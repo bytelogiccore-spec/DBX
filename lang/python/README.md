@@ -1,7 +1,7 @@
 # dbx-py
 
 [![PyPI](https://img.shields.io/pypi/v/dbx-py.svg)](https://pypi.org/project/dbx-py/)
-[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![License](https://img.shields.io/badge/license-MIT%20OR%20Commercial-green.svg)](LICENSE)
 [![Guide](https://img.shields.io/badge/guide-GitHub%20Pages-blue)](https://bytelogiccore-spec.github.io/DBX/english/packages/python)
 
 Python bindings for the DBX high-performance embedded database.

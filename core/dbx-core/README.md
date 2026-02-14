@@ -2,7 +2,7 @@
 
 [![Crates.io](https://img.shields.io/crates/v/dbx-core.svg)](https://crates.io/crates/dbx-core)
 [![docs.rs](https://docs.rs/dbx-core/badge.svg)](https://docs.rs/dbx-core)
-[![License](https://img.shields.io/crates/l/dbx-core.svg)](LICENSE)
+[![License](https://img.shields.io/badge/license-MIT%20OR%20Commercial-green.svg)](LICENSE)
 [![Guide](https://img.shields.io/badge/guide-GitHub%20Pages-blue)](https://bytelogiccore-spec.github.io/DBX/english/packages/rust)
 
 > **29x faster** than SQLite • Pure Rust • MVCC Transactions • 5-Tier Hybrid Storage
