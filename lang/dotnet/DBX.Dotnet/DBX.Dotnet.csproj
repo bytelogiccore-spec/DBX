@@ -5,6 +5,16 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
+
+    <!-- NuGet Package -->
+    <Version>0.0.1-beta</Version>
+    <PackageId>DBX.Dotnet</PackageId>
+    <Authors>ByteLogicCore</Authors>
+    <Description>High-performance .NET bindings for DBX embedded database</Description>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/bytelogiccore-spec/DBX</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/bytelogiccore-spec/DBX</RepositoryUrl>
+    <PackageTags>database;embedded;key-value;high-performance</PackageTags>
   </PropertyGroup>
 
   <ItemGroup>
