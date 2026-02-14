@@ -26,7 +26,7 @@ footer_content: "Copyright &copy; 2026 ByteLogicCore. MIT OR Apache-2.0 License.
 # Aux links
 aux_links:
   "GitHub":
-    - "https://github.com/ByteLogicCore/DBX"
+    - "https://github.com/bytelogiccore-spec/DBX"
   "Rust Docs":
     - "https://docs.rs/dbx-core"
 

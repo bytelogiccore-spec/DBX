@@ -15,6 +15,6 @@ version = "0.0.1-beta"
 edition = "2024"
 license = "MIT OR Commercial"
 license-file = "LICENSE-POLICY.md"
-repository = "https://github.com/ByteLogicStudio/DBX"
+repository = "https://github.com/bytelogiccore-spec/DBX"
 homepage = "https://bytelogic.studio/dbx"
 
