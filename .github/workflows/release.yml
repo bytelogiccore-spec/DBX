@@ -1,4 +1,4 @@
-name: 릴리스 및 배포
+name: 릴리스
 
 on:
   workflow_dispatch:
@@ -7,22 +7,6 @@ on:
         description: '릴리스 버전 (예: v0.1.0)'
         required: true
         type: string
-      publish_crates:
-        description: 'crates.io 배포'
-        type: boolean
-        default: true
-      publish_nuget:
-        description: 'NuGet 배포'
-        type: boolean
-        default: true
-      publish_pypi:
-        description: 'PyPI 배포'
-        type: boolean
-        default: true
-      publish_npm:
-        description: 'npm 배포'
-        type: boolean
-        default: true
 
 jobs:
   # ──────────────────────────────────────────────
@@ -55,35 +39,7 @@ jobs:
         run: cargo test -p dbx-core --locked
 
   # ──────────────────────────────────────────────
-  # Phase 2: 각 패키지 매니저 배포 (독립 실행)
-  # ──────────────────────────────────────────────
-
-  publish-crates:
-    needs: build-and-test
-    if: ${{ inputs.publish_crates }}
-    uses: ./.github/workflows/publish-crates.yml
-    secrets: inherit
-
-  publish-nuget:
-    needs: build-and-test
-    if: ${{ inputs.publish_nuget }}
-    uses: ./.github/workflows/publish-nuget.yml
-    secrets: inherit
-
-  publish-pypi:
-    needs: build-and-test
-    if: ${{ inputs.publish_pypi }}
-    uses: ./.github/workflows/publish-pypi.yml
-    secrets: inherit
-
-  publish-npm:
-    needs: build-and-test
-    if: ${{ inputs.publish_npm }}
-    uses: ./.github/workflows/publish-npm.yml
-    secrets: inherit
-
-  # ──────────────────────────────────────────────
-  # Phase 3: C/C++ 네이티브 빌드
+  # Phase 2: C/C++ 네이티브 빌드
   # ──────────────────────────────────────────────
   build-native:
     name: C/C++ 네이티브 빌드
@@ -117,24 +73,23 @@ jobs:
           path: dbx-native-windows-x64.zip
 
   # ──────────────────────────────────────────────
-  # Phase 4: GitHub Release (모든 에셋 첨부)
+  # Phase 3: GitHub Release 생성
   # ──────────────────────────────────────────────
   github-release:
     name: GitHub 릴리스 생성
     runs-on: ubuntu-latest
-    if: ${{ always() }}
-    needs: [publish-crates, publish-nuget, publish-pypi, publish-npm, build-native]
+    needs: build-native
     steps:
       - uses: actions/checkout@v4
 
-      - name: 모든 에셋 다운로드
+      - name: 에셋 다운로드
         uses: actions/download-artifact@v4
         with:
           path: release-assets
           merge-multiple: true
 
       - name: 에셋 목록 확인
-        run: ls -laR release-assets/ || echo "No artifacts found"
+        run: ls -laR release-assets/
 
       - name: 릴리스 생성
         uses: softprops/action-gh-release@v2
