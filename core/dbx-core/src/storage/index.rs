@@ -1,7 +1,7 @@
-//! Bloom Filter Index — Tier 4 인덱스
+//! Bloom Filter Index — Tier 4 Index
 //!
-//! Parquet 파일별 Bloom Filter를 생성하여 I/O를 최소화
-//! 간단한 비트맵 기반 구현
+//! Creates Bloom Filters per Parquet file to minimize I/O
+//! Simple bitmap-based implementation
 
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
@@ -15,7 +15,7 @@ pub struct BloomIndex {
 }
 
 impl BloomIndex {
-    /// 새로운 Bloom Filter 생성
+    /// Creates a new Bloom Filter
     pub fn new(expected_items: usize, false_positive_rate: f64) -> Self {
         let bitmap_bits = Self::optimal_bitmap_size(expected_items, false_positive_rate);
         let num_hashes = Self::optimal_num_hashes(expected_items, bitmap_bits);
@@ -29,12 +29,12 @@ impl BloomIndex {
         }
     }
 
-    /// 기본 설정으로 생성 (1% 오탐률)
+    /// Creates with default false positive rate (1%)
     pub fn with_default_fpr(expected_items: usize) -> Self {
         Self::new(expected_items, 0.01)
     }
 
-    /// 키 삽입
+    /// Inserts a key
     pub fn insert(&mut self, key: &[u8]) {
         for i in 0..self.num_hashes {
             let hash = self.hash_with_seed(key, i);
@@ -46,7 +46,7 @@ impl BloomIndex {
         self.items_count += 1;
     }
 
-    /// 키가 존재할 가능성 확인
+    /// Checks if key may exist
     pub fn may_contain(&self, key: &[u8]) -> bool {
         for i in 0..self.num_hashes {
             let hash = self.hash_with_seed(key, i);
@@ -60,17 +60,17 @@ impl BloomIndex {
         true
     }
 
-    /// 삽입된 아이템 개수
+    /// Returns number of inserted items
     pub fn len(&self) -> usize {
         self.items_count
     }
 
-    /// 비어있는지 확인
+    /// Checks if empty
     pub fn is_empty(&self) -> bool {
         self.items_count == 0
     }
 
-    /// Bloom Filter 통계
+    /// Returns Bloom Filter statistics
     pub fn stats(&self) -> BloomStats {
         BloomStats {
             items_count: self.items_count,
@@ -80,7 +80,7 @@ impl BloomIndex {
         }
     }
 
-    /// 시드를 사용한 해싱
+    /// Hashes with seed
     fn hash_with_seed(&self, key: &[u8], seed: usize) -> u64 {
         let mut hasher = DefaultHasher::new();
         seed.hash(&mut hasher);
@@ -88,21 +88,21 @@ impl BloomIndex {
         hasher.finish()
     }
 
-    /// 최적 비트맵 크기 계산
+    /// Calculates optimal bitmap size
     fn optimal_bitmap_size(n: usize, p: f64) -> usize {
         let ln2_squared = std::f64::consts::LN_2 * std::f64::consts::LN_2;
         let m = -(n as f64) * p.ln() / ln2_squared;
         m.ceil() as usize
     }
 
-    /// 최적 해시 함수 개수 계산
+    /// Calculates optimal number of hash functions
     fn optimal_num_hashes(n: usize, m: usize) -> usize {
         let k = (m as f64 / n as f64) * std::f64::consts::LN_2;
         (k.ceil() as usize).max(1)
     }
 }
 
-/// Bloom Filter 통계
+/// Bloom Filter statistics
 #[derive(Debug, Clone)]
 pub struct BloomStats {
     pub items_count: usize,

@@ -1,41 +1,36 @@
 use crate::wal::WalRecord;
 use std::io;
-use std::sync::{Arc, Mutex};
+use std::sync::Mutex;
 
-/// WAL 버퍼 - 디스크 I/O 빈도를 최소화하기 위한 메모리 버퍼
-pub struct WALBuffer {
-    buffer: Arc<Mutex<Vec<u8>>>,
+/// WAL Buffer - Memory buffer to minimize disk I/O frequency
+pub struct WalBuffer {
+    buffer: Mutex<Vec<WalRecord>>,
     auto_flush_threshold: usize,
 }
 
-impl WALBuffer {
-    /// 새 WAL 버퍼 생성
+impl WalBuffer {
+    /// Creates a new WAL buffer
     pub fn new(capacity: usize) -> Self {
         Self {
-            buffer: Arc::new(Mutex::new(Vec::with_capacity(capacity))),
-            auto_flush_threshold: capacity * 3 / 4, // 75% 도달 시 자동 플러시
+            buffer: Mutex::new(Vec::with_capacity(capacity)),
+            auto_flush_threshold: capacity * 3 / 4, // Auto-flush at 75%
         }
     }
 
-    /// 레코드를 버퍼에 추가
-    pub fn append(&self, record: &WalRecord) -> io::Result<()> {
-        let serialized = bincode::serialize(record)
-            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
-
+    /// Adds a record to the buffer
+    pub fn push(&self, record: WalRecord) {
         let mut buf = self.buffer.lock().unwrap();
-        buf.extend_from_slice(&serialized);
+        buf.push(record);
 
         // 자동 플러시 체크
         if buf.len() >= self.auto_flush_threshold {
             drop(buf); // 락 해제
-            self.flush()?;
+            let _ = self.flush();
         }
-
-        Ok(())
     }
 
-    /// 버퍼를 디스크로 플러시
-    pub fn flush(&self) -> io::Result<()> {
+    /// Flushes buffer to disk
+    pub fn flush(&self) -> std::io::Result<()> {
         let mut buf = self.buffer.lock().unwrap();
         if buf.is_empty() {
             return Ok(());
@@ -47,12 +42,12 @@ impl WALBuffer {
         Ok(())
     }
 
-    /// 버퍼 사용량 확인
+    /// Checks buffer usage
     pub fn len(&self) -> usize {
         self.buffer.lock().unwrap().len()
     }
 
-    /// 버퍼가 비어있는지 확인
+    /// Checks if buffer is empty
     pub fn is_empty(&self) -> bool {
         self.buffer.lock().unwrap().is_empty()
     }
