@@ -11,6 +11,7 @@ nav_order: 8
 
 ## HTTP 서버 (C++ with httplib)
 
+{% raw %}
 ```cpp
 #include "dbx.hpp"
 #include "httplib.h"
@@ -49,6 +50,7 @@ int main() {
     return 0;
 }
 ```
+{% endraw %}
 
 ## 로그 수집기 (C)
 
@@ -171,6 +173,7 @@ int main() {
 
 ## 게임 저장 시스템 (C++)
 
+{% raw %}
 ```cpp
 #include "dbx.hpp"
 #include <nlohmann/json.hpp>
@@ -237,6 +240,7 @@ int main() {
     return 0;
 }
 ```
+{% endraw %}
 
 ## 다음 단계
 
