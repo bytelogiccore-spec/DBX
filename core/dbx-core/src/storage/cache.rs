@@ -1,6 +1,6 @@
-//! LRU Row Cache — Tier 2 캐시
+//! LRU Row Cache — Tier 2 Cache
 //!
-//! 핫 데이터를 메모리에 캐싱하여 WOS/ROS 접근 최소화
+//! Caches hot data in memory to minimize WOS/ROS access
 
 use lru::LruCache;
 use std::num::NonZeroUsize;
@@ -22,7 +22,7 @@ struct CacheKey {
 }
 
 impl RowCache {
-    /// 새로운 LRU Cache 생성
+    /// Creates a new LRU Cache
     pub fn new(capacity: usize) -> Self {
         let cap = NonZeroUsize::new(capacity).expect("capacity must be > 0");
         Self {
@@ -32,13 +32,14 @@ impl RowCache {
         }
     }
 
-    /// 기본 용량 (10,000개)
+    /// Creates cache with default capacity (10,000 entries)
     pub fn with_default_capacity() -> Self {
         Self::new(10_000)
     }
 
-    /// 자동 튜닝: 히트율 기반 용량 조정
-    /// 히트율이 낮으면 용량 증가, 높으면 유지
+    /// Auto-tuning: adjusts capacity based on hit ratio
+    /// 
+    /// Increases capacity if hit ratio is low, maintains if high
     pub fn auto_tune(&self) -> Option<usize> {
         let ratio = self.hit_ratio();
         let current_size = {
@@ -55,7 +56,7 @@ impl RowCache {
         }
     }
 
-    /// Cache에서 값 조회
+    /// Gets value from cache
     pub fn get(&self, table: &str, key: &[u8]) -> Option<Vec<u8>> {
         let cache_key = CacheKey {
             table: table.to_string(),
@@ -72,7 +73,7 @@ impl RowCache {
         }
     }
 
-    /// Cache에 값 삽입
+    /// Inserts value into cache
     pub fn insert(&self, table: &str, key: &[u8], value: &[u8]) {
         let cache_key = CacheKey {
             table: table.to_string(),
@@ -83,7 +84,7 @@ impl RowCache {
         cache.put(cache_key, value.to_vec());
     }
 
-    /// Cache에서 특정 키 무효화
+    /// Invalidates specific key from cache
     pub fn invalidate(&self, table: &str, key: &[u8]) {
         let cache_key = CacheKey {
             table: table.to_string(),
@@ -94,14 +95,14 @@ impl RowCache {
         cache.pop(&cache_key);
     }
 
-    /// 테이블 전체 무효화
+    /// Invalidates entire table
     pub fn invalidate_table(&self, _table: &str) {
         let mut cache = self.inner.lock().unwrap();
         cache.clear();
         // TODO: 특정 테이블만 제거하도록 개선
     }
 
-    /// Cache 히트율
+    /// Returns cache hit ratio
     pub fn hit_ratio(&self) -> f64 {
         let hits = self.hit_count.load(Ordering::Relaxed);
         let misses = self.miss_count.load(Ordering::Relaxed);
@@ -114,7 +115,7 @@ impl RowCache {
         }
     }
 
-    /// Cache 통계
+    /// Returns cache statistics
     pub fn stats(&self) -> CacheStats {
         CacheStats {
             hits: self.hit_count.load(Ordering::Relaxed),
@@ -123,7 +124,7 @@ impl RowCache {
         }
     }
 
-    /// Cache 초기화
+    /// Clears the cache
     pub fn clear(&self) {
         let mut cache = self.inner.lock().unwrap();
         cache.clear();
@@ -132,7 +133,7 @@ impl RowCache {
     }
 }
 
-/// Cache 통계
+/// Cache statistics
 #[derive(Debug, Clone)]
 pub struct CacheStats {
     pub hits: u64,

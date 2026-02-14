@@ -1,41 +1,41 @@
 //! # DBX — High-Performance Embedded Database
 //!
-//! DBX는 5-Tier Hybrid Storage 아키텍처 기반의 고성능 임베디드 데이터베이스입니다.
-//! 순수 Rust로 구현되었으며, Apache Arrow와 Parquet를 활용한 컬럼형 스토리지를 지원합니다.
+//! DBX is a high-performance embedded database built on a 5-Tier Hybrid Storage architecture.
+//! Written in pure Rust, it leverages Apache Arrow and Parquet for columnar storage.
 //!
-//! ## 주요 특징
+//! ## Key Features
 //!
 //! - **5-Tier Hybrid Storage**: Delta → Cache → WOS → Index → ROS
-//! - **Apache Arrow 기반**: 컬럼형 스토리지 및 벡터화 연산
-//! - **SQL 지원**: SELECT, WHERE, JOIN, GROUP BY, ORDER BY
-//! - **ACID 트랜잭션**: Typestate 패턴 기반 타입 안전 트랜잭션
-//! - **성능 최적화**: LRU Cache, Bloom Filter, SIMD 벡터화
+//! - **Apache Arrow-based**: Columnar storage and vectorized operations
+//! - **SQL Support**: SELECT, WHERE, JOIN, GROUP BY, ORDER BY
+//! - **ACID Transactions**: Type-safe transactions using the Typestate pattern
+//! - **Performance Optimized**: LRU Cache, Bloom Filter, SIMD vectorization
 //!
-//! ## 빠른 시작
+//! ## Quick Start
 //!
-//! ### 기본 사용 (CRUD)
+//! ### Basic Usage (CRUD)
 //!
 //! ```rust
 //! use dbx_core::Database;
 //!
 //! # fn main() -> dbx_core::DbxResult<()> {
-//! // 데이터베이스 열기
+//! // Open database
 //! let db = Database::open_in_memory()?;
 //!
-//! // 데이터 삽입
+//! // Insert data
 //! db.insert("users", b"user:1", b"Alice")?;
 //!
-//! // 데이터 조회
+//! // Get data
 //! let value = db.get("users", b"user:1")?;
 //! assert_eq!(value, Some(b"Alice".to_vec()));
 //!
-//! // 데이터 삭제
+//! // Delete data
 //! db.delete("users", b"user:1")?;
 //! # Ok(())
 //! # }
 //! ```
 //!
-//! ### 트랜잭션
+//! ### Transactions
 //!
 //! ```rust
 //! use dbx_core::Database;
@@ -43,42 +43,44 @@
 //! # fn main() -> dbx_core::DbxResult<()> {
 //! let db = Database::open_in_memory()?;
 //!
-//! // 트랜잭션 시작
+//! // Begin transaction
 //! let _tx = db.begin()?;
 //!
-//! // 기본 CRUD는 Database 직접 사용
+//! // Basic CRUD uses Database directly
 //! db.insert("users", b"user:2", b"Bob")?;
 //!
-//! // 트랜잭션은 Query Builder와 함께 사용 (Phase 6)
+//! // Transactions are used with Query Builder (Phase 6)
 //! # Ok(())
 //! # }
 //! ```
 //!
-//! ## 아키텍처
+//! ## Architecture
 //!
 //! ### 5-Tier Hybrid Storage
 //!
-//! 1. **Delta Store** (DashMap) — 인메모리 쓰기 버퍼, 락 프리 동시성
-//! 2. **Cache** (LRU) — 읽기 캐시, 자주 접근하는 데이터
-//! 3. **WOS** (sled) — Write-Optimized Store, 영구 저장소
-//! 4. **Index** (Bloom Filter) — 빠른 존재 확인
-//! 5. **ROS** (Parquet) — Read-Optimized Store, 컬럼형 압축
+//! 1. **Delta Store** (DashMap) — In-memory write buffer, lock-free concurrency
+//! 2. **Cache** (LRU) — Read cache for frequently accessed data
+//! 3. **WOS** (sled) — Write-Optimized Store, persistent storage
+//! 4. **Index** (Bloom Filter) — Fast existence checks
+//! 5. **ROS** (Parquet) — Read-Optimized Store, columnar compression
 //!
-//! ### SQL 실행 파이프라인
+//! ### SQL Execution Pipeline
 //!
 //! ```text
-//! SQL 문자열 → Parser → AST → Planner → LogicalPlan
+//! SQL String → Parser → AST → Planner → LogicalPlan
 //!          → Optimizer → PhysicalPlan → Executor → RecordBatch
 //! ```
 //!
-//! ## 모듈 구조
+//! ## Module Structure
 
-//! - [`engine`] — 데이터베이스 엔진 ([`Database`])
-//! - [`sql`] — SQL 파서, 플래너, 최적화기, 실행기
-//! - [`storage`] — 5-Tier 스토리지 백엔드
-//! - [`transaction`] — MVCC 트랜잭션 관리
+
+//! - [`engine`] — Database engine ([`Database`])
+//! - [`sql`] — SQL parser, planner, optimizer, executor
+//! - [`storage`] — 5-Tier storage backends
+//! - [`transaction`] — MVCC transaction management
 //! - [`index`] — Hash Index
 //! - [`wal`] — Write-Ahead Log
+
 
 pub mod api;
 pub mod engine;

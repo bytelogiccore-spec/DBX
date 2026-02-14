@@ -55,28 +55,6 @@ let result = db.execute_sql("SELECT * FROM users WHERE id = 1")?;
 println!("{:?}", result);
 ```
 
-## Derive Macro
-
-Use `#[derive(Table)]` for automatic schema generation:
-
-```rust
-use dbx_derive::Table;
-
-#[derive(Table)]
-#[dbx(table_name = "users")]
-pub struct User {
-    #[dbx(primary_key)]
-    pub id: i64,
-    pub name: String,
-    pub email: Option<String>,
-}
-
-// Auto-generated:
-// User::TABLE_NAME -> "users"
-// User::schema() -> Arrow Schema
-// FromRow trait implementation
-```
-
 ## Features
 
 | Feature | Description |

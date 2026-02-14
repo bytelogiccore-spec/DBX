@@ -55,28 +55,6 @@ let result = db.execute_sql("SELECT * FROM users WHERE id = 1")?;
 println!("{:?}", result);
 ```
 
-## Derive 매크로
-
-`#[derive(Table)]`로 자동 스키마 생성:
-
-```rust
-use dbx_derive::Table;
-
-#[derive(Table)]
-#[dbx(table_name = "users")]
-pub struct User {
-    #[dbx(primary_key)]
-    pub id: i64,
-    pub name: String,
-    pub email: Option<String>,
-}
-
-// 자동 생성:
-// User::TABLE_NAME -> "users"
-// User::schema() -> Arrow Schema
-// FromRow 트레이트 구현
-```
-
 ## 기능
 
 | 기능 | 설명 |
