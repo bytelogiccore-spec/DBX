@@ -17,7 +17,7 @@ The core Rust crate for DBX — a high-performance embedded database with 5-Tier
 
 ```toml
 [dependencies]
-dbx-core = "0.0.2-beta"
+dbx-core = "0.0.3-beta"
 ```
 
 ## Quick Start
@@ -69,7 +69,7 @@ println!("{:?}", result);
 ## Feature Flags
 
 ```toml
-dbx-core = { version = "0.0.2-beta", features = ["simd", "logging"] }
+dbx-core = { version = "0.0.3-beta", features = ["simd", "logging"] }
 ```
 
 | Flag | Description |

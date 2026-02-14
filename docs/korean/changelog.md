@@ -14,6 +14,30 @@ DBX의 주요 변경사항을 기록합니다.
 
 ---
 
+## [0.0.3-beta] - 2026-02-15
+
+### 추가
+- Python, Node.js, .NET 패키지 상세 사용법 가이드
+  - JSON 데이터 처리 예제
+  - 배치 작업 및 에러 처리
+  - 실전 예제 (KV Store, Session Manager, Cache Wrapper)
+  - Node.js TypeScript 지원
+  - ASP.NET Core 통합 예제
+- 모든 언어 바인딩에 대한 이중 언어 문서 (영문 + 한글)
+
+### 변경
+- **플랫폼 지원**: **Windows x64 전용**으로 수정 (Linux/macOS 계획됨)
+- **Cargo.toml**: `homepage`를 GitHub Pages로 변경
+- **crates.io**: `dbx-core`만 배포 (`dbx-derive`, `dbx-ffi` 제거)
+- **문서**: Derive Macro 섹션 제거 (프로덕션에서 미사용)
+- **Doc Comment**: Rust doc comment를 영문으로 변환 (docs.rs 일관성)
+
+### 수정
+- 과대 광고된 플랫폼 지원 (이전: 모든 플랫폼, 현재: Windows x64 전용)
+- 패키지 간 버전 불일치
+
+---
+
 ## [0.0.2-beta] - 2026-02-15
 
 ### 추가

@@ -14,6 +14,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.0.3-beta] - 2026-02-15
+
+### Added
+- Comprehensive usage guides for Python, Node.js, and .NET packages
+  - JSON data handling examples
+  - Batch operations and error handling
+  - Real-world examples (KV Store, Session Manager, Cache Wrapper)
+  - TypeScript support for Node.js
+  - ASP.NET Core integration examples
+- Bilingual documentation (English + Korean) for all language bindings
+
+### Changed
+- **Platform Support**: Corrected to **Windows x64 only** (Linux/macOS planned)
+- **Cargo.toml**: `homepage` now points to GitHub Pages instead of bytelogic.studio
+- **crates.io**: Only `dbx-core` is published (removed `dbx-derive` and `dbx-ffi`)
+- **Documentation**: Removed Derive Macro section (not used in production)
+- **Doc Comments**: Converted Rust doc comments to English for docs.rs consistency
+
+### Fixed
+- Over-claimed platform support (was: all platforms, now: Windows x64 only)
+- Version inconsistencies across packages
+
+---
+
 ## [0.0.2-beta] - 2026-02-15
 
 ### Added

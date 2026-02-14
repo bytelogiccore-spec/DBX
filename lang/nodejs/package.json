@@ -1,6 +1,6 @@
 {
     "name": "dbx-native",
-    "version": "0.0.2-beta",
+    "version": "0.0.3-beta",
     "description": "DBX native Node.js bindings using napi-rs",
     "main": "index.js",
     "types": "index.d.ts",

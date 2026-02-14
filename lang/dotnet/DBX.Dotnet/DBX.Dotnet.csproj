@@ -7,7 +7,7 @@
     <LangVersion>latest</LangVersion>
 
     <!-- NuGet Package -->
-    <Version>0.0.2-beta</Version>
+    <Version>0.0.3-beta</Version>
     <PackageId>DBX.Dotnet</PackageId>
     <Authors>ByteLogicCore</Authors>
     <Description>High-performance .NET bindings for DBX embedded database</Description>

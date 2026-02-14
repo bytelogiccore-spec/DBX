@@ -17,7 +17,7 @@ DBX의 핵심 Rust 크레이트 — 5-Tier 하이브리드 스토리지 기반 �
 
 ```toml
 [dependencies]
-dbx-core = "0.0.2-beta"
+dbx-core = "0.0.3-beta"
 ```
 
 ## 빠른 시작
@@ -69,7 +69,7 @@ println!("{:?}", result);
 ## 피처 플래그
 
 ```toml
-dbx-core = { version = "0.0.2-beta", features = ["simd", "logging"] }
+dbx-core = { version = "0.0.3-beta", features = ["simd", "logging"] }
 ```
 
 | 플래그 | 설명 |
