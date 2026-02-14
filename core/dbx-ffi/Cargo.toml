@@ -12,5 +12,5 @@ readme = "README.md"
 crate-type = ["cdylib", "staticlib"]
 
 [dependencies]
-dbx-core = { path = "../dbx-core", version = "0.0.1-beta" }
+dbx-core = { path = "../dbx-core", version = "0.0.2-beta" }
 libc = "0.2"

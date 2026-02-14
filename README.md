@@ -1,6 +1,6 @@
 # DBX — High-Performance Embedded Database
 
-[![Version](https://img.shields.io/badge/version-0.0.1--beta-blue.svg)](https://github.com/ByteLogicCore/DBX)
+[![Version](https://img.shields.io/badge/version-0.0.2--beta-blue.svg)](https://github.com/ByteLogicCore/DBX)
 [![License](https://img.shields.io/badge/license-MIT%20OR%20Commercial-green.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-2024-orange.svg)](https://www.rust-lang.org)
 [![Documentation](https://img.shields.io/badge/docs-GitHub%20Pages-blue)](https://bytelogiccore-spec.github.io/DBX/)

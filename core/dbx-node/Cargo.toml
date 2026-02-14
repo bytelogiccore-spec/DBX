@@ -1,13 +1,13 @@
 [package]
 name = "dbx-node"
-version = "0.1.0"
+version = "0.0.2-beta"
 edition = "2021"
 
 [lib]
 crate-type = ["cdylib"]
 
 [dependencies]
-dbx-core = { path = "../dbx-core", version = "0.0.1-beta" }
+dbx-core = { path = "../dbx-core", version = "0.0.2-beta" }
 napi = { version = "3", features = ["async"] }
 napi-derive = "3"
 

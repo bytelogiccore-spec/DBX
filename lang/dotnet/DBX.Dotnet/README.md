@@ -2,6 +2,7 @@
 
 [![NuGet](https://img.shields.io/nuget/v/DBX.Dotnet.svg)](https://www.nuget.org/packages/DBX.Dotnet)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![Guide](https://img.shields.io/badge/guide-GitHub%20Pages-blue)](https://bytelogiccore-spec.github.io/DBX/english/packages/dotnet)
 
 > High-performance .NET bindings for DBX embedded database
 

@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "dbx-native"
-version = "0.0.1-beta"
+version = "0.0.2-beta"
 description = "High-performance native Python bindings for DBX database"
 requires-python = ">=3.8"
 classifiers = [
