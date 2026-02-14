@@ -8,7 +8,7 @@ version = "0.0.1-beta"
 description = "Python bindings for DBX high-performance database"
 readme = "README.md"
 requires-python = ">=3.8"
-license = {text = "MIT OR Apache-2.0"}
+license = {text = "MIT OR Commercial"}
 authors = [
     {name = "DBX Contributors"}
 ]
@@ -17,7 +17,6 @@ classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
-    "License :: OSI Approved :: Apache Software License",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
@@ -29,9 +28,9 @@ classifiers = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/yourusername/dbx"
-Repository = "https://github.com/yourusername/dbx"
-Documentation = "https://dbx.readthedocs.io"
+Homepage = "https://github.com/bytelogiccore-spec/DBX"
+Repository = "https://github.com/bytelogiccore-spec/DBX"
+Documentation = "https://bytelogiccore-spec.github.io/DBX/"
 
 [tool.setuptools.packages.find]
 where = ["."]

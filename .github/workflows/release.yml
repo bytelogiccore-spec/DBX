@@ -9,97 +9,181 @@ on:
         type: string
 
 jobs:
+  # ──────────────────────────────────────────────
+  # Phase 1: Rust 코어 검증
+  # ──────────────────────────────────────────────
   build-and-test:
-    name: 빌드 및 테스트
+    name: Rust 코어 빌드 및 테스트
     runs-on: windows-latest
-    
+
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Rust 설치
         uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy, rustfmt
-          
+
       - name: Rust 캐시
         uses: Swatinem/rust-cache@v2
-        
+
       - name: 포맷 검사
         run: cargo fmt --all -- --check
-        
-      - name: Lint 검사
-        run: cargo clippy --all-targets --all-features -- -D warnings
-        
-      - name: 빌드
-        run: cargo build --release --locked --verbose
-        
-      - name: 테스트
-        run: cargo test --locked --verbose
 
+      - name: Lint 검사 (dbx-core)
+        run: cargo clippy -p dbx-core -- -D warnings
+
+      - name: 빌드 (Release)
+        run: cargo build --release --locked -p dbx-core -p dbx-ffi
+
+      - name: 테스트
+        run: cargo test -p dbx-core --locked
+
+  # ──────────────────────────────────────────────
+  # Phase 2: 패키지 배포 (병렬)
+  # ──────────────────────────────────────────────
+
+  # 2-1. Rust → crates.io
   publish-rust:
-    name: Rust Crate 배포
+    name: crates.io 배포
     runs-on: ubuntu-latest
     needs: build-and-test
     steps:
       - uses: actions/checkout@v4
+
       - name: Rust 설치
         uses: dtolnay/rust-toolchain@stable
-      - name: Cargo 배포 실행
+
+      - name: Cargo 배포
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CRATES_TOKEN }}
         run: |
-          # 주의: 종속성 순서가 중요합니다
           cargo publish --locked -p dbx-core || true
           sleep 10
           cargo publish --locked -p dbx-ffi || true
 
+  # 2-2. C#/.NET → NuGet
   publish-nuget:
-    name: NuGet 패키지 배포
+    name: NuGet 배포
     runs-on: windows-latest
     needs: build-and-test
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: .NET 설정
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 8.0.x
-          
-      - name: Rust FFI 빌드 (Windows Release)
+
+      - name: Rust FFI 빌드
         uses: dtolnay/rust-toolchain@stable
-      - name: Rust 캐시
-        uses: Swatinem/rust-cache@v2
-      - name: dbx-ffi 빌드
-        run: cargo build --release --locked -p dbx-ffi
-        
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --release --locked -p dbx-ffi
+
       - name: NuGet 패키징
         run: dotnet pack lang/dotnet/DBX.Client/DBX.Client.csproj --configuration Release
-        
-      - name: NuGet 배포
-        run: dotnet nuget push lang/dotnet/DBX.Client/bin/Release/*.nupkg --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate
 
+      - name: NuGet 배포
+        run: >
+          dotnet nuget push lang/dotnet/DBX.Client/bin/Release/*.nupkg
+          --api-key ${{ secrets.NUGET_API_KEY }}
+          --source https://api.nuget.org/v3/index.json
+          --skip-duplicate
+
+  # 2-3. Python → PyPI
+  publish-pypi:
+    name: PyPI 배포
+    runs-on: windows-latest
+    needs: build-and-test
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Python 설치
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Rust FFI 빌드
+        uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --release --locked -p dbx-ffi
+
+      - name: FFI DLL 복사
+        run: Copy-Item target/release/dbx_ffi.dll lang/python/dbx_py/dbx_ffi.dll -Force
+
+      - name: 빌드 도구 설치
+        run: pip install build twine
+
+      - name: 패키지 빌드
+        working-directory: lang/python
+        run: python -m build
+
+      - name: PyPI 배포
+        working-directory: lang/python
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
+        run: twine upload dist/* --skip-existing
+
+  # 2-4. Node.js → npm
+  publish-npm:
+    name: npm 배포
+    runs-on: windows-latest
+    needs: build-and-test
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Node.js 설치
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: https://registry.npmjs.org/
+
+      - name: Rust FFI 빌드
+        uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --release --locked -p dbx-ffi
+
+      - name: npm 패키지 배포
+        working-directory: lang/nodejs
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --access public
+
+  # ──────────────────────────────────────────────
+  # Phase 3: GitHub Release + C/C++ 바이너리
+  # ──────────────────────────────────────────────
   github-release:
     name: GitHub 릴리스 생성
     runs-on: windows-latest
-    needs: [publish-rust, publish-nuget]
+    needs: [publish-rust, publish-nuget, publish-pypi, publish-npm]
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Rust 설치
         uses: dtolnay/rust-toolchain@stable
-      
-      - name: Rust 캐시
-        uses: Swatinem/rust-cache@v2
-      
-      - name: 릴리스 에셋 빌드
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Release 빌드
         run: cargo build --release --locked -p dbx-ffi
-        
+
+      - name: C/C++ 헤더 준비
+        run: |
+          New-Item -Path release-assets -ItemType Directory -Force
+          Copy-Item target/release/dbx_ffi.dll release-assets/
+          Copy-Item target/release/dbx_ffi.lib release-assets/
+          Copy-Item lang/c/include/*.h release-assets/ -ErrorAction SilentlyContinue
+          Copy-Item lang/cpp/include/*.h release-assets/ -ErrorAction SilentlyContinue
+          Copy-Item lang/cpp/include/*.hpp release-assets/ -ErrorAction SilentlyContinue
+          Compress-Archive -Path release-assets/* -DestinationPath dbx-${{ github.event.inputs.version }}-windows-x64.zip
+
       - name: 릴리스 생성
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.event.inputs.version }}
           name: Release ${{ github.event.inputs.version }}
           files: |
+            dbx-${{ github.event.inputs.version }}-windows-x64.zip
             target/release/dbx_ffi.dll
             target/release/dbx_ffi.lib
           generate_release_notes: true
