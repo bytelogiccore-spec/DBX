@@ -1,0 +1,4 @@
+D:\ByteLogicCore\DBX\dbx-csharp\DBX.Client\obj\Release\net8.0\DBX.Client.GeneratedMSBuildEditorConfig.editorconfig
+D:\ByteLogicCore\DBX\dbx-csharp\DBX.Client\obj\Release\net8.0\DBX.Client.AssemblyInfoInputs.cache
+D:\ByteLogicCore\DBX\dbx-csharp\DBX.Client\obj\Release\net8.0\DBX.Client.AssemblyInfo.cs
+D:\ByteLogicCore\DBX\dbx-csharp\DBX.Client\obj\Release\net8.0\DBX.Client.csproj.CoreCompileInputs.cache

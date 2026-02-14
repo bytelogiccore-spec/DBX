@@ -1,0 +1,46 @@
+name: ByteLogicCore Documentation
+description: High-performance embedded database built on 5-Tier Hybrid Storage architecture
+
+# Theme
+theme: just-the-docs
+color_scheme: dark
+
+# Site settings
+url: https://bytelogiccore.github.io
+baseurl: /DBX
+logo: /assets/images/logo.png  # 이미지 저장 후 주석 해제 예정
+
+# Navigation
+nav_enabled: true
+nav_sort: case_insensitive
+search_enabled: true
+search:
+  heading_level: 2
+  previews: 3
+  preview_words_before: 5
+  preview_words_after: 10
+
+# Footer
+footer_content: "Copyright &copy; 2026 ByteLogicCore. MIT OR Apache-2.0 License."
+
+# Aux links
+aux_links:
+  "GitHub":
+    - "https://github.com/ByteLogicCore/DBX"
+  "Rust Docs":
+    - "https://docs.rs/dbx-core"
+
+# Plugins
+plugins:
+  - jekyll-seo-tag
+  - jekyll-sitemap
+
+# Exclude
+exclude:
+  - Gemfile
+  - Gemfile.lock
+  - node_modules
+  - vendor
+  - .sass-cache
+  - .jekyll-cache
+  - .DS_Store

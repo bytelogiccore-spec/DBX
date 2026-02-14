@@ -1,0 +1,110 @@
+name: 릴리스 및 배포
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: '릴리스 버전 (예: v0.1.0)'
+        required: true
+        type: string
+
+jobs:
+  build-and-test:
+    name: 빌드 및 테스트
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Rust 설치
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+          
+      - name: Rust 캐시
+        uses: Swatinem/rust-cache@v2
+        
+      - name: 포맷 검사
+        run: cargo fmt --all -- --check
+        
+      - name: Lint 검사
+        run: cargo clippy --all-targets --all-features -- -D warnings
+        
+      - name: 빌드
+        run: cargo build --release --locked --verbose
+        
+      - name: 테스트
+        run: cargo test --locked --verbose
+
+  publish-rust:
+    name: Rust Crate 배포
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    steps:
+      - uses: actions/checkout@v4
+      - name: Rust 설치
+        uses: dtolnay/rust-toolchain@stable
+      - name: Cargo 배포 실행
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CRATES_TOKEN }}
+        run: |
+          # 주의: 종속성 순서가 중요합니다
+          cargo publish --locked -p dbx-core || true
+          sleep 10
+          cargo publish --locked -p dbx-ffi || true
+
+  publish-nuget:
+    name: NuGet 패키지 배포
+    runs-on: windows-latest
+    needs: build-and-test
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: .NET 설정
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+          
+      - name: Rust FFI 빌드 (Windows Release)
+        uses: dtolnay/rust-toolchain@stable
+      - name: Rust 캐시
+        uses: Swatinem/rust-cache@v2
+      - name: dbx-ffi 빌드
+        run: cargo build --release --locked -p dbx-ffi
+        
+      - name: NuGet 패키징
+        run: dotnet pack bindings/dbx-csharp/DBX.Client/DBX.Client.csproj --configuration Release
+        
+      - name: NuGet 배포
+        run: dotnet nuget push bindings/dbx-csharp/DBX.Client/bin/Release/*.nupkg --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate
+
+  github-release:
+    name: GitHub 릴리스 생성
+    runs-on: windows-latest
+    needs: [publish-rust, publish-nuget]
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Rust 설치
+        uses: dtolnay/rust-toolchain@stable
+      
+      - name: Rust 캐시
+        uses: Swatinem/rust-cache@v2
+      
+      - name: 릴리스 에셋 빌드
+        run: cargo build --release --locked -p dbx-ffi
+        
+      - name: 릴리스 생성
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.version }}
+          name: Release ${{ github.event.inputs.version }}
+          files: |
+            target/release/dbx_ffi.dll
+            target/release/dbx_ffi.lib
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

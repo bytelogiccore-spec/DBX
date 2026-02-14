@@ -1,0 +1,20 @@
+[workspace]
+members = [
+    "core/dbx-core",
+    "core/dbx-derive",
+    "core/dbx-ffi",
+    "core/dbx-py",
+    "core/dbx-csharp",
+    "core/dbx-node",
+    "testing/benchmarks",
+]
+resolver = "2"
+
+[workspace.package]
+version = "0.0.1-beta"
+edition = "2024"
+license = "MIT OR Commercial"
+license-file = "LICENSE-POLICY.md"
+repository = "https://github.com/ByteLogicStudio/DBX"
+homepage = "https://bytelogic.studio/dbx"
+

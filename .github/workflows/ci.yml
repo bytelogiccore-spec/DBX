@@ -1,0 +1,68 @@
+name: 빌드 및 테스트
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  rust-build:
+    name: Rust 빌드 및 테스트
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Rust 설치
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+          
+      - name: Rust 캐시
+        uses: Swatinem/rust-cache@v2
+        
+      - name: 포맷 검사
+        run: cargo fmt --all -- --check
+        
+      - name: Lint 검사
+        run: cargo clippy --all-targets --all-features -- -D warnings
+        
+      - name: 빌드
+        run: cargo build --locked --verbose
+        
+      - name: 테스트
+        run: cargo test --locked --verbose
+
+  csharp-build:
+    name: C# 빌드 및 테스트
+    runs-on: windows-latest
+    needs: rust-build
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: .NET 설정
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+          
+      - name: Rust FFI 빌드 (Windows)
+        uses: dtolnay/rust-toolchain@stable
+      - name: Rust 캐시 (FFI)
+        uses: Swatinem/rust-cache@v2
+      - name: dbx-ffi 빌드
+        run: cargo build --release --locked -p dbx-ffi
+        
+      - name: C# 종속성 복원
+        run: dotnet restore bindings/dbx-csharp/DBX.Client/DBX.Client.csproj
+        
+      - name: DBX.Client 빌드
+        run: dotnet build bindings/dbx-csharp/DBX.Client/DBX.Client.csproj --configuration Release --no-restore
+        
+      - name: DBX.Client 테스트
+        run: dotnet test bindings/dbx-csharp/DBX.Benchmark/DBX.Benchmark.csproj --configuration Release

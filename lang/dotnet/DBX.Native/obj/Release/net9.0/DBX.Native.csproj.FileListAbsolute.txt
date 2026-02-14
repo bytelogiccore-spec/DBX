@@ -1,0 +1,12 @@
+D:\ByteLogicCore\DBX\lang\dotnet\DBX.Native\obj\Release\net9.0\DBX.Native.GeneratedMSBuildEditorConfig.editorconfig
+D:\ByteLogicCore\DBX\lang\dotnet\DBX.Native\obj\Release\net9.0\DBX.Native.AssemblyInfoInputs.cache
+D:\ByteLogicCore\DBX\lang\dotnet\DBX.Native\obj\Release\net9.0\DBX.Native.AssemblyInfo.cs
+D:\ByteLogicCore\DBX\lang\dotnet\DBX.Native\obj\Release\net9.0\DBX.Native.csproj.CoreCompileInputs.cache
+D:\ByteLogicCore\DBX\lang\dotnet\DBX.Native\bin\Release\net9.0\dbx_csharp.dll
+D:\ByteLogicCore\DBX\lang\dotnet\DBX.Native\bin\Release\net9.0\DBX.Native.deps.json
+D:\ByteLogicCore\DBX\lang\dotnet\DBX.Native\bin\Release\net9.0\DBX.Native.dll
+D:\ByteLogicCore\DBX\lang\dotnet\DBX.Native\bin\Release\net9.0\DBX.Native.pdb
+D:\ByteLogicCore\DBX\lang\dotnet\DBX.Native\obj\Release\net9.0\DBX.Native.dll
+D:\ByteLogicCore\DBX\lang\dotnet\DBX.Native\obj\Release\net9.0\refint\DBX.Native.dll
+D:\ByteLogicCore\DBX\lang\dotnet\DBX.Native\obj\Release\net9.0\DBX.Native.pdb
+D:\ByteLogicCore\DBX\lang\dotnet\DBX.Native\obj\Release\net9.0\ref\DBX.Native.dll

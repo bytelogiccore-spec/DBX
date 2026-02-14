@@ -1,0 +1,19 @@
+[package]
+name = "dbx-py"
+version = "0.0.1-beta"
+edition = "2021"
+authors = ["DBX Team"]
+description = "PyO3 native Python bindings for DBX database"
+
+[lib]
+name = "dbx_native"
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3 = { version = "0.22", features = ["extension-module"] }
+dbx-core = { path = "../dbx-core" }
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1

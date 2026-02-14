@@ -1,0 +1,39 @@
+# Rust Build
+/target
+Cargo.lock
+
+# DBX Data & Logs
+*.db
+*.parquet
+*.log
+data/
+
+# .NET (C# bindings)
+lang/csharp/bin/
+lang/csharp/obj/
+*.nupkg
+
+# IDE & OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Benchmarks
+testing/benchmarks/*.txt
+testing/benchmarks/src/bin/
+dbx_bench_data_*/
+sqlite_bench_*.db
+
+# Temporary & Build Files
+**/temp_*.txt
+**/build_errors.txt
+**/*_temp.txt
+**/physical_temp.txt
+
+# Project Config (hidden folders & files)
+.agent/
+.gemini/
+.specify/
+.design/
+GEMINI.md

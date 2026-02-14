@@ -1,0 +1,19 @@
+# GitHub Sponsors configuration
+# https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/displaying-a-sponsor-button-in-your-repository
+
+# GitHub Sponsors 사용자명 (활성화 후 입력)
+github: [ByteLogicStudio]  # 실제 GitHub 사용자명으로 변경하세요
+
+# Ko-fi 후원 링크
+ko_fi: Q5Q41TDHWG
+
+# 다른 후원 플랫폼 (선택사항)
+# patreon: your_patreon_username
+# open_collective: your_opencollective_username
+# ko_fi: your_kofi_username
+# tidelift: npm/package-name
+# community_bridge: project-name
+# liberapay: your_liberapay_username
+# issuehunt: your_issuehunt_username
+# buy_me_a_coffee: your_buymeacoffee_username
+# custom: ['https://your-custom-sponsor-link.com']

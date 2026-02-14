@@ -1,0 +1,41 @@
+{
+    "name": "dbx-native",
+    "version": "0.1.0",
+    "description": "DBX native Node.js bindings using napi-rs",
+    "main": "index.js",
+    "types": "index.d.ts",
+    "napi": {
+        "name": "dbx-native",
+        "triples": {
+            "defaults": true,
+            "additional": [
+                "x86_64-pc-windows-msvc",
+                "x86_64-apple-darwin",
+                "aarch64-apple-darwin",
+                "x86_64-unknown-linux-gnu"
+            ]
+        }
+    },
+    "scripts": {
+        "build": "napi build --platform --release --cargo-cwd ../../core/dbx-node",
+        "build:debug": "napi build --platform --cargo-cwd ../../core/dbx-node",
+        "prepublishOnly": "napi prepublish -t npm",
+        "test": "node examples/basic.js",
+        "bench": "node benchmarks/benchmark.js"
+    },
+    "devDependencies": {
+        "@napi-rs/cli": "^2.18.0",
+        "better-sqlite3": "^11.0.0"
+    },
+    "keywords": [
+        "database",
+        "key-value",
+        "rust",
+        "napi",
+        "native"
+    ],
+    "license": "MIT",
+    "engines": {
+        "node": ">= 16"
+    }
+}

@@ -1,0 +1,13 @@
+[package]
+name = "dbx-ffi"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "C FFI bindings for DBX database"
+
+[lib]
+crate-type = ["cdylib", "staticlib"]
+
+[dependencies]
+dbx-core = { path = "../dbx-core" }
+libc = "0.2"

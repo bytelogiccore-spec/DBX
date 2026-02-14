@@ -1,0 +1,1092 @@
+//! GPU Storage Layer ??Optional acceleration using CUDA.
+//!
+//! Provides utilities to transfer Arrow RecordBatches to GPU memory
+//! and execute custom kernels.
+
+#[cfg(feature = "gpu")]
+use cudarc::driver::{CudaContext, CudaModule, CudaSlice, LaunchConfig, PushKernelArg};
+#[cfg(feature = "gpu")]
+use cudarc::nvrtc::compile_ptx;
+#[cfg(feature = "gpu")]
+use dashmap::DashMap;
+
+use crate::error::{DbxError, DbxResult};
+use arrow::record_batch::RecordBatch;
+
+/// GPU Hash Strategy for GROUP BY operations
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Default)]
+pub enum GpuHashStrategy {
+    /// Linear probing - best for small group counts (< 100)
+    #[default]
+    Linear,
+    /// Cuckoo hashing - best for medium group counts (100-1000)
+    Cuckoo,
+    /// Robin Hood hashing - best for large group counts (> 1000) or large datasets
+    RobinHood,
+}
+
+
+impl GpuHashStrategy {
+    /// Parse from string (case-insensitive)
+    pub fn from_str(s: &str) -> DbxResult<Self> {
+        match s.to_lowercase().as_str() {
+            "linear" => Ok(GpuHashStrategy::Linear),
+            "cuckoo" => Ok(GpuHashStrategy::Cuckoo),
+            "robin_hood" | "robinhood" => Ok(GpuHashStrategy::RobinHood),
+            _ => Err(DbxError::Gpu(format!(
+                "Invalid GPU hash strategy: '{}'. Valid options: linear, cuckoo, robin_hood",
+                s
+            ))),
+        }
+    }
+
+    /// Get strategy name
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            GpuHashStrategy::Linear => "linear",
+            GpuHashStrategy::Cuckoo => "cuckoo",
+            GpuHashStrategy::RobinHood => "robin_hood",
+        }
+    }
+}
+
+/// Reduction strategy for SUM/COUNT operations
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Default)]
+pub enum GpuReductionStrategy {
+    /// Automatically choose based on data size
+    #[default]
+    Auto,
+    /// Single-pass with atomic operations (good for small data)
+    SinglePass,
+    /// Multi-pass reduction (good for large data, eliminates atomic contention)
+    MultiPass,
+}
+
+
+impl GpuReductionStrategy {
+    /// Parse from string (case-insensitive)
+    pub fn from_str(s: &str) -> DbxResult<Self> {
+        match s.to_lowercase().as_str() {
+            "auto" => Ok(GpuReductionStrategy::Auto),
+            "single" | "single_pass" => Ok(GpuReductionStrategy::SinglePass),
+            "multi" | "multi_pass" => Ok(GpuReductionStrategy::MultiPass),
+            _ => Err(DbxError::Gpu(format!(
+                "Invalid GPU reduction strategy: '{}'. Valid options: auto, single_pass, multi_pass",
+                s
+            ))),
+        }
+    }
+
+    /// Get strategy name
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            GpuReductionStrategy::Auto => "auto",
+            GpuReductionStrategy::SinglePass => "single_pass",
+            GpuReductionStrategy::MultiPass => "multi_pass",
+        }
+    }
+
+    /// Choose optimal strategy based on data size
+    /// For SUM: single-pass is generally better for current GPU architecture
+    /// Multi-pass only beneficial for extremely large datasets (>100M rows)
+    pub fn choose_for_sum(&self, data_size: usize) -> GpuReductionStrategy {
+        match self {
+            GpuReductionStrategy::Auto => {
+                // Based on benchmarks: single-pass is better for most cases
+                // Only use multi-pass for very large datasets
+                if data_size > 100_000_000 {
+                    GpuReductionStrategy::MultiPass
+                } else {
+                    GpuReductionStrategy::SinglePass
+                }
+            }
+            strategy => *strategy,
+        }
+    }
+}
+
+/// Represents a handle to memory on the GPU for a specific type.
+#[cfg(feature = "gpu")]
+pub enum GpuData {
+    Int32(CudaSlice<i32>),
+    Int64(CudaSlice<i64>),
+    Float64(CudaSlice<f64>),
+    /// Raw bytes, used for unsupported or generic data.
+    Raw(CudaSlice<u8>),
+}
+
+#[cfg(feature = "gpu")]
+impl GpuData {
+    pub fn len(&self) -> usize {
+        match self {
+            GpuData::Int32(s) => s.len(),
+            GpuData::Int64(s) => s.len(),
+            GpuData::Float64(s) => s.len(),
+            GpuData::Raw(s) => s.len(),
+        }
+    }
+}
+
+/// Manager for GPU-accelerated operations.
+pub struct GpuManager {
+    #[cfg(feature = "gpu")]
+    device: Arc<CudaContext>,
+
+    #[cfg(feature = "gpu")]
+    module: Arc<CudaModule>,
+
+    /// Buffer cache: table_name -> column_name -> GpuData
+    /// This avoids re-uploading data that hasn't changed.
+    #[cfg(feature = "gpu")]
+    buffer_cache: DashMap<String, DashMap<String, Arc<GpuData>>>,
+
+    /// Hash strategy for GROUP BY operations (runtime configurable)
+    hash_strategy: GpuHashStrategy,
+
+    /// Reduction strategy for SUM operations (runtime configurable)
+    reduction_strategy: GpuReductionStrategy,
+}
+
+#[cfg(feature = "gpu")]
+const KERNELS_SRC: &str = include_str!("kernels.cu");
+
+impl GpuManager {
+    /// Create a new GpuManager. Returns None if GPU acceleration is disabled
+    /// or if no compatible device is found.
+    pub fn try_new() -> Option<Self> {
+        #[cfg(feature = "gpu")]
+        {
+            let device = CudaContext::new(0).ok()?;
+
+            // Compile and Load kernels
+            let ptx = compile_ptx(KERNELS_SRC).ok()?;
+            let module = device.load_module(ptx).ok()?;
+
+            Some(Self {
+                device,
+                module,
+                buffer_cache: DashMap::new(),
+                hash_strategy: GpuHashStrategy::default(), // Linear by default
+                reduction_strategy: GpuReductionStrategy::default(), // Auto by default
+            })
+        }
+        #[cfg(not(feature = "gpu"))]
+        {
+            #[allow(unreachable_code)]
+            {
+                None
+            }
+        }
+    }
+
+    /// Set GPU hash strategy for GROUP BY operations
+    pub fn set_hash_strategy(&mut self, strategy: GpuHashStrategy) {
+        self.hash_strategy = strategy;
+    }
+
+    /// Get current GPU hash strategy
+    pub fn hash_strategy(&self) -> GpuHashStrategy {
+        self.hash_strategy
+    }
+
+    /// Set GPU reduction strategy for SUM operations
+    pub fn set_reduction_strategy(&mut self, strategy: GpuReductionStrategy) {
+        self.reduction_strategy = strategy;
+    }
+
+    /// Get current GPU reduction strategy
+    pub fn reduction_strategy(&self) -> GpuReductionStrategy {
+        self.reduction_strategy
+    }
+
+    /// Upload a RecordBatch to GPU memory and cache it.
+    pub fn upload_batch(&self, table: &str, batch: &RecordBatch) -> DbxResult<()> {
+        #[cfg(not(feature = "gpu"))]
+        {
+            let _ = (table, batch);
+            Err(DbxError::NotImplemented(
+                "GPU acceleration is not enabled".to_string(),
+            ))
+        }
+
+        #[cfg(feature = "gpu")]
+        {
+            let table_cache = self
+                .buffer_cache
+                .entry(table.to_string())
+                .or_insert_with(DashMap::new);
+            let schema = batch.schema();
+
+            for (i, column) in batch.columns().iter().enumerate() {
+                let column_name = schema.field(i).name();
+                if table_cache.contains_key(column_name) {
+                    continue;
+                }
+
+                let gpu_data = self.convert_and_upload(column)?;
+                table_cache.insert(column_name.clone(), Arc::new(gpu_data));
+            }
+            Ok(())
+        }
+    }
+
+    #[cfg(feature = "gpu")]
+    fn convert_and_upload(&self, array: &Arc<dyn Array>) -> DbxResult<GpuData> {
+        match array.data_type() {
+            arrow::datatypes::DataType::Int32 => {
+                let arr = array.as_any().downcast_ref::<Int32Array>().unwrap();
+                let stream = self.device.default_stream();
+                let slice = stream
+                    .clone_htod(arr.values().to_vec().as_slice())
+                    .map_err(|e| DbxError::Gpu(format!("CUDA HTOD copy (i32) failed: {:?}", e)))?;
+                Ok(GpuData::Int32(slice))
+            }
+            arrow::datatypes::DataType::Int64 => {
+                let arr = array.as_any().downcast_ref::<Int64Array>().unwrap();
+                let stream = self.device.default_stream();
+                let slice = stream
+                    .clone_htod(arr.values().to_vec().as_slice())
+                    .map_err(|e| DbxError::Gpu(format!("CUDA HTOD copy (i64) failed: {:?}", e)))?;
+                Ok(GpuData::Int64(slice))
+            }
+            arrow::datatypes::DataType::Float64 => {
+                let arr = array.as_any().downcast_ref::<Float64Array>().unwrap();
+                let stream = self.device.default_stream();
+                let slice = stream
+                    .clone_htod(arr.values().to_vec().as_slice())
+                    .map_err(|e| DbxError::Gpu(format!("CUDA HTOD copy (f64) failed: {:?}", e)))?;
+                Ok(GpuData::Float64(slice))
+            }
+            _ => Err(DbxError::NotImplemented(format!(
+                "GPU upload for type {:?} not supported yet",
+                array.data_type()
+            ))),
+        }
+    }
+
+    /// SUM aggregation on GPU with configurable reduction strategy.
+    pub fn sum(&self, table: &str, column: &str) -> DbxResult<i64> {
+        #[cfg(not(feature = "gpu"))]
+        {
+            let _ = (table, column);
+            Err(DbxError::NotImplemented(
+                "GPU acceleration is not enabled".to_string(),
+            ))
+        }
+
+        #[cfg(feature = "gpu")]
+        {
+            let data = self.get_gpu_data(table, column).ok_or_else(|| {
+                DbxError::Gpu(format!(
+                    "Column {}.{} not found in GPU cache",
+                    table, column
+                ))
+            })?;
+
+            match &*data {
+                GpuData::Int32(slice) => {
+                    let n = slice.len() as i32;
+                    let stream = self.device.default_stream();
+
+                    // Choose reduction strategy
+                    let strategy = self.reduction_strategy.choose_for_sum(slice.len());
+
+                    match strategy {
+                        GpuReductionStrategy::SinglePass => {
+                            // Single-pass with atomic operations
+                            let mut result_dev = stream.alloc_zeros::<i64>(1).map_err(|e| {
+                                DbxError::Gpu(format!("Failed to alloc result: {:?}", e))
+                            })?;
+
+                            let func = self.module.load_function("sum_i32").map_err(|_| {
+                                DbxError::Gpu("Kernel sum_i32 not found".to_string())
+                            })?;
+
+                            let cfg = LaunchConfig::for_num_elems(n as u32);
+                            let mut builder = stream.launch_builder(&func);
+                            builder.arg(slice);
+                            builder.arg(&mut result_dev);
+                            builder.arg(&n);
+                            unsafe { builder.launch(cfg) }.map_err(|e| {
+                                DbxError::Gpu(format!("Kernel launch failed: {:?}", e))
+                            })?;
+
+                            stream.synchronize().map_err(|e| {
+                                DbxError::Gpu(format!("Stream sync failed: {:?}", e))
+                            })?;
+                            let result_host = stream.clone_dtoh(&result_dev).map_err(|e| {
+                                DbxError::Gpu(format!("Failed to copy result: {:?}", e))
+                            })?;
+
+                            Ok(result_host[0])
+                        }
+                        GpuReductionStrategy::MultiPass => {
+                            // Multi-pass reduction (eliminates atomic contention)
+                            let cfg = LaunchConfig::for_num_elems(n as u32);
+                            let num_blocks = cfg.grid_dim.0 as usize;
+
+                            // Allocate intermediate buffer for block partial sums
+                            let mut block_sums_dev =
+                                stream.alloc_zeros::<i64>(num_blocks).map_err(|e| {
+                                    DbxError::Gpu(format!("Failed to alloc block_sums: {:?}", e))
+                                })?;
+
+                            // Pass 1: Compute block partial sums
+                            let func_pass1 =
+                                self.module.load_function("sum_i32_pass1").map_err(|_| {
+                                    DbxError::Gpu("Kernel sum_i32_pass1 not found".to_string())
+                                })?;
+
+                            let mut builder = stream.launch_builder(&func_pass1);
+                            builder.arg(slice);
+                            builder.arg(&mut block_sums_dev);
+                            builder.arg(&n);
+                            unsafe { builder.launch(cfg) }.map_err(|e| {
+                                DbxError::Gpu(format!("Pass1 kernel launch failed: {:?}", e))
+                            })?;
+
+                            // Pass 2: Final reduction of block sums
+                            let mut result_dev = stream.alloc_zeros::<i64>(1).map_err(|e| {
+                                DbxError::Gpu(format!("Failed to alloc result: {:?}", e))
+                            })?;
+
+                            let func_pass2 =
+                                self.module.load_function("sum_i32_pass2").map_err(|_| {
+                                    DbxError::Gpu("Kernel sum_i32_pass2 not found".to_string())
+                                })?;
+
+                            // Use single block for pass2 (num_blocks is usually small)
+                            let cfg_pass2 = LaunchConfig {
+                                grid_dim: (1, 1, 1),
+                                block_dim: (256, 1, 1),
+                                shared_mem_bytes: 0,
+                            };
+
+                            let mut builder2 = stream.launch_builder(&func_pass2);
+                            builder2.arg(&block_sums_dev);
+                            builder2.arg(&mut result_dev);
+                            let num_blocks_i32 = num_blocks as i32;
+                            builder2.arg(&num_blocks_i32);
+                            unsafe { builder2.launch(cfg_pass2) }.map_err(|e| {
+                                DbxError::Gpu(format!("Pass2 kernel launch failed: {:?}", e))
+                            })?;
+
+                            stream.synchronize().map_err(|e| {
+                                DbxError::Gpu(format!("Stream sync failed: {:?}", e))
+                            })?;
+                            let result_host = stream.clone_dtoh(&result_dev).map_err(|e| {
+                                DbxError::Gpu(format!("Failed to copy result: {:?}", e))
+                            })?;
+
+                            Ok(result_host[0])
+                        }
+                        GpuReductionStrategy::Auto => {
+                            unreachable!("Auto should be resolved by choose_for_sum")
+                        }
+                    }
+                }
+                _ => Err(DbxError::NotImplemented(
+                    "GPU SUM only supported for Int32 for now".to_string(),
+                )),
+            }
+        }
+    }
+
+    /// COUNT aggregation on GPU (single-pass for simplicity).
+    pub fn count(&self, table: &str, column: &str) -> DbxResult<u64> {
+        #[cfg(not(feature = "gpu"))]
+        {
+            let _ = (table, column);
+            Err(DbxError::NotImplemented(
+                "GPU acceleration is not enabled".to_string(),
+            ))
+        }
+
+        #[cfg(feature = "gpu")]
+        {
+            let data = self.get_gpu_data(table, column).ok_or_else(|| {
+                DbxError::Gpu(format!(
+                    "Column {}.{} not found in GPU cache",
+                    table, column
+                ))
+            })?;
+
+            let n = data.len() as i32;
+            let stream = self.device.default_stream();
+            let mut result_dev = stream
+                .alloc_zeros::<i64>(1)
+                .map_err(|e| DbxError::Gpu(format!("Failed to alloc result: {:?}", e)))?;
+
+            let func = self
+                .module
+                .load_function("count_all")
+                .map_err(|_| DbxError::Gpu("Kernel count_all not found".to_string()))?;
+
+            let cfg = LaunchConfig::for_num_elems(n as u32);
+
+            // We pass the slice as a raw pointer since type varies but data[i] access in count_all is fixed offset logic
+            let mut builder = stream.launch_builder(&func);
+            match &*data {
+                GpuData::Int32(s) => {
+                    builder.arg(s);
+                    builder.arg(&mut result_dev);
+                    builder.arg(&n);
+                }
+                GpuData::Int64(s) => {
+                    builder.arg(s);
+                    builder.arg(&mut result_dev);
+                    builder.arg(&n);
+                }
+                GpuData::Float64(s) => {
+                    builder.arg(s);
+                    builder.arg(&mut result_dev);
+                    builder.arg(&n);
+                }
+                GpuData::Raw(s) => {
+                    builder.arg(s);
+                    builder.arg(&mut result_dev);
+                    builder.arg(&n);
+                }
+            }
+            unsafe { builder.launch(cfg) }
+                .map_err(|e| DbxError::Gpu(format!("Kernel launch failed: {:?}", e)))?;
+
+            stream
+                .synchronize()
+                .map_err(|e| DbxError::Gpu(format!("Stream sync failed: {:?}", e)))?;
+            let result_host = stream
+                .clone_dtoh(&result_dev)
+                .map_err(|e| DbxError::Gpu(format!("Failed to copy result: {:?}", e)))?;
+
+            Ok(result_host[0] as u64)
+        }
+    }
+
+    /// MIN/MAX aggregation on GPU.
+    pub fn min_max(&self, table: &str, column: &str, find_max: bool) -> DbxResult<i32> {
+        #[cfg(not(feature = "gpu"))]
+        {
+            let _ = (table, column, find_max);
+            Err(DbxError::NotImplemented(
+                "GPU acceleration is not enabled".to_string(),
+            ))
+        }
+
+        #[cfg(feature = "gpu")]
+        {
+            let data = self.get_gpu_data(table, column).ok_or_else(|| {
+                DbxError::Gpu(format!(
+                    "Column {}.{} not found in GPU cache",
+                    table, column
+                ))
+            })?;
+
+            match &*data {
+                GpuData::Int32(slice) => {
+                    let n = slice.len() as i32;
+                    let initial_val = if find_max { i32::MIN } else { i32::MAX };
+                    let stream = self.device.default_stream();
+                    let mut result_dev = stream
+                        .clone_htod(&[initial_val])
+                        .map_err(|e| DbxError::Gpu(format!("Failed to alloc result: {:?}", e)))?;
+
+                    let kernel_name = if find_max { "max_i32" } else { "min_i32" };
+                    let func = self
+                        .module
+                        .load_function(kernel_name)
+                        .map_err(|_| DbxError::Gpu(format!("Kernel {} not found", kernel_name)))?;
+
+                    let cfg = LaunchConfig::for_num_elems(n as u32);
+                    let mut builder = stream.launch_builder(&func);
+                    builder.arg(slice);
+                    builder.arg(&mut result_dev);
+                    builder.arg(&n);
+                    unsafe { builder.launch(cfg) }
+                        .map_err(|e| DbxError::Gpu(format!("Kernel launch failed: {:?}", e)))?;
+
+                    stream
+                        .synchronize()
+                        .map_err(|e| DbxError::Gpu(format!("Stream sync failed: {:?}", e)))?;
+                    let result_host = stream
+                        .clone_dtoh(&result_dev)
+                        .map_err(|e| DbxError::Gpu(format!("Failed to copy result: {:?}", e)))?;
+
+                    Ok(result_host[0])
+                }
+                _ => Err(DbxError::NotImplemented(
+                    "GPU MIN/MAX only supported for Int32 for now".to_string(),
+                )),
+            }
+        }
+    }
+
+    /// Filter GT on GPU. Returns a bitmask (Vec<u8> where 1 means true).
+    pub fn filter_gt(&self, table: &str, column: &str, threshold: i32) -> DbxResult<Vec<u8>> {
+        #[cfg(not(feature = "gpu"))]
+        {
+            let _ = (table, column, threshold);
+            Err(DbxError::NotImplemented(
+                "GPU acceleration is not enabled".to_string(),
+            ))
+        }
+
+        #[cfg(feature = "gpu")]
+        {
+            let data = self.get_gpu_data(table, column).ok_or_else(|| {
+                DbxError::Gpu(format!(
+                    "Column {}.{} not found in GPU cache",
+                    table, column
+                ))
+            })?;
+
+            match &*data {
+                GpuData::Int32(slice) => {
+                    let n = slice.len() as i32;
+                    let stream = self.device.default_stream();
+                    let mut mask_dev = stream
+                        .alloc_zeros::<u8>(n as usize)
+                        .map_err(|e| DbxError::Gpu(format!("Failed to alloc mask: {:?}", e)))?;
+
+                    let func = self
+                        .module
+                        .load_function("filter_gt_i32")
+                        .map_err(|_| DbxError::Gpu("Kernel filter_gt_i32 not found".to_string()))?;
+
+                    let cfg = LaunchConfig::for_num_elems(n as u32);
+                    let mut builder = stream.launch_builder(&func);
+                    builder.arg(slice);
+                    builder.arg(&threshold);
+                    builder.arg(&mut mask_dev);
+                    builder.arg(&n);
+                    unsafe { builder.launch(cfg) }
+                        .map_err(|e| DbxError::Gpu(format!("Kernel launch failed: {:?}", e)))?;
+
+                    stream
+                        .synchronize()
+                        .map_err(|e| DbxError::Gpu(format!("Stream sync failed: {:?}", e)))?;
+                    let mask_host = stream
+                        .clone_dtoh(&mask_dev)
+                        .map_err(|e| DbxError::Gpu(format!("Failed to copy mask: {:?}", e)))?;
+
+                    Ok(mask_host)
+                }
+                _ => Err(DbxError::NotImplemented(
+                    "GPU FILTER only supported for Int32 for now".to_string(),
+                )),
+            }
+        }
+    }
+
+    /// Retrieve cached GPU data for a specific column.
+    #[cfg(feature = "gpu")]
+    pub fn get_gpu_data(&self, table: &str, column: &str) -> Option<Arc<GpuData>> {
+        self.buffer_cache
+            .get(table)?
+            .get(column)
+            .map(|v| Arc::clone(&v))
+    }
+
+    pub fn clear_table_cache(&self, _table: &str) {
+        #[cfg(feature = "gpu")]
+        {
+            self.buffer_cache.remove(table);
+        }
+    }
+
+    pub fn clear_all_cache(&self) {
+        #[cfg(feature = "gpu")]
+        {
+            self.buffer_cache.clear();
+        }
+    }
+
+    // ========================================================================
+    // GROUP BY Aggregation
+    // ========================================================================
+
+    /// GROUP BY with SUM aggregation on GPU.
+    /// Returns Vec<(group_key, sum_value, count)>
+    pub fn group_by_sum(
+        &self,
+        table: &str,
+        group_column: &str,
+        value_column: &str,
+    ) -> DbxResult<Vec<(i32, i64, i32)>> {
+        #[cfg(not(feature = "gpu"))]
+        {
+            let _ = (table, group_column, value_column);
+            Err(DbxError::NotImplemented(
+                "GPU acceleration is not enabled".to_string(),
+            ))
+        }
+
+        #[cfg(feature = "gpu")]
+        {
+            let keys_data = self.get_gpu_data(table, group_column).ok_or_else(|| {
+                DbxError::Gpu(format!(
+                    "Column {}.{} not found in GPU cache",
+                    table, group_column
+                ))
+            })?;
+            let values_data = self.get_gpu_data(table, value_column).ok_or_else(|| {
+                DbxError::Gpu(format!(
+                    "Column {}.{} not found in GPU cache",
+                    table, value_column
+                ))
+            })?;
+
+            let (keys_slice, n) = match &*keys_data {
+                GpuData::Int32(slice) => (slice, slice.len()),
+                _ => {
+                    return Err(DbxError::NotImplemented(
+                        "GROUP BY keys must be Int32".to_string(),
+                    ));
+                }
+            };
+
+            let values_slice = match &*values_data {
+                GpuData::Int64(slice) => slice,
+                _ => {
+                    return Err(DbxError::NotImplemented(
+                        "GROUP BY values must be Int64 for SUM".to_string(),
+                    ));
+                }
+            };
+
+            // Hash table size: ~2x input size for good performance
+            let table_size = (n * 2).next_power_of_two();
+            let stream = self.device.default_stream();
+
+            // Allocate hash table (initialized to -1 for keys, 0 for sums/counts)
+            let mut hash_keys = vec![-1i32; table_size];
+            let mut hash_sums = vec![0i64; table_size];
+            let mut hash_counts = vec![0i32; table_size];
+
+            let mut hash_keys_dev = stream
+                .clone_htod(&hash_keys)
+                .map_err(|e| DbxError::Gpu(format!("Failed to alloc hash keys: {:?}", e)))?;
+            let mut hash_sums_dev = stream
+                .clone_htod(&hash_sums)
+                .map_err(|e| DbxError::Gpu(format!("Failed to alloc hash sums: {:?}", e)))?;
+            let mut hash_counts_dev = stream
+                .clone_htod(&hash_counts)
+                .map_err(|e| DbxError::Gpu(format!("Failed to alloc hash counts: {:?}", e)))?;
+
+            // Launch kernel
+            let func = self
+                .module
+                .load_function("group_by_sum_i32")
+                .map_err(|_| DbxError::Gpu("Kernel group_by_sum_i32 not found".to_string()))?;
+
+            let cfg = LaunchConfig::for_num_elems(n as u32);
+            let n_i32 = n as i32;
+            let table_size_i32 = table_size as i32;
+
+            let mut builder = stream.launch_builder(&func);
+            builder.arg(keys_slice);
+            builder.arg(values_slice);
+            builder.arg(&mut hash_keys_dev);
+            builder.arg(&mut hash_sums_dev);
+            builder.arg(&mut hash_counts_dev);
+            builder.arg(&n_i32);
+            builder.arg(&table_size_i32);
+            unsafe { builder.launch(cfg) }
+                .map_err(|e| DbxError::Gpu(format!("Kernel launch failed: {:?}", e)))?;
+
+            stream
+                .synchronize()
+                .map_err(|e| DbxError::Gpu(format!("Stream sync failed: {:?}", e)))?;
+
+            // Copy results back
+            hash_keys = stream
+                .clone_dtoh(&hash_keys_dev)
+                .map_err(|e| DbxError::Gpu(format!("Failed to copy hash keys: {:?}", e)))?;
+            hash_sums = stream
+                .clone_dtoh(&hash_sums_dev)
+                .map_err(|e| DbxError::Gpu(format!("Failed to copy hash sums: {:?}", e)))?;
+            hash_counts = stream
+                .clone_dtoh(&hash_counts_dev)
+                .map_err(|e| DbxError::Gpu(format!("Failed to copy hash counts: {:?}", e)))?;
+
+            // Extract non-empty groups
+            let mut results = Vec::new();
+            for i in 0..table_size {
+                if hash_keys[i] != -1 {
+                    results.push((hash_keys[i], hash_sums[i], hash_counts[i]));
+                }
+            }
+
+            Ok(results)
+        }
+    }
+
+    /// GROUP BY with COUNT aggregation on GPU.
+    /// Returns Vec<(group_key, count)>
+    pub fn group_by_count(&self, table: &str, group_column: &str) -> DbxResult<Vec<(i32, i32)>> {
+        #[cfg(not(feature = "gpu"))]
+        {
+            let _ = (table, group_column);
+            Err(DbxError::NotImplemented(
+                "GPU acceleration is not enabled".to_string(),
+            ))
+        }
+
+        #[cfg(feature = "gpu")]
+        {
+            let keys_data = self.get_gpu_data(table, group_column).ok_or_else(|| {
+                DbxError::Gpu(format!(
+                    "Column {}.{} not found in GPU cache",
+                    table, group_column
+                ))
+            })?;
+
+            let (keys_slice, n) = match &*keys_data {
+                GpuData::Int32(slice) => (slice, slice.len()),
+                _ => {
+                    return Err(DbxError::NotImplemented(
+                        "GROUP BY keys must be Int32".to_string(),
+                    ));
+                }
+            };
+
+            let table_size = (n * 2).next_power_of_two();
+            let stream = self.device.default_stream();
+
+            let mut hash_keys = vec![-1i32; table_size];
+            let mut hash_counts = vec![0i32; table_size];
+
+            let mut hash_keys_dev = stream
+                .clone_htod(&hash_keys)
+                .map_err(|e| DbxError::Gpu(format!("Failed to alloc hash keys: {:?}", e)))?;
+            let mut hash_counts_dev = stream
+                .clone_htod(&hash_counts)
+                .map_err(|e| DbxError::Gpu(format!("Failed to alloc hash counts: {:?}", e)))?;
+
+            let func = self
+                .module
+                .load_function("group_by_count_i32")
+                .map_err(|_| DbxError::Gpu("Kernel group_by_count_i32 not found".to_string()))?;
+
+            let cfg = LaunchConfig::for_num_elems(n as u32);
+            let n_i32 = n as i32;
+            let table_size_i32 = table_size as i32;
+
+            let mut builder = stream.launch_builder(&func);
+            builder.arg(keys_slice);
+            builder.arg(&mut hash_keys_dev);
+            builder.arg(&mut hash_counts_dev);
+            builder.arg(&n_i32);
+            builder.arg(&table_size_i32);
+            unsafe { builder.launch(cfg) }
+                .map_err(|e| DbxError::Gpu(format!("Kernel launch failed: {:?}", e)))?;
+
+            stream
+                .synchronize()
+                .map_err(|e| DbxError::Gpu(format!("Stream sync failed: {:?}", e)))?;
+
+            hash_keys = stream
+                .clone_dtoh(&hash_keys_dev)
+                .map_err(|e| DbxError::Gpu(format!("Failed to copy hash keys: {:?}", e)))?;
+            hash_counts = stream
+                .clone_dtoh(&hash_counts_dev)
+                .map_err(|e| DbxError::Gpu(format!("Failed to copy hash counts: {:?}", e)))?;
+
+            let mut results = Vec::new();
+            for i in 0..table_size {
+                if hash_keys[i] != -1 {
+                    results.push((hash_keys[i], hash_counts[i]));
+                }
+            }
+
+            Ok(results)
+        }
+    }
+
+    /// GROUP BY with MIN/MAX aggregation on GPU.
+    /// Returns Vec<(group_key, min_or_max_value, count)>
+    pub fn group_by_min_max(
+        &self,
+        table: &str,
+        group_column: &str,
+        value_column: &str,
+        find_max: bool,
+    ) -> DbxResult<Vec<(i32, i32, i32)>> {
+        #[cfg(not(feature = "gpu"))]
+        {
+            let _ = (table, group_column, value_column, find_max);
+            Err(DbxError::NotImplemented(
+                "GPU acceleration is not enabled".to_string(),
+            ))
+        }
+
+        #[cfg(feature = "gpu")]
+        {
+            let keys_data = self.get_gpu_data(table, group_column).ok_or_else(|| {
+                DbxError::Gpu(format!(
+                    "Column {}.{} not found in GPU cache",
+                    table, group_column
+                ))
+            })?;
+            let values_data = self.get_gpu_data(table, value_column).ok_or_else(|| {
+                DbxError::Gpu(format!(
+                    "Column {}.{} not found in GPU cache",
+                    table, value_column
+                ))
+            })?;
+
+            let (keys_slice, n) = match &*keys_data {
+                GpuData::Int32(slice) => (slice, slice.len()),
+                _ => {
+                    return Err(DbxError::NotImplemented(
+                        "GROUP BY keys must be Int32".to_string(),
+                    ));
+                }
+            };
+
+            let values_slice = match &*values_data {
+                GpuData::Int32(slice) => slice,
+                _ => {
+                    return Err(DbxError::NotImplemented(
+                        "GROUP BY values must be Int32 for MIN/MAX".to_string(),
+                    ));
+                }
+            };
+
+            let table_size = (n * 2).next_power_of_two();
+            let stream = self.device.default_stream();
+
+            let initial_val = if find_max { i32::MIN } else { i32::MAX };
+            let mut hash_keys = vec![-1i32; table_size];
+            let mut hash_values = vec![initial_val; table_size];
+            let mut hash_counts = vec![0i32; table_size];
+
+            let mut hash_keys_dev = stream
+                .clone_htod(&hash_keys)
+                .map_err(|e| DbxError::Gpu(format!("Failed to alloc hash keys: {:?}", e)))?;
+            let mut hash_values_dev = stream
+                .clone_htod(&hash_values)
+                .map_err(|e| DbxError::Gpu(format!("Failed to alloc hash values: {:?}", e)))?;
+            let mut hash_counts_dev = stream
+                .clone_htod(&hash_counts)
+                .map_err(|e| DbxError::Gpu(format!("Failed to alloc hash counts: {:?}", e)))?;
+
+            let kernel_name = if find_max {
+                "group_by_max_i32"
+            } else {
+                "group_by_min_i32"
+            };
+            let func = self
+                .module
+                .load_function(kernel_name)
+                .map_err(|_| DbxError::Gpu(format!("Kernel {} not found", kernel_name)))?;
+
+            let cfg = LaunchConfig::for_num_elems(n as u32);
+            let n_i32 = n as i32;
+            let table_size_i32 = table_size as i32;
+
+            let mut builder = stream.launch_builder(&func);
+            builder.arg(keys_slice);
+            builder.arg(values_slice);
+            builder.arg(&mut hash_keys_dev);
+            builder.arg(&mut hash_values_dev);
+            builder.arg(&mut hash_counts_dev);
+            builder.arg(&n_i32);
+            builder.arg(&table_size_i32);
+            unsafe { builder.launch(cfg) }
+                .map_err(|e| DbxError::Gpu(format!("Kernel launch failed: {:?}", e)))?;
+
+            stream
+                .synchronize()
+                .map_err(|e| DbxError::Gpu(format!("Stream sync failed: {:?}", e)))?;
+
+            hash_keys = stream
+                .clone_dtoh(&hash_keys_dev)
+                .map_err(|e| DbxError::Gpu(format!("Failed to copy hash keys: {:?}", e)))?;
+            hash_values = stream
+                .clone_dtoh(&hash_values_dev)
+                .map_err(|e| DbxError::Gpu(format!("Failed to copy hash values: {:?}", e)))?;
+            hash_counts = stream
+                .clone_dtoh(&hash_counts_dev)
+                .map_err(|e| DbxError::Gpu(format!("Failed to copy hash counts: {:?}", e)))?;
+
+            let mut results = Vec::new();
+            for i in 0..table_size {
+                if hash_keys[i] != -1 {
+                    results.push((hash_keys[i], hash_values[i], hash_counts[i]));
+                }
+            }
+
+            Ok(results)
+        }
+    }
+
+    // ========================================================================
+    // Hash Join
+    // ========================================================================
+
+    /// Hash Join on GPU: Build + Probe phases.
+    /// Returns Vec<(probe_row_id, build_row_id)> for matched rows.
+    pub fn hash_join(
+        &self,
+        build_table: &str,
+        build_key_column: &str,
+        probe_table: &str,
+        probe_key_column: &str,
+    ) -> DbxResult<Vec<(i32, i32)>> {
+        #[cfg(not(feature = "gpu"))]
+        {
+            let _ = (build_table, build_key_column, probe_table, probe_key_column);
+            Err(DbxError::NotImplemented(
+                "GPU acceleration is not enabled".to_string(),
+            ))
+        }
+
+        #[cfg(feature = "gpu")]
+        {
+            // Get build side keys
+            let build_keys_data = self
+                .get_gpu_data(build_table, build_key_column)
+                .ok_or_else(|| {
+                    DbxError::Gpu(format!(
+                        "Column {}.{} not found in GPU cache",
+                        build_table, build_key_column
+                    ))
+                })?;
+            let (build_keys_slice, build_n) = match &*build_keys_data {
+                GpuData::Int32(slice) => (slice, slice.len()),
+                _ => {
+                    return Err(DbxError::NotImplemented(
+                        "Hash join keys must be Int32".to_string(),
+                    ));
+                }
+            };
+
+            // Get probe side keys
+            let probe_keys_data = self
+                .get_gpu_data(probe_table, probe_key_column)
+                .ok_or_else(|| {
+                    DbxError::Gpu(format!(
+                        "Column {}.{} not found in GPU cache",
+                        probe_table, probe_key_column
+                    ))
+                })?;
+            let (probe_keys_slice, probe_n) = match &*probe_keys_data {
+                GpuData::Int32(slice) => (slice, slice.len()),
+                _ => {
+                    return Err(DbxError::NotImplemented(
+                        "Hash join keys must be Int32".to_string(),
+                    ));
+                }
+            };
+
+            let stream = self.device.default_stream();
+
+            // Phase 1: Build hash table
+            let table_size = (build_n * 2).next_power_of_two();
+            let mut hash_table_keys = vec![-1i32; table_size];
+            let mut hash_table_row_ids = vec![-1i32; table_size];
+
+            let mut hash_table_keys_dev = stream
+                .clone_htod(&hash_table_keys)
+                .map_err(|e| DbxError::Gpu(format!("Failed to alloc hash table keys: {:?}", e)))?;
+            let mut hash_table_row_ids_dev =
+                stream.clone_htod(&hash_table_row_ids).map_err(|e| {
+                    DbxError::Gpu(format!("Failed to alloc hash table row IDs: {:?}", e))
+                })?;
+
+            // Create build row IDs (0, 1, 2, ...)
+            let build_row_ids: Vec<i32> = (0..build_n as i32).collect();
+            let build_row_ids_dev = stream
+                .clone_htod(&build_row_ids)
+                .map_err(|e| DbxError::Gpu(format!("Failed to alloc build row IDs: {:?}", e)))?;
+
+            let build_func = self
+                .module
+                .load_function("hash_join_build_i32")
+                .map_err(|_| DbxError::Gpu("Kernel hash_join_build_i32 not found".to_string()))?;
+
+            let build_cfg = LaunchConfig::for_num_elems(build_n as u32);
+            let build_n_i32 = build_n as i32;
+            let table_size_i32 = table_size as i32;
+
+            let mut builder = stream.launch_builder(&build_func);
+            builder.arg(build_keys_slice);
+            builder.arg(&build_row_ids_dev);
+            builder.arg(&mut hash_table_keys_dev);
+            builder.arg(&mut hash_table_row_ids_dev);
+            builder.arg(&build_n_i32);
+            builder.arg(&table_size_i32);
+            unsafe { builder.launch(build_cfg) }
+                .map_err(|e| DbxError::Gpu(format!("Build kernel launch failed: {:?}", e)))?;
+
+            stream
+                .synchronize()
+                .map_err(|e| DbxError::Gpu(format!("Build stream sync failed: {:?}", e)))?;
+
+            // Phase 2: Probe hash table
+            let max_output_size = probe_n * 2; // Conservative estimate
+            let mut output_probe_ids = vec![0i32; max_output_size];
+            let mut output_build_ids = vec![0i32; max_output_size];
+            let mut match_count = vec![0i32; 1];
+
+            let mut output_probe_ids_dev = stream
+                .clone_htod(&output_probe_ids)
+                .map_err(|e| DbxError::Gpu(format!("Failed to alloc output probe IDs: {:?}", e)))?;
+            let mut output_build_ids_dev = stream
+                .clone_htod(&output_build_ids)
+                .map_err(|e| DbxError::Gpu(format!("Failed to alloc output build IDs: {:?}", e)))?;
+            let mut match_count_dev = stream
+                .clone_htod(&match_count)
+                .map_err(|e| DbxError::Gpu(format!("Failed to alloc match count: {:?}", e)))?;
+
+            let probe_func = self
+                .module
+                .load_function("hash_join_probe_i32")
+                .map_err(|_| DbxError::Gpu("Kernel hash_join_probe_i32 not found".to_string()))?;
+
+            let probe_cfg = LaunchConfig::for_num_elems(probe_n as u32);
+            let probe_n_i32 = probe_n as i32;
+            let max_output_size_i32 = max_output_size as i32;
+
+            let mut builder = stream.launch_builder(&probe_func);
+            builder.arg(probe_keys_slice);
+            builder.arg(&hash_table_keys_dev);
+            builder.arg(&hash_table_row_ids_dev);
+            builder.arg(&mut output_probe_ids_dev);
+            builder.arg(&mut output_build_ids_dev);
+            builder.arg(&mut match_count_dev);
+            builder.arg(&probe_n_i32);
+            builder.arg(&table_size_i32);
+            builder.arg(&max_output_size_i32);
+            unsafe { builder.launch(probe_cfg) }
+                .map_err(|e| DbxError::Gpu(format!("Probe kernel launch failed: {:?}", e)))?;
+
+            stream
+                .synchronize()
+                .map_err(|e| DbxError::Gpu(format!("Probe stream sync failed: {:?}", e)))?;
+
+            // Copy results back
+            match_count = stream
+                .clone_dtoh(&match_count_dev)
+                .map_err(|e| DbxError::Gpu(format!("Failed to copy match count: {:?}", e)))?;
+            let actual_matches = match_count[0] as usize;
+
+            output_probe_ids = stream
+                .clone_dtoh(&output_probe_ids_dev)
+                .map_err(|e| DbxError::Gpu(format!("Failed to copy output probe IDs: {:?}", e)))?;
+            output_build_ids = stream
+                .clone_dtoh(&output_build_ids_dev)
+                .map_err(|e| DbxError::Gpu(format!("Failed to copy output build IDs: {:?}", e)))?;
+
+            // Extract matched pairs
+            let mut results = Vec::new();
+            for i in 0..actual_matches.min(max_output_size) {
+                results.push((output_probe_ids[i], output_build_ids[i]));
+            }
+
+            Ok(results)
+        }
+    }
+}
