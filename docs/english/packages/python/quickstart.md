@@ -1,36 +1,36 @@
 ---
 layout: default
-title: 빠른 시작
+title: Quick Start
 parent: Python (dbx-py)
-grand_parent: 패키지
-great_grand_parent: 한국어
+grand_parent: Packages
+great_grand_parent: English
 nav_order: 2
 ---
 
-# 빠른 시작
+# Quick Start
 
-5분 안에 DBX를 시작해보세요!
+Get started with DBX in 5 minutes!
 
-## 설치
+## Installation
 
 ```bash
 pip install dbx-py
 ```
 
-## 첫 번째 프로그램
+## First Program
 
 ```python
 from dbx_py import Database
 
-# 인메모리 데이터베이스 열기
+# Open in-memory database
 db = Database.open_in_memory()
 
-# KV 작업
+# KV operations
 db.insert("users", b"user:1", b"Alice")
 value = db.get("users", b"user:1")
 print(value.decode())  # Alice
 
-# SQL 작업
+# SQL operations
 db.execute_sql("CREATE TABLE users (id INTEGER, name TEXT)")
 db.execute_sql("INSERT INTO users VALUES (1, 'Alice')")
 result = db.execute_sql("SELECT * FROM users")
@@ -39,16 +39,16 @@ print(result)
 db.close()
 ```
 
-## Context Manager 사용
+## Using Context Manager
 
 ```python
 with Database("mydb.db") as db:
     db.insert("users", b"user:1", b"Alice")
-    # 자동으로 flush() 및 close()
+    # Automatically flush() and close()
 ```
 
-## 다음 단계
+## Next Steps
 
-- [SQL 가이드](sql-guide) - SQL 사용법
-- [KV 작업](kv-operations) - Key-Value 작업
-- [API 레퍼런스](api-reference) - 전체 API
+- [SQL Guide](sql-guide) - SQL usage
+- [KV Operations](kv-operations) - Key-Value operations
+- [API Reference](api-reference) - Complete API

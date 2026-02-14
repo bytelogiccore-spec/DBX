@@ -1,17 +1,17 @@
 ---
 layout: default
-title: 고급 기능
+title: Advanced
 parent: Python (dbx-py)
-grand_parent: 패키지
-great_grand_parent: 한국어
+grand_parent: Packages
+great_grand_parent: English
 nav_order: 5
 ---
 
-# 고급 기능
+# Advanced Features
 
-## 트랜잭션
+## Transactions
 
-### 기본 트랜잭션
+### Basic Transaction
 
 ```python
 from dbx_py import Database
@@ -28,25 +28,12 @@ except Exception as e:
     print(f"Transaction failed: {e}")
 ```
 
-### Context Manager
+## Performance Tuning
+
+### Batch Operations
 
 ```python
-# 향후 지원 예정
-```
-
-## 암호화
-
-```python
-# 향후 지원 예정
-# db = Database.open_encrypted("mydb.db", password="secret")
-```
-
-## 성능 튜닝
-
-### 배치 작업
-
-```python
-# 트랜잭션 사용
+# Use transactions
 tx = db.begin_transaction()
 for i in range(10000):
     db.insert("data", f"key:{i}".encode(), f"value:{i}".encode())
@@ -54,14 +41,14 @@ tx.commit()
 db.flush()
 ```
 
-### 버퍼 플러시
+### Buffer Flush
 
 ```python
-# 명시적 플러시
+# Explicit flush
 db.flush()
 ```
 
-## 멀티스레딩
+## Multithreading
 
 ```python
 import threading
@@ -84,7 +71,7 @@ for t in threads:
     t.join()
 ```
 
-## 다음 단계
+## Next Steps
 
-- [실전 예제](examples) - 더 많은 예제
-- [API 레퍼런스](api-reference) - 전체 API
+- [Examples](examples) - More examples
+- [API Reference](api-reference) - Complete API

@@ -1,15 +1,15 @@
 ---
 layout: default
-title: 실전 예제
+title: Examples
 parent: Python (dbx-py)
-grand_parent: 패키지
-great_grand_parent: 한국어
+grand_parent: Packages
+great_grand_parent: English
 nav_order: 7
 ---
 
-# 실전 예제
+# Real-World Examples
 
-## Flask 웹 애플리케이션
+## Flask Web Application
 
 ```python
 from flask import Flask, request, jsonify
@@ -18,7 +18,7 @@ from dbx_py import Database
 app = Flask(__name__)
 db = Database("app.db")
 
-# 스키마 초기화
+# Initialize schema
 db.execute_sql("CREATE TABLE IF NOT EXISTS users (id INTEGER, name TEXT, email TEXT)")
 
 @app.route('/users', methods=['POST'])
@@ -37,7 +37,7 @@ if __name__ == '__main__':
     app.run(debug=True)
 ```
 
-## 로그 분석기
+## Log Analyzer
 
 ```python
 import re
@@ -74,7 +74,7 @@ class LogAnalyzer:
     def close(self):
         self.db.close()
 
-# 사용
+# Usage
 analyzer = LogAnalyzer("logs.db")
 analyzer.parse_log("app.log")
 errors = analyzer.get_errors()
@@ -82,7 +82,7 @@ print(errors)
 analyzer.close()
 ```
 
-## 캐시 데코레이터
+## Cache Decorator
 
 ```python
 import functools
@@ -97,37 +97,37 @@ class CacheDecorator:
     def __call__(self, func):
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
-            # 캐시 키 생성
+            # Generate cache key
             key = f"{func.__name__}:{json.dumps(args)}:{json.dumps(kwargs)}"
             
-            # 캐시 조회
+            # Check cache
             cached = self.db.get("cache", key.encode())
             if cached:
                 return json.loads(cached.decode())
             
-            # 함수 실행
+            # Execute function
             result = func(*args, **kwargs)
             
-            # 캐시 저장
+            # Save to cache
             self.db.insert("cache", key.encode(), json.dumps(result).encode())
             
             return result
         return wrapper
 
-# 사용
+# Usage
 cache = CacheDecorator("cache.db")
 
 @cache
 def expensive_function(x, y):
     import time
-    time.sleep(2)  # 시뮬레이션
+    time.sleep(2)  # Simulation
     return x + y
 
-print(expensive_function(1, 2))  # 2초 소요
-print(expensive_function(1, 2))  # 즉시 반환 (캐시)
+print(expensive_function(1, 2))  # Takes 2 seconds
+print(expensive_function(1, 2))  # Returns immediately (cached)
 ```
 
-## 다음 단계
+## Next Steps
 
-- [API 레퍼런스](api-reference) - 전체 API
-- [고급 기능](advanced) - 트랜잭션, 성능 튜닝
+- [API Reference](api-reference) - Complete API
+- [Advanced](advanced) - Transactions, performance tuning

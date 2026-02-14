@@ -1,85 +1,101 @@
 ---
 layout: default
-title: 설치
+title: Installation
 parent: Python (dbx-py)
-grand_parent: 패키지
-great_grand_parent: 한국어
+grand_parent: Packages
+great_grand_parent: English
 nav_order: 1
 ---
 
-# 설치
+# Installation
 
-## PyPI에서 설치
+## Install from PyPI
 
 ```bash
 pip install dbx-py
 ```
 
-## 소스에서 빌드
+## Install with pip
 
 ```bash
-git clone https://github.com/bytelogiccore-spec/DBX.git
-cd DBX/lang/python
-pip install maturin
-maturin develop --release
+python -m pip install dbx-py
 ```
 
-## 요구사항
+## Install with uv (Recommended)
 
-- **Python**: 3.8 이상
-- **플랫폼**: Windows x64 (현재 테스트 완료)
-  - Linux x64: 계획됨
-  - macOS (Intel/Apple Silicon): 계획됨
+```bash
+uv pip install dbx-py
+```
 
-## 설치 확인
+## Requirements
+
+- **Python**: 3.8 or higher
+- **Platform**: Windows x64 (currently tested)
+  - Linux x64: Planned
+  - macOS (Intel/Apple Silicon): Planned
+
+## Verify Installation
 
 ```python
-import dbx_py
-print(dbx_py.__version__)  # 0.0.4b0
+from dbx_py import Database
+
+db = Database.open_in_memory()
+print("DBX Python loaded successfully!")
+db.close()
 ```
 
-## 가상 환경 (권장)
+## Virtual Environment
+
+### venv
 
 ```bash
-# venv 생성
 python -m venv venv
+source venv/bin/activate  # Linux/macOS
+venv\Scripts\activate     # Windows
 
-# 활성화 (Windows)
-venv\Scripts\activate
-
-# 활성화 (Linux/macOS)
-source venv/bin/activate
-
-# dbx-py 설치
 pip install dbx-py
 ```
 
-## 문제 해결
-
-### ImportError: DLL load failed
-
-**원인**: Visual C++ Redistributable 누락
-
-**해결**:
-1. [Microsoft Visual C++ Redistributable](https://aka.ms/vs/17/release/vc_redist.x64.exe) 다운로드
-2. 설치 후 Python 재시작
-
-### pip install 실패
+### conda
 
 ```bash
-# pip 업그레이드
-python -m pip install --upgrade pip
-
-# 재시도
+conda create -n dbx python=3.11
+conda activate dbx
 pip install dbx-py
 ```
 
-### 특정 버전 설치
+## Troubleshooting
+
+### Module Not Found
+
+**Cause**: Installation failed or wrong Python environment
+
+**Solution**:
+```bash
+# Verify installation
+pip list | grep dbx-py
+
+# Reinstall
+pip uninstall dbx-py
+pip install dbx-py
+```
+
+### Import Error on Windows
+
+**Cause**: Missing Visual C++ Redistributable
+
+**Solution**:
+1. Download [Microsoft Visual C++ Redistributable](https://aka.ms/vs/17/release/vc_redist.x64.exe)
+2. Install and restart
+
+### Version Check
 
 ```bash
-# 최신 베타
-pip install dbx-py --pre
-
-# 특정 버전
-pip install dbx-py==0.0.4b0
+pip show dbx-py
 ```
+
+## Next Steps
+
+- [Quick Start](quickstart) - Get started in 5 minutes
+- [SQL Guide](sql-guide) - SQL usage
+- [API Reference](api-reference) - Complete API
