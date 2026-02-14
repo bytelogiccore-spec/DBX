@@ -72,15 +72,12 @@
 //! ```
 //!
 //! ## Module Structure
-
-
 //! - [`engine`] — Database engine ([`Database`])
 //! - [`sql`] — SQL parser, planner, optimizer, executor
 //! - [`storage`] — 5-Tier storage backends
 //! - [`transaction`] — MVCC transaction management
 //! - [`index`] — Hash Index
 //! - [`wal`] — Write-Ahead Log
-
 
 pub mod api;
 pub mod engine;

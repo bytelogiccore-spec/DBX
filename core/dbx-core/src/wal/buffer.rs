@@ -1,5 +1,4 @@
 use crate::wal::WalRecord;
-use std::io;
 use std::sync::Mutex;
 
 /// WAL Buffer - Memory buffer to minimize disk I/O frequency
@@ -59,7 +58,7 @@ mod tests {
 
     #[test]
     fn test_wal_buffer_append() {
-        let buffer = WALBuffer::new(1024);
+        let buffer = WalBuffer::new(1024);
         let record = WalRecord::Insert {
             table: "test".to_string(),
             key: vec![1, 2, 3],
@@ -67,13 +66,13 @@ mod tests {
             ts: 0,
         };
 
-        assert!(buffer.append(&record).is_ok());
+        buffer.push(record);
         assert!(!buffer.is_empty());
     }
 
     #[test]
     fn test_wal_buffer_flush() {
-        let buffer = WALBuffer::new(1024);
+        let buffer = WalBuffer::new(1024);
         let record = WalRecord::Insert {
             table: "test".to_string(),
             key: vec![1, 2, 3],
@@ -81,7 +80,7 @@ mod tests {
             ts: 0,
         };
 
-        buffer.append(&record).unwrap();
+        buffer.push(record);
         assert!(buffer.flush().is_ok());
         assert!(buffer.is_empty());
     }
