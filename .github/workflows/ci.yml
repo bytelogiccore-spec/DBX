@@ -10,10 +10,7 @@ on:
 jobs:
   rust-build:
     name: Rust 빌드 및 테스트
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-latest, windows-latest]
+    runs-on: windows-latest
     
     steps:
       - uses: actions/checkout@v4
