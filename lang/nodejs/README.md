@@ -79,4 +79,10 @@ npm run bench
 
 ## License
 
-MIT License — see [LICENSE](https://github.com/bytelogiccore-spec/DBX/blob/main/LICENSE) for details.
+Dual-licensed under:
+- **MIT License** — for open-source projects
+- **Commercial License** — for proprietary/commercial use
+
+See [LICENSE](https://github.com/bytelogiccore-spec/DBX/blob/main/LICENSE) for details.
+
+For commercial licensing inquiries, contact: [ByteLogicCore](https://github.com/bytelogiccore-spec)

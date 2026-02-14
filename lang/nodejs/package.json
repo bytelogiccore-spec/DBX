@@ -34,6 +34,11 @@
         "napi",
         "native"
     ],
+    "homepage": "https://bytelogiccore-spec.github.io/DBX/english/packages/nodejs",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/bytelogiccore-spec/DBX.git"
+    },
     "license": "MIT",
     "engines": {
         "node": ">= 16"
