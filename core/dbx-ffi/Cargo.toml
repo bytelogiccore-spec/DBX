@@ -6,6 +6,7 @@ license.workspace = true
 repository.workspace = true
 homepage.workspace = true
 description = "C FFI bindings for DBX database"
+readme = "README.md"
 
 [lib]
 crate-type = ["cdylib", "staticlib"]

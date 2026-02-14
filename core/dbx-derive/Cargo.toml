@@ -6,6 +6,7 @@ license.workspace = true
 repository.workspace = true
 homepage.workspace = true
 description = "Procedural macros for DBX database engine (#[derive(Table)])"
+readme = "README.md"
 
 [lib]
 proc-macro = true

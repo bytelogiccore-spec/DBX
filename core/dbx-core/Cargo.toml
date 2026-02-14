@@ -6,6 +6,7 @@ license.workspace = true
 repository.workspace = true
 homepage.workspace = true
 description = "High-performance file-based database engine with 5-Tier Hybrid Storage"
+readme = "README.md"
 
 [dependencies]
 # Derive macros

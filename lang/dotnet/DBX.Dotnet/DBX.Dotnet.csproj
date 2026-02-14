@@ -15,7 +15,12 @@
     <PackageProjectUrl>https://github.com/bytelogiccore-spec/DBX</PackageProjectUrl>
     <RepositoryUrl>https://github.com/bytelogiccore-spec/DBX</RepositoryUrl>
     <PackageTags>database;embedded;key-value;high-performance</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
 
   <ItemGroup>
     <None Include="..\..\..\target\release\dbx_csharp.dll">
