@@ -7,7 +7,7 @@ description = "High-performance file-based database engine with 5-Tier Hybrid St
 
 [dependencies]
 # Derive macros
-dbx-derive = { path = "../dbx-derive" }
+dbx-derive = { path = "../dbx-derive", version = "0.0.1-beta" }
 
 # Error handling
 thiserror = "2.0"

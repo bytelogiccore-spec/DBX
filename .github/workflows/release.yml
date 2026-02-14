@@ -84,11 +84,9 @@ jobs:
         run: dotnet pack lang/dotnet/DBX.Dotnet/DBX.Dotnet.csproj --configuration Release
 
       - name: NuGet 배포
-        run: >
-          dotnet nuget push lang/dotnet/DBX.Dotnet/bin/Release/*.nupkg
-          --api-key ${{ secrets.NUGET_API_KEY }}
-          --source https://api.nuget.org/v3/index.json
-          --skip-duplicate
+        run: |
+          $pkg = Get-ChildItem lang/dotnet/DBX.Dotnet/bin/Release/*.nupkg | Select-Object -First 1
+          dotnet nuget push $pkg.FullName --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate
 
       - name: NuGet 에셋 업로드
         uses: actions/upload-artifact@v4
@@ -168,7 +166,7 @@ jobs:
         working-directory: lang/nodejs
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: npm publish --access public
+        run: npm publish --access public --ignore-scripts
 
       - name: npm 에셋 업로드
         uses: actions/upload-artifact@v4

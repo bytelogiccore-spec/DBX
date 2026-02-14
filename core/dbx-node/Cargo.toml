@@ -7,7 +7,7 @@ edition = "2021"
 crate-type = ["cdylib"]
 
 [dependencies]
-dbx-core = { path = "../dbx-core" }
+dbx-core = { path = "../dbx-core", version = "0.0.1-beta" }
 napi = { version = "3", features = ["async"] }
 napi-derive = "3"
 

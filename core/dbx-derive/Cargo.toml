@@ -14,5 +14,5 @@ quote = "1"
 proc-macro2 = "1"
 
 [dev-dependencies]
-dbx-core = { path = "../dbx-core" }
+dbx-core = { path = "../dbx-core", version = "0.0.1-beta" }
 arrow = { version = "54", features = ["prettyprint"] }

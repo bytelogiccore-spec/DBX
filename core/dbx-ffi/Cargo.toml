@@ -9,5 +9,5 @@ description = "C FFI bindings for DBX database"
 crate-type = ["cdylib", "staticlib"]
 
 [dependencies]
-dbx-core = { path = "../dbx-core" }
+dbx-core = { path = "../dbx-core", version = "0.0.1-beta" }
 libc = "0.2"
