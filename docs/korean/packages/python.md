@@ -178,7 +178,7 @@ class Database:
 ## 요구사항
 
 - Python 3.8+
-- Windows x64 / Linux x64 / macOS (ARM64/x64)
+- **Windows x64 전용** (Linux/macOS 지원 예정)
 
 ## 문제 해결
 

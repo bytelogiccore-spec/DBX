@@ -179,7 +179,7 @@ class Database:
 ## Requirements
 
 - Python 3.8+
-- Windows x64 / Linux x64 / macOS (ARM64/x64)
+- **Windows x64 only** (Linux/macOS support planned)
 
 ## Troubleshooting
 

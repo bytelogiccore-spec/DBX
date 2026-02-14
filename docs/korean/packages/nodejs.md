@@ -371,7 +371,7 @@ async function expensiveOperation() {
 ## 요구사항
 
 - Node.js >= 16
-- Windows x64 / Linux x64 / macOS (ARM64/x64)
+- **Windows x64 전용** (Linux/macOS 지원 예정)
 
 ## 문제 해결
 
@@ -427,10 +427,10 @@ process.on('SIGTERM', () => {
 
 | 플랫폼 | 아키텍처 | 상태 |
 |--------|----------|------|
-| Windows | x64 | ✅ 지원 |
-| Linux | x64 | ✅ 지원 |
-| macOS | x64 (Intel) | ✅ 지원 |
-| macOS | ARM64 (Apple Silicon) | ✅ 지원 |
+| Windows | x64 | ✅ 테스트 완료 |
+| Linux | x64 | ⚠️ 계획됨 |
+| macOS | x64 (Intel) | ⚠️ 계획됨 |
+| macOS | ARM64 (Apple Silicon) | ⚠️ 계획됨 |
 
 ## 라이선스
 

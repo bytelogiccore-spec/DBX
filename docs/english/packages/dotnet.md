@@ -454,7 +454,7 @@ Console.WriteLine(cached); // Second call: instant
 ## Requirements
 
 - .NET Standard 2.0+ (.NET Framework 4.6.1+, .NET Core 2.0+, .NET 5+)
-- Windows x64 / Linux x64 / macOS (ARM64/x64)
+- **Windows x64 only** (Linux/macOS support planned)
 
 ## Troubleshooting
 
@@ -491,10 +491,10 @@ db.Flush(); // ✅ Fast
 
 | Platform | Architecture | Status |
 |----------|--------------|--------|
-| Windows | x64 | ✅ Supported |
-| Linux | x64 | ✅ Supported |
-| macOS | x64 (Intel) | ✅ Supported |
-| macOS | ARM64 (Apple Silicon) | ✅ Supported |
+| Windows | x64 | ✅ Tested |
+| Linux | x64 | ⚠️ Planned |
+| macOS | x64 (Intel) | ⚠️ Planned |
+| macOS | ARM64 (Apple Silicon) | ⚠️ Planned |
 
 ## License
 
