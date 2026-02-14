@@ -453,6 +453,6 @@ Try these exercises to practice:
 ## Getting Help
 
 - **[Documentation](../)** — Full documentation
-- **[Examples](../examples/basic-crud)** — More code examples
+- **[Examples](../examples/quick-start)** — More code examples
 - **[GitHub Issues](https://github.com/ByteLogicCore/DBX/issues)** — Report bugs
 - **[Discussions](https://github.com/ByteLogicCore/DBX/discussions)** — Ask questions

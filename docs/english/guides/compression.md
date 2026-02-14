@@ -269,4 +269,4 @@ db.set_compression_level("data", 1)?;  // 레벨 3 → 1
 
 - [Encryption](./encryption.md) - 압축과 암호화 함께 사용
 - [GPU Acceleration](./gpu-acceleration.md) - 압축된 데이터의 GPU 처리
-- [Basic CRUD](./basic-crud.md) - 기본 데이터 작업
+- [CRUD Operations](./crud-operations.md) - 기본 데이터 작업

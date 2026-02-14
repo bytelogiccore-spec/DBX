@@ -623,5 +623,5 @@ if let Some(gpu) = db.gpu_manager() {
 
 - [SQL Reference](sql-reference) — Use GPU with SQL queries
 - [Storage Layers](storage-layers) — Understand data flow
-- [Performance Tuning](../operations/performance-tuning) — Optimize GPU performance
+- [Performance Benchmarks](../benchmarks) — Optimize GPU performance
 - [Benchmarks](../benchmarks) — See detailed performance comparisons

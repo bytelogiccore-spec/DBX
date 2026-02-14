@@ -520,5 +520,5 @@ fn increment_counter(db: &Database, key: &[u8]) -> dbx_core::DbxResult<u64> {
 
 - [Transactions Guide](transactions) — Learn about MVCC transactions
 - [SQL Reference](sql-reference) — Use SQL for complex queries
-- [Performance Tuning](../operations/performance-tuning) — Optimize your database
+- [Performance Benchmarks](../benchmarks) — Optimize your database
 - [API Reference](../api/database) — Complete API documentation

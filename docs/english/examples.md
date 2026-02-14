@@ -99,4 +99,4 @@ Each example includes:
 
 ---
 
-**Need help?** Check the [Troubleshooting Guide](../troubleshooting.md) or [open an issue](https://github.com/ByteLogicStudio/DBX/issues).
+**Need help?** [Open an issue](https://github.com/bytelogiccore-spec/DBX/issues).

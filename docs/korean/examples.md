@@ -99,4 +99,4 @@ cargo run --example gpu_acceleration
 
 ---
 
-**도움이 필요하신가요?** [문제 해결 가이드](../troubleshooting.md)를 확인하거나 [이슈를 등록](https://github.com/ByteLogicStudio/DBX/issues)해 주세요.
+**도움이 필요하신가요?** [이슈를 등록](https://github.com/bytelogiccore-spec/DBX/issues)해 주세요.

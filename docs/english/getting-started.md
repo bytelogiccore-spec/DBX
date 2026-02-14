@@ -203,5 +203,5 @@ if let Some(gpu) = db.gpu_manager() {
 
 - [Architecture Guide](architecture) — Learn about the 5-Tier Hybrid Storage
 - [Benchmarks](benchmarks) — See performance comparisons
-- [Examples](examples/basic-crud) — Explore more code examples
+- [Examples](examples/quick-start) — Explore more code examples
 - [API Documentation](https://docs.rs/dbx-core) — Full Rust API reference

@@ -543,5 +543,5 @@ fn main() -> dbx_core::DbxResult<()> {
 
 - [CRUD Operations](crud-operations) — Basic database operations
 - [SQL Reference](sql-reference) — Use SQL with transactions
-- [Performance Tuning](../operations/performance-tuning) — Optimize transaction performance
+- [Performance Benchmarks](../benchmarks) — Optimize transaction performance
 - [API Reference](../api/transaction) — Complete transaction API

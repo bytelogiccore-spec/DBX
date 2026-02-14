@@ -277,6 +277,6 @@ for row_id in row_ids {
 
 ## Next Steps
 
-- [SQL Queries](./sql-queries.md) - SQL에서 인덱스 활용
+- [SQL Reference](./sql-reference.md) - SQL에서 인덱스 활용
 - [GPU Acceleration](./gpu-acceleration.md) - GPU를 활용한 대용량 데이터 처리
-- [Basic CRUD](./basic-crud.md) - 기본 데이터 작업
+- [CRUD Operations](./crud-operations.md) - 기본 데이터 작업

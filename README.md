@@ -1,7 +1,7 @@
 # DBX — High-Performance Embedded Database
 
 [![Version](https://img.shields.io/badge/version-0.0.1--beta-blue.svg)](https://github.com/ByteLogicCore/DBX)
-[![License](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-green.svg)](LICENSE)
+[![License](https://img.shields.io/badge/license-MIT%20OR%20Commercial-green.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-2024-orange.svg)](https://www.rust-lang.org)
 [![Documentation](https://img.shields.io/badge/docs-GitHub%20Pages-blue)](https://bytelogiccore-spec.github.io/DBX/)
 
@@ -45,7 +45,7 @@ Your support helps with:
 - **🔐 Enterprise Security** — AES-256-GCM-SIV encryption, ZSTD compression
 - **🦀 Pure Rust** — Memory safety guaranteed, zero-cost abstractions
 
-📊 **[Full Benchmark Report](https://bytelogiccore-spec.github.io/DBX/benchmarks)** — Detailed comparison vs SQLite, Sled, Redb
+📊 **[Full Benchmark Report](https://bytelogiccore-spec.github.io/DBX/english/benchmarks)** — Detailed comparison vs SQLite, Sled, Redb
 
 ## 📦 5-Tier Hybrid Storage Architecture
 
@@ -73,7 +73,7 @@ Your support helps with:
                   Optional: GPU Acceleration (CUDA)
 ```
 
-🏗️ **[Architecture Deep Dive](https://bytelogiccore-spec.github.io/DBX/architecture)** — How DBX achieves 6.7x performance
+🏗️ **[Architecture Deep Dive](https://bytelogiccore-spec.github.io/DBX/english/architecture)** — How DBX achieves 6.7x performance
 
 ---
 
@@ -86,27 +86,27 @@ DBX provides official bindings for multiple languages:
 - **C/C++** - Low-level C API and modern C++17 wrapper
 - **Node.js** - Native N-API bindings
 
-**[View Language Bindings Guide →](https://bytelogiccore-spec.github.io/DBX/guides/language-bindings)**
+**[View Language Bindings Guide →](https://bytelogiccore-spec.github.io/DBX/english/guides/language-bindings)**
 
 ---
 
 ## 📚 Documentation
 
 ### 🎓 Getting Started
-- **[Quick Start Guide](https://bytelogiccore-spec.github.io/DBX/getting-started)** — Install and run your first query
-- **[Beginner Tutorial](https://bytelogiccore-spec.github.io/DBX/tutorials/beginner)** — Step-by-step learning path
+- **[Quick Start Guide](https://bytelogiccore-spec.github.io/DBX/english/getting-started)** — Install and run your first query
+- **[Beginner Tutorial](https://bytelogiccore-spec.github.io/DBX/english/tutorials/beginner)** — Step-by-step learning path
 
 ### 📖 Feature Guides
-- **[CRUD Operations](https://bytelogiccore-spec.github.io/DBX/guides/crud-operations)** — Insert, read, delete, batch operations
-- **[Transactions](https://bytelogiccore-spec.github.io/DBX/guides/transactions)** — MVCC, Snapshot Isolation, concurrency
-- **[SQL Reference](https://bytelogiccore-spec.github.io/DBX/guides/sql-reference)** — Supported syntax and query optimization
-- **[Storage Layers](https://bytelogiccore-spec.github.io/DBX/guides/storage-layers)** — 5-Tier architecture explained
-- **[GPU Acceleration](https://bytelogiccore-spec.github.io/DBX/guides/gpu-acceleration)** — CUDA setup and performance tuning
+- **[CRUD Operations](https://bytelogiccore-spec.github.io/DBX/english/guides/crud-operations)** — Insert, read, delete, batch operations
+- **[Transactions](https://bytelogiccore-spec.github.io/DBX/english/guides/transactions)** — MVCC, Snapshot Isolation, concurrency
+- **[SQL Reference](https://bytelogiccore-spec.github.io/DBX/english/guides/sql-reference)** — Supported syntax and query optimization
+- **[Storage Layers](https://bytelogiccore-spec.github.io/DBX/english/guides/storage-layers)** — 5-Tier architecture explained
+- **[GPU Acceleration](https://bytelogiccore-spec.github.io/DBX/english/guides/gpu-acceleration)** — CUDA setup and performance tuning
 
 ### 🔬 Advanced Topics
-- **[Architecture Guide](https://bytelogiccore-spec.github.io/DBX/architecture)** — Design principles and internals
-- **[Performance Benchmarks](https://bytelogiccore-spec.github.io/DBX/benchmarks)** — DBX vs SQLite/Sled/Redb comparison
-- **[Examples](https://bytelogiccore-spec.github.io/DBX/examples)** — Code examples and use cases
+- **[Architecture Guide](https://bytelogiccore-spec.github.io/DBX/english/architecture)** — Design principles and internals
+- **[Performance Benchmarks](https://bytelogiccore-spec.github.io/DBX/english/benchmarks)** — DBX vs SQLite/Sled/Redb comparison
+- **[Examples](https://bytelogiccore-spec.github.io/DBX/english/examples)** — Code examples and use cases
 
 ---
 
@@ -138,7 +138,7 @@ DBX is available under a **dual-license model**:
 - **🆓 MIT License** — Free for individuals, startups, and small organizations
 - **💼 Commercial License** — Required for large organizations (100+ employees or $5M+ revenue)
 
-📚 **[License Policy Guide](./legal/LICENSE-POLICY.md)** — Which license do I need?
+📚 **[License Policy Guide](./legal/english/LICENSE-POLICY.md)** — Which license do I need?
 
 📧 **Commercial licensing:** license@bytelogic.studio
 
@@ -148,7 +148,7 @@ DBX is available under a **dual-license model**:
 
 Issues and PRs are always welcome!
 
-Please read our [Contributing Guide](./legal/CONTRIBUTING.md) for details on our code of conduct and the process for submitting pull requests.
+Please read our [Contributing Guide](./legal/english/CONTRIBUTING.md) for details on our code of conduct and the process for submitting pull requests.
 
 ---
 

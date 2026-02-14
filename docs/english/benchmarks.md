@@ -338,4 +338,4 @@ All benchmark results were validated through Criterion.rs statistical analysis:
 - [Architecture](architecture) — Understand the 5-Tier Hybrid Storage
 - [Getting Started](getting-started) — Try DBX yourself
 - [GPU Acceleration](guides/gpu-acceleration) — Accelerate analytical queries
-- [Examples](examples/basic-crud) — Explore code examples
+- [Examples](examples/quick-start) — Explore code examples

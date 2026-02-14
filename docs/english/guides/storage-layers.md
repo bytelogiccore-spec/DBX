@@ -621,4 +621,4 @@ let results = db.execute_sql(
 - [CRUD Operations](crud-operations) — Basic database operations
 - [Transactions](transactions) — MVCC transactions
 - [SQL Reference](sql-reference) — Analytical queries
-- [Performance Tuning](../operations/performance-tuning) — Optimize storage
+- [Performance Benchmarks](../benchmarks) — Optimize storage

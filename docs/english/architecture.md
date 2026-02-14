@@ -279,5 +279,5 @@ Results
 ## Next Steps
 
 - [Benchmarks](benchmarks) — See performance comparisons
-- [Examples](examples/basic-crud) — Explore code examples
+- [Examples](examples/quick-start) — Explore code examples
 - [API Documentation](https://docs.rs/dbx-core) — Full Rust API reference

@@ -348,5 +348,5 @@ db.set_flush_interval(Duration::from_secs(30))?;
 ## Next Steps
 
 - [Transactions](./transactions.md) - WAL과 MVCC 트랜잭션
-- [Basic CRUD](./basic-crud.md) - 기본 데이터 작업
+- [CRUD Operations](./crud-operations.md) - 기본 데이터 작업
 - [Encryption](./encryption.md) - 암호화된 WAL
