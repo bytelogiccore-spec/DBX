@@ -40,7 +40,7 @@ jobs:
         run: cargo test -p dbx-core --locked
 
   # ──────────────────────────────────────────────
-  # Phase 2: 패키지 배포 (병렬)
+  # Phase 2: 패키지 빌드 + 배포 + 에셋 업로드
   # ──────────────────────────────────────────────
 
   # 2-1. Rust → crates.io
@@ -90,6 +90,12 @@ jobs:
           --source https://api.nuget.org/v3/index.json
           --skip-duplicate
 
+      - name: NuGet 에셋 업로드
+        uses: actions/upload-artifact@v4
+        with:
+          name: nuget-package
+          path: lang/dotnet/DBX.Client/bin/Release/*.nupkg
+
   # 2-3. Python → PyPI
   publish-pypi:
     name: PyPI 배포
@@ -125,6 +131,12 @@ jobs:
           TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
         run: twine upload dist/* --skip-existing
 
+      - name: Python 에셋 업로드
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-package
+          path: lang/python/dist/*
+
   # 2-4. Node.js → npm
   publish-npm:
     name: npm 배포
@@ -144,19 +156,27 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - run: cargo build --release --locked -p dbx-ffi
 
-      - name: npm 패키지 배포
+      - name: npm 패키지 생성
+        working-directory: lang/nodejs
+        run: npm pack
+
+      - name: npm 배포
         working-directory: lang/nodejs
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: npm publish --access public
 
-  # ──────────────────────────────────────────────
-  # Phase 3: GitHub Release + C/C++ 바이너리
-  # ──────────────────────────────────────────────
-  github-release:
-    name: GitHub 릴리스 생성
+      - name: npm 에셋 업로드
+        uses: actions/upload-artifact@v4
+        with:
+          name: npm-package
+          path: lang/nodejs/*.tgz
+
+  # 2-5. C/C++ 네이티브 바이너리
+  build-native:
+    name: C/C++ 네이티브 빌드
     runs-on: windows-latest
-    needs: [publish-rust, publish-nuget, publish-pypi, publish-npm]
+    needs: build-and-test
     steps:
       - uses: actions/checkout@v4
 
@@ -167,25 +187,60 @@ jobs:
       - name: Release 빌드
         run: cargo build --release --locked -p dbx-ffi
 
-      - name: C/C++ 헤더 준비
+      - name: C/C++ 패키지 준비
         run: |
-          New-Item -Path release-assets -ItemType Directory -Force
-          Copy-Item target/release/dbx_ffi.dll release-assets/
-          Copy-Item target/release/dbx_ffi.lib release-assets/
-          Copy-Item lang/c/include/*.h release-assets/ -ErrorAction SilentlyContinue
-          Copy-Item lang/cpp/include/*.h release-assets/ -ErrorAction SilentlyContinue
-          Copy-Item lang/cpp/include/*.hpp release-assets/ -ErrorAction SilentlyContinue
-          Compress-Archive -Path release-assets/* -DestinationPath dbx-${{ github.event.inputs.version }}-windows-x64.zip
+          New-Item -Path dbx-native -ItemType Directory -Force
+          Copy-Item target/release/dbx_ffi.dll dbx-native/
+          Copy-Item target/release/dbx_ffi.dll.lib dbx-native/ -ErrorAction SilentlyContinue
+          Copy-Item target/release/dbx_ffi.lib dbx-native/ -ErrorAction SilentlyContinue
+          Copy-Item lang/c/include/*.h dbx-native/ -ErrorAction SilentlyContinue
+          Copy-Item lang/cpp/include/*.h dbx-native/ -ErrorAction SilentlyContinue
+          Copy-Item lang/cpp/include/*.hpp dbx-native/ -ErrorAction SilentlyContinue
+          Compress-Archive -Path dbx-native/* -DestinationPath dbx-native-windows-x64.zip
+
+      - name: 네이티브 에셋 업로드
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-package
+          path: dbx-native-windows-x64.zip
+
+  # ──────────────────────────────────────────────
+  # Phase 3: GitHub Release (모든 패키지 첨부)
+  # ──────────────────────────────────────────────
+  github-release:
+    name: GitHub 릴리스 생성
+    runs-on: ubuntu-latest
+    needs: [publish-rust, publish-nuget, publish-pypi, publish-npm, build-native]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 모든 에셋 다운로드
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+
+      - name: 에셋 목록 확인
+        run: ls -la release-assets/
 
       - name: 릴리스 생성
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.event.inputs.version }}
-          name: Release ${{ github.event.inputs.version }}
-          files: |
-            dbx-${{ github.event.inputs.version }}-windows-x64.zip
-            target/release/dbx_ffi.dll
-            target/release/dbx_ffi.lib
+          name: DBX ${{ github.event.inputs.version }}
+          body: |
+            ## 📦 Downloads
+
+            | Package | File | Install |
+            |---------|------|---------|
+            | **Rust** | [crates.io](https://crates.io/crates/dbx-core) | `cargo add dbx-core` |
+            | **C#/.NET** | `.nupkg` (아래 첨부) | `dotnet add package DBX.Client` |
+            | **Python** | `.whl` / `.tar.gz` (아래 첨부) | `pip install dbx-py` |
+            | **Node.js** | `.tgz` (아래 첨부) | `npm install dbx-native` |
+            | **C/C++** | `dbx-native-windows-x64.zip` | 헤더 + DLL/LIB 포함 |
+
+            ---
+          files: release-assets/*
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
