@@ -7,6 +7,22 @@ on:
         description: '릴리스 버전 (예: v0.1.0)'
         required: true
         type: string
+      publish_crates:
+        description: 'crates.io 배포'
+        type: boolean
+        default: true
+      publish_nuget:
+        description: 'NuGet 배포'
+        type: boolean
+        default: true
+      publish_pypi:
+        description: 'PyPI 배포'
+        type: boolean
+        default: true
+      publish_npm:
+        description: 'npm 배포'
+        type: boolean
+        default: true
 
 jobs:
   # ──────────────────────────────────────────────
@@ -15,7 +31,6 @@ jobs:
   build-and-test:
     name: Rust 코어 빌드 및 테스트
     runs-on: windows-latest
-
     steps:
       - uses: actions/checkout@v4
 
@@ -40,141 +55,36 @@ jobs:
         run: cargo test -p dbx-core --locked
 
   # ──────────────────────────────────────────────
-  # Phase 2: 패키지 빌드 + 배포 + 에셋 업로드
+  # Phase 2: 각 패키지 매니저 배포 (독립 실행)
   # ──────────────────────────────────────────────
 
-  # 2-1. Rust → crates.io
-  publish-rust:
-    name: crates.io 배포
-    runs-on: ubuntu-latest
+  publish-crates:
     needs: build-and-test
-    steps:
-      - uses: actions/checkout@v4
+    if: ${{ inputs.publish_crates }}
+    uses: ./.github/workflows/publish-crates.yml
+    secrets: inherit
 
-      - name: Rust 설치
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Cargo 배포
-        env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CRATES_TOKEN }}
-        run: |
-          cargo publish --locked -p dbx-core || true
-          sleep 10
-          cargo publish --locked -p dbx-ffi || true
-
-  # 2-2. C#/.NET → NuGet
   publish-nuget:
-    name: NuGet 배포
-    runs-on: windows-latest
     needs: build-and-test
-    steps:
-      - uses: actions/checkout@v4
+    if: ${{ inputs.publish_nuget }}
+    uses: ./.github/workflows/publish-nuget.yml
+    secrets: inherit
 
-      - name: .NET 설정
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: 8.0.x
-
-      - name: Rust C# FFI 빌드
-        uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - run: cargo build --release --locked -p dbx-csharp
-
-      - name: NuGet 패키징
-        run: dotnet pack lang/dotnet/DBX.Dotnet/DBX.Dotnet.csproj --configuration Release
-
-      - name: NuGet 배포
-        run: |
-          $pkg = Get-ChildItem lang/dotnet/DBX.Dotnet/bin/Release/*.nupkg | Select-Object -First 1
-          dotnet nuget push $pkg.FullName --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate
-
-      - name: NuGet 에셋 업로드
-        uses: actions/upload-artifact@v4
-        with:
-          name: nuget-package
-          path: lang/dotnet/DBX.Dotnet/bin/Release/*.nupkg
-
-  # 2-3. Python → PyPI
   publish-pypi:
-    name: PyPI 배포
-    runs-on: windows-latest
     needs: build-and-test
-    steps:
-      - uses: actions/checkout@v4
+    if: ${{ inputs.publish_pypi }}
+    uses: ./.github/workflows/publish-pypi.yml
+    secrets: inherit
 
-      - name: Python 설치
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.10'
-
-      - name: Rust FFI 빌드
-        uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - run: cargo build --release --locked -p dbx-ffi
-
-      - name: FFI DLL 복사
-        run: Copy-Item target/release/dbx_ffi.dll lang/python/dbx_py/dbx_ffi.dll -Force
-
-      - name: 빌드 도구 설치
-        run: pip install setuptools wheel twine
-
-      - name: 패키지 빌드
-        working-directory: lang/python
-        run: python setup.py sdist bdist_wheel
-
-      - name: PyPI 배포
-        working-directory: lang/python
-        env:
-          TWINE_USERNAME: __token__
-          TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
-        run: twine upload dist/* --skip-existing
-
-      - name: Python 에셋 업로드
-        uses: actions/upload-artifact@v4
-        with:
-          name: python-package
-          path: lang/python/dist/*
-
-  # 2-4. Node.js → npm
   publish-npm:
-    name: npm 배포
-    runs-on: windows-latest
     needs: build-and-test
-    steps:
-      - uses: actions/checkout@v4
+    if: ${{ inputs.publish_npm }}
+    uses: ./.github/workflows/publish-npm.yml
+    secrets: inherit
 
-      - name: Node.js 설치
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          registry-url: https://registry.npmjs.org/
-
-      - name: Rust FFI 빌드
-        uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - run: cargo build --release --locked -p dbx-ffi
-
-      - name: npm 의존성 설치
-        working-directory: lang/nodejs
-        run: npm install
-
-      - name: npm 패키지 생성
-        working-directory: lang/nodejs
-        run: npm pack
-
-      - name: npm 배포
-        working-directory: lang/nodejs
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: npm publish --access public --ignore-scripts
-
-      - name: npm 에셋 업로드
-        uses: actions/upload-artifact@v4
-        with:
-          name: npm-package
-          path: lang/nodejs/*.tgz
-
-  # 2-5. C/C++ 네이티브 바이너리
+  # ──────────────────────────────────────────────
+  # Phase 3: C/C++ 네이티브 빌드
+  # ──────────────────────────────────────────────
   build-native:
     name: C/C++ 네이티브 빌드
     runs-on: windows-latest
@@ -207,12 +117,13 @@ jobs:
           path: dbx-native-windows-x64.zip
 
   # ──────────────────────────────────────────────
-  # Phase 3: GitHub Release (모든 패키지 첨부)
+  # Phase 4: GitHub Release (모든 에셋 첨부)
   # ──────────────────────────────────────────────
   github-release:
     name: GitHub 릴리스 생성
     runs-on: ubuntu-latest
-    needs: [publish-rust, publish-nuget, publish-pypi, publish-npm, build-native]
+    if: ${{ always() }}
+    needs: [publish-crates, publish-nuget, publish-pypi, publish-npm, build-native]
     steps:
       - uses: actions/checkout@v4
 
@@ -223,23 +134,23 @@ jobs:
           merge-multiple: true
 
       - name: 에셋 목록 확인
-        run: ls -la release-assets/
+        run: ls -laR release-assets/ || echo "No artifacts found"
 
       - name: 릴리스 생성
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.event.inputs.version }}
-          name: DBX ${{ github.event.inputs.version }}
+          tag_name: ${{ inputs.version }}
+          name: DBX ${{ inputs.version }}
           body: |
             ## 📦 Downloads
 
-            | Package | File | Install |
-            |---------|------|---------|
-            | **Rust** | [crates.io](https://crates.io/crates/dbx-core) | `cargo add dbx-core` |
-            | **C#/.NET** | `.nupkg` (아래 첨부) | `dotnet add package DBX.Client` |
-            | **Python** | `.whl` / `.tar.gz` (아래 첨부) | `pip install dbx-py` |
-            | **Node.js** | `.tgz` (아래 첨부) | `npm install dbx-native` |
-            | **C/C++** | `dbx-native-windows-x64.zip` | 헤더 + DLL/LIB 포함 |
+            | Package | Install |
+            |---------|---------|
+            | **Rust** | `cargo add dbx-core` |
+            | **C#/.NET** | `dotnet add package DBX.Dotnet` |
+            | **Python** | `pip install dbx-py` |
+            | **Node.js** | `npm install dbx-native` |
+            | **C/C++** | `dbx-native-windows-x64.zip` (아래 첨부) |
 
             ---
           files: release-assets/*

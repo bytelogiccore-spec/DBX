@@ -1,0 +1,34 @@
+name: Publish → crates.io
+
+on:
+  workflow_dispatch:
+  workflow_call:
+
+jobs:
+  publish:
+    name: crates.io 배포
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Publish dbx-derive
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CRATES_TOKEN }}
+        run: cargo publish --locked -p dbx-derive || true
+
+      - name: Wait for index
+        run: sleep 30
+
+      - name: Publish dbx-core
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CRATES_TOKEN }}
+        run: cargo publish --locked -p dbx-core || true
+
+      - name: Wait for index
+        run: sleep 30
+
+      - name: Publish dbx-ffi
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CRATES_TOKEN }}
+        run: cargo publish --locked -p dbx-ffi || true

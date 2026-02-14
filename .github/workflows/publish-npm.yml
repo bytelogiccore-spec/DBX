@@ -1,0 +1,48 @@
+name: Publish → npm
+
+on:
+  workflow_dispatch:
+  workflow_call:
+
+# npm OIDC trusted publishing 사용 시 필요
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    name: npm 배포
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Node.js 설치
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: https://registry.npmjs.org/
+
+      - name: Rust FFI 빌드
+        uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --release --locked -p dbx-ffi
+
+      - name: npm 의존성 설치
+        working-directory: lang/nodejs
+        run: npm install
+
+      - name: npm 패키지 생성
+        working-directory: lang/nodejs
+        run: npm pack
+
+      - name: npm 배포
+        working-directory: lang/nodejs
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npm publish --access public --ignore-scripts
+
+      - name: 에셋 업로드
+        uses: actions/upload-artifact@v4
+        with:
+          name: npm-package
+          path: lang/nodejs/*.tgz

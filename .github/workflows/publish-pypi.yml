@@ -1,0 +1,45 @@
+name: Publish → PyPI
+
+on:
+  workflow_dispatch:
+  workflow_call:
+
+jobs:
+  publish:
+    name: PyPI 배포
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Python 설치
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Rust FFI 빌드
+        uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --release --locked -p dbx-ffi
+
+      - name: FFI DLL 복사
+        run: Copy-Item target/release/dbx_ffi.dll lang/python/dbx_py/dbx_ffi.dll -Force
+
+      - name: 빌드 도구 설치
+        run: pip install setuptools wheel twine
+
+      - name: 패키지 빌드
+        working-directory: lang/python
+        run: python setup.py sdist bdist_wheel
+
+      - name: PyPI 배포
+        working-directory: lang/python
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
+        run: twine upload dist/* --skip-existing
+
+      - name: 에셋 업로드
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-package
+          path: lang/python/dist/*

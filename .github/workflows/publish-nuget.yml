@@ -1,0 +1,36 @@
+name: Publish → NuGet
+
+on:
+  workflow_dispatch:
+  workflow_call:
+
+jobs:
+  publish:
+    name: NuGet 배포
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: .NET 설정
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
+
+      - name: Rust C# FFI 빌드
+        uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --release --locked -p dbx-csharp
+
+      - name: NuGet 패키징
+        run: dotnet pack lang/dotnet/DBX.Dotnet/DBX.Dotnet.csproj --configuration Release
+
+      - name: NuGet 배포
+        run: |
+          $pkg = Get-ChildItem lang/dotnet/DBX.Dotnet/bin/Release/*.nupkg | Select-Object -First 1
+          dotnet nuget push $pkg.FullName --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate
+
+      - name: 에셋 업로드
+        uses: actions/upload-artifact@v4
+        with:
+          name: nuget-package
+          path: lang/dotnet/DBX.Dotnet/bin/Release/*.nupkg
