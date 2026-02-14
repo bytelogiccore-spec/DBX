@@ -23,14 +23,13 @@ While DBX already provides high-performance CRUD, SQL, transactions, and GPU acc
 ### ✅ Completed Features
 
 - **Core Functionality**
-  - 5-Tier Hybrid Storage (Delta → Cache → WOS → Index → ROS)
+  - 4-Tier Hybrid Storage (Delta → Cache → WOS → ROS)
   - CRUD Operations (Insert, Get, Delete, Count)
   - MVCC Transactions (Snapshot Isolation)
   - SQL Support (SELECT, WHERE, JOIN, GROUP BY, ORDER BY)
   
 - **Performance Optimization**
   - GPU Acceleration (CUDA-based aggregation, filtering, joins)
-  - Bloom Filter Indexing
   - LRU Cache
   - SIMD Vectorization
   - **Parallel Query** (Rayon-based)

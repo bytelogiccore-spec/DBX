@@ -1,12 +1,12 @@
 name: ByteLogicCore Documentation
-description: High-performance embedded database built on 5-Tier Hybrid Storage architecture
+description: High-performance embedded database built on 4-Tier Hybrid Storage architecture
 
 # Theme
 theme: just-the-docs
 color_scheme: dark
 
 # Site settings
-url: https://bytelogiccore.github.io
+url: https://bytelogiccore-spec.github.io
 baseurl: /DBX
 logo: /assets/images/logo.png  # 이미지 저장 후 주석 해제 예정
 

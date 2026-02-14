@@ -3,11 +3,11 @@
 [![Version](https://img.shields.io/badge/version-0.0.1--beta-blue.svg)](https://github.com/ByteLogicCore/DBX)
 [![License](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-green.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-2024-orange.svg)](https://www.rust-lang.org)
-[![Documentation](https://img.shields.io/badge/docs-GitHub%20Pages-blue)](https://bytelogiccore.github.io/DBX/)
+[![Documentation](https://img.shields.io/badge/docs-GitHub%20Pages-blue)](https://bytelogiccore-spec.github.io/DBX/)
 
 > **29x faster file GET** than SQLite • Pure Rust • GPU-Accelerated • MVCC Transactions
 
-**DBX** is a next-generation embedded database built on a **5-Tier Hybrid Storage** architecture, designed for modern HTAP (Hybrid Transactional/Analytical Processing) workloads.
+**DBX** is a next-generation embedded database built on a **4-Tier Hybrid Storage** architecture, designed for modern HTAP (Hybrid Transactional/Analytical Processing) workloads.
 
 ---
 
@@ -38,18 +38,16 @@ Your support helps with:
 
 ### 🎯 Key Advantages
 
-- **🚀 5-Tier Hybrid Storage** — Optimized for both OLTP and OLAP workloads
+- **🚀 4-Tier Hybrid Storage** — Optimized for both OLTP and OLAP workloads
 - **🎮 GPU Acceleration** — CUDA-powered analytics (up to 4.5x faster filtering)
 - **🔒 MVCC Transactions** — Snapshot Isolation with zero-lock reads
 - **💾 Columnar Cache** — Apache Arrow-based query optimization
 - **🔐 Enterprise Security** — AES-256-GCM-SIV encryption, ZSTD compression
 - **🦀 Pure Rust** — Memory safety guaranteed, zero-cost abstractions
 
-📊 **[Full Benchmark Report](https://bytelogiccore.github.io/DBX/benchmarks)** — Detailed comparison vs SQLite, Sled, Redb
+📊 **[Full Benchmark Report](https://bytelogiccore-spec.github.io/DBX/benchmarks)** — Detailed comparison vs SQLite, Sled, Redb
 
----
-
-## 📦 5-Tier Hybrid Storage Architecture
+## 📦 4-Tier Hybrid Storage Architecture
 
 ```
 ┌─────────────────────────────────────────┐
@@ -61,21 +59,17 @@ Your support helps with:
 └─────────────────┬───────────────────────┘
                   │
 ┌─────────────────▼───────────────────────┐
-│  Tier 3: WOS (sled)                     │  ← MVCC Snapshot Isolation
+│  Tier 3: WOS (BTreeMap/sled)            │  ← MVCC Snapshot Isolation
 └─────────────────┬───────────────────────┘
                   │ Compaction
 ┌─────────────────▼───────────────────────┐
-│  Tier 4: Index (Bloom Filter)           │  ← Fast existence check
-└─────────────────┬───────────────────────┘
-                  │
-┌─────────────────▼───────────────────────┐
-│  Tier 5: ROS (Parquet)                  │  ← Columnar compression
+│  Tier 4: ROS (Parquet)                  │  ← Columnar compression
 └─────────────────────────────────────────┘
 
                   Optional: GPU Acceleration (CUDA)
 ```
 
-🏗️ **[Architecture Deep Dive](https://bytelogiccore.github.io/DBX/architecture)** — How DBX achieves 6.7x performance
+🏗️ **[Architecture Deep Dive](https://bytelogiccore-spec.github.io/DBX/architecture)** — How DBX achieves 6.7x performance
 
 ---
 
@@ -88,34 +82,34 @@ DBX provides official bindings for multiple languages:
 - **C/C++** - Low-level C API and modern C++17 wrapper
 - **Node.js** - Native N-API bindings
 
-**[View Language Bindings Guide →](https://bytelogiccore.github.io/DBX/guides/language-bindings)**
+**[View Language Bindings Guide →](https://bytelogiccore-spec.github.io/DBX/guides/language-bindings)**
 
 ---
 
 ## 📚 Documentation
 
 ### 🎓 Getting Started
-- **[Quick Start Guide](https://bytelogiccore.github.io/DBX/getting-started)** — Install and run your first query
-- **[Beginner Tutorial](https://bytelogiccore.github.io/DBX/tutorials/beginner)** — Step-by-step learning path
+- **[Quick Start Guide](https://bytelogiccore-spec.github.io/DBX/getting-started)** — Install and run your first query
+- **[Beginner Tutorial](https://bytelogiccore-spec.github.io/DBX/tutorials/beginner)** — Step-by-step learning path
 
 ### 📖 Feature Guides
-- **[CRUD Operations](https://bytelogiccore.github.io/DBX/guides/crud-operations)** — Insert, read, delete, batch operations
-- **[Transactions](https://bytelogiccore.github.io/DBX/guides/transactions)** — MVCC, Snapshot Isolation, concurrency
-- **[SQL Reference](https://bytelogiccore.github.io/DBX/guides/sql-reference)** — Supported syntax and query optimization
-- **[Storage Layers](https://bytelogiccore.github.io/DBX/guides/storage-layers)** — 5-Tier architecture explained
-- **[GPU Acceleration](https://bytelogiccore.github.io/DBX/guides/gpu-acceleration)** — CUDA setup and performance tuning
+- **[CRUD Operations](https://bytelogiccore-spec.github.io/DBX/guides/crud-operations)** — Insert, read, delete, batch operations
+- **[Transactions](https://bytelogiccore-spec.github.io/DBX/guides/transactions)** — MVCC, Snapshot Isolation, concurrency
+- **[SQL Reference](https://bytelogiccore-spec.github.io/DBX/guides/sql-reference)** — Supported syntax and query optimization
+- **[Storage Layers](https://bytelogiccore-spec.github.io/DBX/guides/storage-layers)** — 5-Tier architecture explained
+- **[GPU Acceleration](https://bytelogiccore-spec.github.io/DBX/guides/gpu-acceleration)** — CUDA setup and performance tuning
 
 ### 🔬 Advanced Topics
-- **[Architecture Guide](https://bytelogiccore.github.io/DBX/architecture)** — Design principles and internals
-- **[Performance Benchmarks](https://bytelogiccore.github.io/DBX/benchmarks)** — DBX vs SQLite/Sled/Redb comparison
-- **[Examples](https://bytelogiccore.github.io/DBX/examples)** — Code examples and use cases
+- **[Architecture Guide](https://bytelogiccore-spec.github.io/DBX/architecture)** — Design principles and internals
+- **[Performance Benchmarks](https://bytelogiccore-spec.github.io/DBX/benchmarks)** — DBX vs SQLite/Sled/Redb comparison
+- **[Examples](https://bytelogiccore-spec.github.io/DBX/examples)** — Code examples and use cases
 
 ---
 
 ## ✨ Features
 
 ### Core Features ✅
-- ✅ **5-Tier Hybrid Storage** — Delta → Cache → WOS → Index → ROS
+- ✅ **4-Tier Hybrid Storage** — Delta → Cache → WOS → ROS
 - ✅ **MVCC Transactions** — Snapshot Isolation, Garbage Collection
 - ✅ **SQL Support** — SELECT, WHERE, JOIN, GROUP BY, ORDER BY
 - ✅ **GPU Acceleration** — CUDA-based aggregation and filtering
@@ -125,10 +119,11 @@ DBX provides official bindings for multiple languages:
 - ✅ **100+ Tests** — Comprehensive integration test suite
 
 ### Roadmap 🚧
-- Advanced SQL (window functions, CTEs)
-- Additional language bindings (Python, Node.js)
-- Distributed query execution
-- Enhanced GPU optimization
+- **Phase 1: Trigger System** — BEFORE/AFTER triggers, conditional logic
+- **Phase 2: User-Defined Functions** — Scalar, Aggregate, and Table UDFs
+- **Phase 3: Partitioning** — Range, Hash, and List partitioning with pruning
+- **Phase 4: Job Scheduler** — Automated maintenance and periodic tasks
+- **Phase 5: Advanced Features** — Materialized Views, Replication, Sharding
 
 ---
 
