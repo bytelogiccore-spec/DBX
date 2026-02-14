@@ -783,7 +783,7 @@ dependencies = [
 
 [[package]]
 name = "dbx-core"
-version = "0.0.2-beta"
+version = "0.0.3-beta"
 dependencies = [
  "aes-gcm-siv",
  "ahash",
@@ -795,7 +795,6 @@ dependencies = [
  "crossbeam-skiplist",
  "cudarc",
  "dashmap",
- "dbx-derive",
  "hkdf",
  "lru",
  "parking_lot 0.12.5",
@@ -826,19 +825,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "dbx-derive"
-version = "0.0.2-beta"
-dependencies = [
- "arrow",
- "dbx-core",
- "proc-macro2",
- "quote",
- "syn",
-]
-
-[[package]]
 name = "dbx-ffi"
-version = "0.0.2-beta"
+version = "0.0.3-beta"
 dependencies = [
  "dbx-core",
  "libc",
