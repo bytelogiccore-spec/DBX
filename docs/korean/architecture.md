@@ -2,13 +2,13 @@
 layout: default
 title: 아키텍처
 nav_order: 3
-description: "DBX 4-Tier 하이브리드 스토리지 아키텍처"
+description: "DBX 5-Tier 하이브리드 스토리지 아키텍처"
 ---
 
 # 아키텍처
 {: .no_toc }
 
-DBX의 4-Tier 하이브리드 스토리지 아키텍처와 MVCC 트랜잭션 시스템에 대해 심층적으로 알아봅니다.
+DBX의 5-Tier 하이브리드 스토리지 아키텍처와 MVCC 트랜잭션 시스템에 대해 심층적으로 알아봅니다.
 {: .fs-6 .fw-300 }
 
 ## 목차
@@ -19,9 +19,9 @@ DBX의 4-Tier 하이브리드 스토리지 아키텍처와 MVCC 트랜잭션 시
 
 ---
 
-## 4-Tier 하이브리드 스토리지
+## 5-Tier 하이브리드 스토리지
 
-DBX는 OLTP와 OLAP 워크로드 모두에 최적화된 정교한 4계층 아키텍처를 사용합니다:
+DBX는 OLTP와 OLAP 워크로드 모두에 최적화된 정교한 5계층 아키텍처를 사용합니다:
 
 ```
 ┌─────────────────────────────────────────┐
@@ -37,13 +37,18 @@ DBX는 OLTP와 OLAP 워크로드 모두에 최적화된 정교한 4계층 아키
 └─────────────────┬───────────────────────┘
                   │
 ┌─────────────────▼───────────────────────┐
-│  Tier 3: WOS (BTreeMap/sled)            │  ← 영구 저장소
+│  Tier 3: WOS (sled)                     │  ← 영구 저장소
 │     - Write-Optimized Store             │
 │     - MVCC 및 스냅샷 격리               │
 └─────────────────┬───────────────────────┘
                   │ Compaction
 ┌─────────────────▼───────────────────────┐
-│  Tier 4: ROS (Parquet)                  │  ← 컬럼형 압축
+│  Tier 4: Index (Bloom Filter)           │  ← 빠른 존재 확인
+│     - 오탐지 최소화                     │
+└─────────────────┬───────────────────────┘
+                  │
+┌─────────────────▼───────────────────────┐
+│  Tier 5: ROS (Parquet)                  │  ← 컬럼형 압축
 │     - Read-Optimized Store              │
 │     - Apache Arrow/Parquet              │
 └─────────────────────────────────────────┘
@@ -93,8 +98,18 @@ DBX는 OLTP와 OLAP 워크로드 모두에 최적화된 정교한 4계층 아키
 - 크래시 복구
 - 컴팩션 (Compaction)
 
+### Tier 4: Index
 
-### Tier 4: ROS (Read-Optimized Store)
+**목적**: 빠른 존재 확인
+
+**구현**: Bloom Filter
+
+**특징**:
+- 오탐지 최소화
+- 빠른 조회 (O(1))
+- 공간 효율적
+
+### Tier 5: ROS (Read-Optimized Store)
 
 **목적**: 장기 컬럼형 저장소
 
@@ -222,7 +237,7 @@ Delta Store (Tier 1)
     ↓ (임계값 도달 시 자동 Flush)
 WOS (Tier 3)
     ↓ (컴팩션)
-ROS (Tier 4)
+ROS (Tier 5)
 ```
 
 ### 읽기 경로 (OLTP)
@@ -234,7 +249,9 @@ Delta Store (Tier 1) → 있으면 즉시 반환
     ↓
 WOS (Tier 3) → 있으면 즉시 반환
     ↓
-ROS (Tier 4) → Parquet에서 읽기
+Index (Tier 4) → 존재 여부 확인
+    ↓
+ROS (Tier 5) → Parquet에서 읽기
 ```
 
 ### 읽기 경로 (OLAP)

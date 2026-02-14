@@ -23,13 +23,14 @@ DBX의 미래 발전 방향과 계획된 기능들입니다.
 ### ✅ 구현 완료
 
 - **핵심 기능**
-  - 4-Tier Hybrid Storage (Delta → Cache → WOS → ROS)
+  - 5-Tier Hybrid Storage (Delta → Cache → WOS → Index → ROS)
   - CRUD Operations (Insert, Get, Delete, Count)
   - MVCC Transactions (Snapshot Isolation)
   - SQL Support (SELECT, WHERE, JOIN, GROUP BY, ORDER BY)
   
 - **성능 최적화**
   - GPU Acceleration (CUDA-based aggregation, filtering, joins)
+  - Bloom Filter Indexing
   - LRU Cache
   - SIMD Vectorization
   - **병렬 쿼리** (Rayon 기반)

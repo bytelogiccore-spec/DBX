@@ -13,7 +13,7 @@ pub mod encrypted_parquet;
 pub mod encrypted_wos;
 pub mod encryption;
 pub mod gpu;
-
+pub mod index;
 pub mod kv_adapter;
 pub mod memory_wos;
 pub mod opfs;

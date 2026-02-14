@@ -9,7 +9,7 @@ permalink: /
 # DBX
 {: .fs-9 }
 
-High-performance embedded database built on a 4-Tier Hybrid Storage architecture. Designed for HTAP (Hybrid Transactional/Analytical Processing) workloads, implemented in pure Rust.
+High-performance embedded database built on a 5-Tier Hybrid Storage architecture. Designed for HTAP (Hybrid Transactional/Analytical Processing) workloads, implemented in pure Rust.
 {: .fs-6 .fw-300 }
 
 [Get Started](getting-started){: .btn .btn-primary .fs-5 .mb-4 .mb-md-0 .mr-2 }
@@ -20,7 +20,7 @@ High-performance embedded database built on a 4-Tier Hybrid Storage architecture
 ## Key Features
 
 ### 🏗️ Architecture
-- **4-Tier Hybrid Storage** — Delta → Cache → WOS → ROS
+- **5-Tier Hybrid Storage** — Delta → Cache → WOS → Index → ROS
 - **HTAP Support** — Concurrent OLTP and OLAP workloads
 - **MVCC Transactions** — Snapshot Isolation with Garbage Collection
 - **Columnar Cache** — Apache Arrow-based analytical query optimization
@@ -85,12 +85,11 @@ fn main() -> dbx_core::DbxResult<()> {
 
 Comprehensive feature guides:
 
-- **[CRUD Operations](guides/crud-operations)** — Complete CRUD guide
-- **[SQL Reference](guides/sql-reference)** — Full SQL syntax reference
-- **[Transactions](guides/transactions)** — MVCC and snapshot isolation
-- **[GPU Acceleration](guides/gpu-acceleration)** — CUDA-based query acceleration
+- **[Storage Layers](guides/storage-layers)** — 5-Tier architecture deep dive
+- **[Language Bindings](guides/language-bindings)** — Python, C#, C/C++, Node.js
 - **[Encryption](guides/encryption)** — AES-256 and ChaCha20 encryption
 - **[Compression](guides/compression)** — ZSTD compression
+- **[Indexing](guides/indexing)** — Bloom Filter indexes
 - **[WAL Recovery](guides/wal-recovery)** — Write-Ahead Logging and crash recovery
 
 ### 🎓 Tutorials
@@ -107,6 +106,7 @@ Practical code examples:
 - **[SQL Quick Start](examples/sql-quick-start)** — SQL 기본 사용법
 - **[Encryption](examples/encryption)** — Data encryption
 - **[Compression](examples/compression)** — Data compression
+- **[Indexing](examples/indexing)** — Index creation and usage
 - **[WAL Recovery](examples/wal-recovery)** — Crash recovery
 
 ### 🔧 API Reference

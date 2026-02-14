@@ -7,7 +7,7 @@
 
 > **29x faster file GET** than SQLite • Pure Rust • GPU-Accelerated • MVCC Transactions
 
-**DBX** is a next-generation embedded database built on a **4-Tier Hybrid Storage** architecture, designed for modern HTAP (Hybrid Transactional/Analytical Processing) workloads.
+**DBX** is a next-generation embedded database built on a **5-Tier Hybrid Storage** architecture, designed for modern HTAP (Hybrid Transactional/Analytical Processing) workloads.
 
 ---
 
@@ -38,7 +38,7 @@ Your support helps with:
 
 ### 🎯 Key Advantages
 
-- **🚀 4-Tier Hybrid Storage** — Optimized for both OLTP and OLAP workloads
+- **🚀 5-Tier Hybrid Storage** — Optimized for both OLTP and OLAP workloads
 - **🎮 GPU Acceleration** — CUDA-powered analytics (up to 4.5x faster filtering)
 - **🔒 MVCC Transactions** — Snapshot Isolation with zero-lock reads
 - **💾 Columnar Cache** — Apache Arrow-based query optimization
@@ -47,7 +47,7 @@ Your support helps with:
 
 📊 **[Full Benchmark Report](https://bytelogiccore-spec.github.io/DBX/benchmarks)** — Detailed comparison vs SQLite, Sled, Redb
 
-## 📦 4-Tier Hybrid Storage Architecture
+## 📦 5-Tier Hybrid Storage Architecture
 
 ```
 ┌─────────────────────────────────────────┐
@@ -59,11 +59,15 @@ Your support helps with:
 └─────────────────┬───────────────────────┘
                   │
 ┌─────────────────▼───────────────────────┐
-│  Tier 3: WOS (BTreeMap/sled)            │  ← MVCC Snapshot Isolation
+│  Tier 3: WOS (sled)                     │  ← MVCC Snapshot Isolation
 └─────────────────┬───────────────────────┘
                   │ Compaction
 ┌─────────────────▼───────────────────────┐
-│  Tier 4: ROS (Parquet)                  │  ← Columnar compression
+│  Tier 4: Index (Bloom Filter)           │  ← Fast existence check
+└─────────────────┬───────────────────────┘
+                  │
+┌─────────────────▼───────────────────────┐
+│  Tier 5: ROS (Parquet)                  │  ← Columnar compression
 └─────────────────────────────────────────┘
 
                   Optional: GPU Acceleration (CUDA)
@@ -109,7 +113,7 @@ DBX provides official bindings for multiple languages:
 ## ✨ Features
 
 ### Core Features ✅
-- ✅ **4-Tier Hybrid Storage** — Delta → Cache → WOS → ROS
+- ✅ **5-Tier Hybrid Storage** — Delta → Cache → WOS → Index → ROS
 - ✅ **MVCC Transactions** — Snapshot Isolation, Garbage Collection
 - ✅ **SQL Support** — SELECT, WHERE, JOIN, GROUP BY, ORDER BY
 - ✅ **GPU Acceleration** — CUDA-based aggregation and filtering
