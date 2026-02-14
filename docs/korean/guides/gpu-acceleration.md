@@ -1,8 +1,8 @@
 ---
 layout: default
 title: GPU 가속
-parent: Guides
-nav_order: 5
+parent: 한국어
+nav_order: 24
 description: "DBX의 분석 쿼리를 위한 CUDA 기반 GPU 가속"
 ---
 

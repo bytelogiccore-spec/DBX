@@ -1,8 +1,8 @@
 ---
 layout: default
 title: 저장소 계층
-parent: Guides
-nav_order: 4
+parent: 한국어
+nav_order: 23
 description: "DBX의 5계층 하이브리드 저장소 아키텍처 이해"
 ---
 

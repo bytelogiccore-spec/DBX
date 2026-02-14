@@ -36,7 +36,10 @@ fn main() -> dbx_core::DbxResult<()> {
         // Try to create the same table again - should fail if schema was persisted
         match db.execute_sql("CREATE TABLE users (id INT, name TEXT)") {
             Err(e) => {
-                println!("  ✓ users table schema persisted (got expected error: {})", e);
+                println!(
+                    "  ✓ users table schema persisted (got expected error: {})",
+                    e
+                );
             }
             Ok(_) => {
                 panic!("users table should already exist!");

@@ -1,8 +1,8 @@
 ---
 layout: default
 title: Transactions
-parent: Guides
-nav_order: 2
+parent: English
+nav_order: 22
 description: "MVCC transactions and concurrency control in DBX"
 ---
 

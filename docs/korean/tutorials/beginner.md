@@ -1,8 +1,8 @@
 ---
 layout: default
 title: 초보자 튜토리얼
-parent: Tutorials
-nav_order: 1
+parent: 한국어
+nav_order: 30
 description: "DBX 초보자를 위한 단계별 가이드"
 ---
 

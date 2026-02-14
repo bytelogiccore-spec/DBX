@@ -1,8 +1,8 @@
 ---
 layout: default
 title: Transaction API
-nav_order: 2
-parent: API Reference
+nav_order: 42
+parent: English
 ---
 
 # Transaction API

@@ -1,8 +1,8 @@
 ---
 layout: default
 title: SQL Reference
-parent: Guides
-nav_order: 3
+parent: English
+nav_order: 21
 description: "Complete SQL syntax reference for DBX"
 ---
 

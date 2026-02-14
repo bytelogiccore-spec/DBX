@@ -26,6 +26,11 @@ jobs:
       - name: Rust 캐시
         uses: Swatinem/rust-cache@v2
         
+      - name: Python 설치 (dbx-py 용)
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+        
       - name: 포맷 검사
         run: cargo fmt --all -- --check
         
@@ -59,10 +64,10 @@ jobs:
         run: cargo build --release --locked -p dbx-ffi
         
       - name: C# 종속성 복원
-        run: dotnet restore bindings/dbx-csharp/DBX.Client/DBX.Client.csproj
+        run: dotnet restore lang/dotnet/DBX.Client/DBX.Client.csproj
         
       - name: DBX.Client 빌드
-        run: dotnet build bindings/dbx-csharp/DBX.Client/DBX.Client.csproj --configuration Release --no-restore
+        run: dotnet build lang/dotnet/DBX.Client/DBX.Client.csproj --configuration Release --no-restore
         
       - name: DBX.Client 테스트
-        run: dotnet test bindings/dbx-csharp/DBX.Benchmark/DBX.Benchmark.csproj --configuration Release
+        run: dotnet test lang/dotnet/DBX.Benchmark/DBX.Benchmark.csproj --configuration Release

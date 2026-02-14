@@ -1,8 +1,8 @@
 ---
 layout: default
 title: WAL Recovery
-parent: Examples
-nav_order: 7
+parent: English
+nav_order: 29
 ---
 
 # WAL Recovery

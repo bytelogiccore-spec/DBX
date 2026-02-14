@@ -1,7 +1,8 @@
 ---
 layout: default
 title: Benchmarks
-nav_order: 4
+nav_order: 3
+parent: English
 description: "DBX performance benchmarks"
 ---
 

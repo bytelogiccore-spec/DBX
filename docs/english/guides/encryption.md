@@ -1,8 +1,8 @@
 ---
 layout: default
 title: Encryption
-parent: Examples
-nav_order: 3
+parent: English
+nav_order: 25
 ---
 
 # Encryption

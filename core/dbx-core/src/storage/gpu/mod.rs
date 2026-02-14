@@ -23,17 +23,17 @@ mod strategy;
 
 // Advanced optimization modules (007)
 #[cfg(feature = "gpu")]
-mod topology;
-#[cfg(feature = "gpu")]
-mod sharding;
+mod memory;
 #[cfg(feature = "gpu")]
 mod multi_device;
 #[cfg(feature = "gpu")]
-mod persistent;
-#[cfg(feature = "gpu")]
 mod occupancy;
 #[cfg(feature = "gpu")]
-mod memory;
+mod persistent;
+#[cfg(feature = "gpu")]
+mod sharding;
+#[cfg(feature = "gpu")]
+mod topology;
 
 // Re-exports
 pub use adaptive::GpuGroupByStrategy;
@@ -46,8 +46,8 @@ pub use strategy::{GpuHashStrategy, GpuReductionStrategy};
 
 // Advanced optimization re-exports (007)
 #[cfg(feature = "gpu")]
-pub use topology::DeviceTopology;
+pub use memory::{GpuMemoryManager, MemoryStrategy, UnifiedBuffer};
 #[cfg(feature = "gpu")]
 pub use occupancy::OccupancyCalculator;
 #[cfg(feature = "gpu")]
-pub use memory::{UnifiedBuffer, GpuMemoryManager, MemoryStrategy};
+pub use topology::DeviceTopology;

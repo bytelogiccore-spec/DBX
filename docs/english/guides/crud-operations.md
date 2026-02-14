@@ -1,8 +1,8 @@
 ---
 layout: default
 title: CRUD Operations
-parent: Guides
-nav_order: 1
+parent: English
+nav_order: 20
 description: "Complete guide to Create, Read, Update, Delete operations in DBX"
 ---
 

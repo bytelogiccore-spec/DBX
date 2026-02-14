@@ -24,7 +24,7 @@ impl GpuManager {
         {
             tracing::debug!(target: "gpu", table = %table, column = %column, "GPU sum start");
             let start = std::time::Instant::now();
-            
+
             let data = self.get_gpu_data(table, column).ok_or_else(|| {
                 DbxError::Gpu(format!(
                     "Column {}.{} not found in GPU cache",
@@ -47,7 +47,7 @@ impl GpuManager {
                             let slice_host = stream.clone_dtoh(slice).map_err(|e| {
                                 DbxError::Gpu(format!("Failed to copy slice to host: {:?}", e))
                             })?;
-                            
+
                             let min_val = slice_host.iter().min().copied().unwrap_or(0);
                             let max_val = slice_host.iter().max().copied().unwrap_or(0);
                             let num_bins = (max_val - min_val + 1).min(1000) as usize;
@@ -56,19 +56,26 @@ impl GpuManager {
                             if num_bins > 1000 || num_bins == 0 {
                                 // Fall back to SinglePass for high cardinality
                                 return Err(DbxError::Gpu(
-                                    "Cardinality too high for histogram, use SinglePass".to_string(),
+                                    "Cardinality too high for histogram, use SinglePass"
+                                        .to_string(),
                                 ));
                             }
 
                             // Allocate histogram buffer
-                            let mut histogram_dev = stream.alloc_zeros::<i64>(num_bins).map_err(|e| {
-                                DbxError::Gpu(format!("Failed to alloc histogram: {:?}", e))
-                            })?;
+                            let mut histogram_dev =
+                                stream.alloc_zeros::<i64>(num_bins).map_err(|e| {
+                                    DbxError::Gpu(format!("Failed to alloc histogram: {:?}", e))
+                                })?;
 
                             // Load histogram kernel
-                            let func = self.module.load_function("histogram_sum_i32").map_err(|_| {
-                                DbxError::Gpu("Kernel histogram_sum_i32 not found".to_string())
-                            })?;
+                            let func =
+                                self.module
+                                    .load_function("histogram_sum_i32")
+                                    .map_err(|_| {
+                                        DbxError::Gpu(
+                                            "Kernel histogram_sum_i32 not found".to_string(),
+                                        )
+                                    })?;
 
                             // Launch histogram kernel
                             let cfg = LaunchConfig::for_num_elems(n as u32);
@@ -93,10 +100,11 @@ impl GpuManager {
                             stream.synchronize().map_err(|e| {
                                 DbxError::Gpu(format!("Stream sync failed: {:?}", e))
                             })?;
-                            
-                            let histogram_host = stream.clone_dtoh(&histogram_dev).map_err(|e| {
-                                DbxError::Gpu(format!("Failed to copy histogram: {:?}", e))
-                            })?;
+
+                            let histogram_host =
+                                stream.clone_dtoh(&histogram_dev).map_err(|e| {
+                                    DbxError::Gpu(format!("Failed to copy histogram: {:?}", e))
+                                })?;
 
                             let result = histogram_host.iter().sum();
                             tracing::debug!(target: "gpu", table = %table, column = %column, strategy = "Histogram", elapsed_us = start.elapsed().as_micros(), "GPU sum complete");

@@ -7,9 +7,9 @@ fn main() {
     let dialect = GenericDialect {};
     let sql = "INSERT INTO users (id, name) VALUES (1, 'Alice')";
     let ast = Parser::parse_sql(&dialect, sql).unwrap();
-    
+
     println!("Parsed statement: {:#?}", ast[0]);
-    
+
     match &ast[0] {
         Statement::Insert { .. } => println!("Matched as Statement::Insert {{ .. }}"),
         Statement::Insert(insert) => println!("Matched as Statement::Insert(insert)"),

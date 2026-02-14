@@ -1,8 +1,8 @@
 ---
 layout: default
 title: Compression
-parent: Examples
-nav_order: 6
+parent: 한국어
+nav_order: 14
 ---
 
 # Compression Quick Start

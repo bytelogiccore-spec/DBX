@@ -59,9 +59,12 @@ impl Database {
         // Load persisted metadata (schemas and indexes)
         let loaded_schemas = crate::engine::metadata::load_all_schemas(&wos_backend)?;
         let loaded_indexes = crate::engine::metadata::load_all_indexes(&wos_backend)?;
-        
-        info!("Loaded {} schemas and {} indexes from persistent storage", 
-              loaded_schemas.len(), loaded_indexes.len());
+
+        info!(
+            "Loaded {} schemas and {} indexes from persistent storage",
+            loaded_schemas.len(),
+            loaded_indexes.len()
+        );
 
         let (tx, rx) = std::sync::mpsc::channel::<BackgroundJob>();
         let wal_for_worker = Some(wal.clone());

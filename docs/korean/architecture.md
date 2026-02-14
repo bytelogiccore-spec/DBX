@@ -1,7 +1,8 @@
 ---
 layout: default
 title: 아키텍처
-nav_order: 3
+nav_order: 2
+parent: 한국어
 description: "DBX 5-Tier 하이브리드 스토리지 아키텍처"
 ---
 

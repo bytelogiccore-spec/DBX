@@ -20,12 +20,12 @@ fn test_kv_save_load() -> dbx_core::DbxResult<()> {
     // Create in-memory DB and add data using KV API
     {
         let db = Database::open_in_memory()?;
-        
+
         // Insert some data
         db.insert("users", b"user:1", b"Alice")?;
         db.insert("users", b"user:2", b"Bob")?;
         db.insert("products", b"prod:1", b"Laptop")?;
-        
+
         println!("  ✓ Inserted 3 key-value pairs");
 
         // Flush to ensure data is in WOS (not just Delta)
@@ -46,11 +46,11 @@ fn test_kv_save_load() -> dbx_core::DbxResult<()> {
         let value1 = db.get("users", b"user:1")?;
         let value2 = db.get("users", b"user:2")?;
         let value3 = db.get("products", b"prod:1")?;
-        
+
         assert_eq!(value1, Some(b"Alice".to_vec()), "Expected Alice");
         assert_eq!(value2, Some(b"Bob".to_vec()), "Expected Bob");
         assert_eq!(value3, Some(b"Laptop".to_vec()), "Expected Laptop");
-        
+
         println!("  ✓ All data verified correctly");
     }
 

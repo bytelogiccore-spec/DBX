@@ -31,7 +31,7 @@ impl<T: Clone + cudarc::driver::DeviceRepr> UnifiedBuffer<T> {
         // We use regular host memory for now
         // TODO: Implement proper Unified Memory when cudarc supports it
         let data = vec![unsafe { std::mem::zeroed() }; size];
-        
+
         Ok(Self {
             device,
             data,
@@ -56,16 +56,17 @@ impl<T: Clone + cudarc::driver::DeviceRepr> UnifiedBuffer<T> {
         // Note: cudarc doesn't expose cudaMemPrefetchAsync directly
         // We simulate this by uploading to GPU
         // TODO: Implement proper prefetching when cudarc supports it
-        
+
         if !self.prefetched {
             // Upload data to GPU (simulating prefetch)
             let stream = self.device.default_stream();
-            let _gpu_slice = stream.clone_htod(&self.data)
+            let _gpu_slice = stream
+                .clone_htod(&self.data)
                 .map_err(|e| DbxError::Gpu(format!("Prefetch failed: {:?}", e)))?;
-            
+
             self.prefetched = true;
         }
-        
+
         Ok(())
     }
 
@@ -92,7 +93,8 @@ impl<T: Clone + cudarc::driver::DeviceRepr> UnifiedBuffer<T> {
     /// Upload to GPU and get CudaSlice
     pub fn to_device(&self) -> DbxResult<CudaSlice<T>> {
         let stream = self.device.default_stream();
-        stream.clone_htod(&self.data)
+        stream
+            .clone_htod(&self.data)
             .map_err(|e| DbxError::Gpu(format!("Upload failed: {:?}", e)))
     }
 

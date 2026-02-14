@@ -1,8 +1,8 @@
 ---
 layout: default
 title: Indexing
-parent: Examples
-nav_order: 4
+parent: 한국어
+nav_order: 15
 ---
 
 # Indexing Quick Start

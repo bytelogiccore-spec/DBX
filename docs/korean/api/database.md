@@ -1,8 +1,8 @@
 ---
 layout: default
 title: 데이터베이스 API
-nav_order: 1
-parent: API Reference
+nav_order: 40
+parent: 한국어
 ---
 
 # 데이터베이스 API

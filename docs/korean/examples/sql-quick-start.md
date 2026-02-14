@@ -1,8 +1,8 @@
 ---
 layout: default
 title: SQL Quick Start
-parent: Examples
-nav_order: 2
+parent: 한국어
+nav_order: 12
 ---
 
 # SQL Quick Start

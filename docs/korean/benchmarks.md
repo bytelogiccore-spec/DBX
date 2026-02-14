@@ -1,7 +1,8 @@
 ---
 layout: default
 title: 벤치마크
-nav_order: 4
+nav_order: 3
+parent: 한국어
 description: "DBX 성능 벤치마크"
 ---
 

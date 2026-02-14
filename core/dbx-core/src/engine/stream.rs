@@ -2,7 +2,6 @@
 //!
 //! Provides CUDA Streams for overlapping data transfer and kernel execution.
 
-
 #[cfg(feature = "gpu")]
 use cudarc::driver::{CudaContext, CudaStream};
 

@@ -1,8 +1,8 @@
 ---
 layout: default
 title: 언어 바인딩
-nav_order: 7
-parent: Guides
+nav_order: 28
+parent: 한국어
 ---
 
 # 언어 바인딩

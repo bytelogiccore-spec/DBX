@@ -7,36 +7,38 @@ has_children: false
 
 # 🚀 DBX Documentation
 
-Welcome to the official documentation for DBX, a next-generation high-performance embedded database.  
-**DBX**는 순수 Rust 기반의 고성능 하이브리드 스토리지 엔진입니다.
+Welcome to the official documentation for DBX, a next-generation high-performance embedded database.
 
 ---
 
 ## 🌎 Choose Your Language / 언어를 선택하세요
 
-Please select your preferred language to continue.
-
-<div style="display: flex; gap: 20px; margin-top: 30px;">
-  <a href="./english/" style="flex: 1; text-decoration: none; color: inherit; padding: 20px; border: 1px solid #30363d; border-radius: 6px; background: #161b22; text-align: center; transition: transform 0.2s;">
-    <div style="font-size: 24px; margin-bottom: 10px;">🇺🇸</div>
-    <div style="font-size: 18px; font-weight: bold;">English</div>
-    <div style="opacity: 0.7;">View Documentation in English</div>
+<div style="display: flex; gap: 20px; margin-top: 30px; flex-wrap: wrap;">
+  <a href="./english/" style="flex: 1; min-width: 200px; text-decoration: none; color: inherit; padding: 24px; border: 1px solid #30363d; border-radius: 8px; background: #161b22; text-align: center; transition: transform 0.2s, box-shadow 0.2s;" onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 12px rgba(0,0,0,0.3)'" onmouseout="this.style.transform='none'; this.style.boxShadow='none'">
+    <div style="font-size: 32px; margin-bottom: 12px;">🇺🇸</div>
+    <div style="font-size: 20px; font-weight: bold;">English</div>
+    <div style="opacity: 0.7; margin-top: 6px;">View Documentation in English</div>
   </a>
-  
-  <a href="./korean/" style="flex: 1; text-decoration: none; color: inherit; padding: 20px; border: 1px solid #30363d; border-radius: 6px; background: #161b22; text-align: center; transition: transform 0.2s;">
-    <div style="font-size: 24px; margin-bottom: 10px;">🇰🇷</div>
-    <div style="font-size: 18px; font-weight: bold;">한국어</div>
-    <div style="opacity: 0.7;">한국어로 문서 보기</div>
+
+  <a href="./korean/" style="flex: 1; min-width: 200px; text-decoration: none; color: inherit; padding: 24px; border: 1px solid #30363d; border-radius: 8px; background: #161b22; text-align: center; transition: transform 0.2s, box-shadow 0.2s;" onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 4px 12px rgba(0,0,0,0.3)'" onmouseout="this.style.transform='none'; this.style.boxShadow='none'">
+    <div style="font-size: 32px; margin-bottom: 12px;">🇰🇷</div>
+    <div style="font-size: 20px; font-weight: bold;">한국어</div>
+    <div style="opacity: 0.7; margin-top: 6px;">한국어로 문서 보기</div>
   </a>
 </div>
 
 ---
 
 ## ⚡ Key Highlights
-- **29x faster file GET** than SQLite
-- **Pure Rust** Implementation
-- **GPU-Accelerated** Analytics
-- **MVCC** Snapshot Isolation
+
+| Feature | Description |
+|---------|-------------|
+| **29x faster** | File GET performance vs SQLite |
+| **5-Tier Storage** | Delta → Cache → WOS → Index → ROS |
+| **Pure Rust** | Zero unsafe dependencies in core |
+| **GPU Accelerated** | CUDA-based analytical queries |
+| **MVCC** | Snapshot Isolation transactions |
+| **Multi-Language** | Rust, Python, C#, C/C++, Node.js |
 
 ---
 

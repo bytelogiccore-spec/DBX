@@ -1,8 +1,8 @@
 ---
 layout: default
 title: 트랜잭션 API
-nav_order: 2
-parent: API Reference
+nav_order: 42
+parent: 한국어
 ---
 
 # 트랜잭션 API

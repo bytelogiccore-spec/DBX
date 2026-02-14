@@ -48,8 +48,9 @@ impl DeviceTopology {
         // Initialize devices
         let mut devices = Vec::new();
         for i in 0..device_count {
-            let device = CudaContext::new(i as usize)
-                .map_err(|e| DbxError::Gpu(format!("Failed to initialize device {}: {:?}", i, e)))?;
+            let device = CudaContext::new(i as usize).map_err(|e| {
+                DbxError::Gpu(format!("Failed to initialize device {}: {:?}", i, e))
+            })?;
             devices.push(device);
         }
 

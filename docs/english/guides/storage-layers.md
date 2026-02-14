@@ -1,8 +1,8 @@
 ---
 layout: default
 title: Storage Layers
-parent: Guides
-nav_order: 4
+parent: English
+nav_order: 23
 description: "Understanding DBX's 5-Tier Hybrid Storage architecture"
 ---
 

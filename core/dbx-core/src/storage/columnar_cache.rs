@@ -92,7 +92,9 @@ impl ColumnarCache {
         use std::fs;
         use std::path::Path;
 
-        let table_cache = self.tables.get(table)
+        let table_cache = self
+            .tables
+            .get(table)
             .ok_or_else(|| DbxError::Storage(format!("Table '{}' not in cache", table)))?;
 
         let batches = table_cache.batches.read();

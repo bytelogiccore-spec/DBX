@@ -1,8 +1,8 @@
 ---
 layout: default
 title: CRUD 작업
-parent: Guides
-nav_order: 1
+parent: 한국어
+nav_order: 20
 description: "DBX의 생성, 조회, 수정, 삭제 작업에 대한 전체 가이드"
 ---
 

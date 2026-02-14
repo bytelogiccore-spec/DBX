@@ -6,7 +6,7 @@ use crate::sql::executor::{
     FilterOperator, HashAggregateOperator, HashJoinOperator, LimitOperator, PhysicalOperator,
     ProjectionOperator, SortOperator, TableScanOperator,
 };
-use crate::sql::planner::{LogicalPlanner, PhysicalPlan, PhysicalPlanner, PhysicalExpr};
+use crate::sql::planner::{LogicalPlanner, PhysicalExpr, PhysicalPlan, PhysicalPlanner};
 use crate::storage::columnar_cache::ColumnarCache;
 use arrow::array::RecordBatch;
 use arrow::datatypes::Schema;
@@ -46,14 +46,13 @@ fn reconstruct_full_record(key: &[u8], value_bytes: &[u8]) -> Vec<u8> {
 fn json_record_to_batch(value_bytes: &[u8]) -> DbxResult<RecordBatch> {
     use arrow::array::{ArrayRef, BooleanArray, Float64Array, Int64Array, StringArray};
     use arrow::datatypes::{DataType, Field, Schema};
-    
-    let current_values: Vec<serde_json::Value> = 
-        serde_json::from_slice(value_bytes)
-            .unwrap_or_else(|_| vec![]);
-    
+
+    let current_values: Vec<serde_json::Value> =
+        serde_json::from_slice(value_bytes).unwrap_or_else(|_| vec![]);
+
     let mut fields = Vec::new();
     let mut columns: Vec<ArrayRef> = Vec::new();
-    
+
     for (i, val) in current_values.iter().enumerate() {
         match val {
             serde_json::Value::Number(n) => {
@@ -86,7 +85,7 @@ fn json_record_to_batch(value_bytes: &[u8]) -> DbxResult<RecordBatch> {
             }
         }
     }
-    
+
     let schema = Arc::new(Schema::new(fields));
     RecordBatch::try_new(schema, columns).map_err(|e| DbxError::from(e))
 }
@@ -99,10 +98,10 @@ fn evaluate_filter_for_record(
 ) -> DbxResult<bool> {
     if let Some(expr) = filter_expr {
         let batch = json_record_to_batch(value_bytes)?;
-        
+
         use crate::sql::executor::evaluate_expr;
         let result = evaluate_expr(expr, &batch)?;
-        
+
         use arrow::array::BooleanArray;
         let bool_array = result
             .as_any()
@@ -111,7 +110,7 @@ fn evaluate_filter_for_record(
                 expected: "BooleanArray".to_string(),
                 actual: format!("{:?}", result.data_type()),
             })?;
-        
+
         Ok(bool_array.value(0))
     } else {
         Ok(true) // No filter, all records match
@@ -192,14 +191,14 @@ impl Database {
             } => {
                 // Execute INSERT: convert PhysicalExpr values to bytes and insert into Delta Store
                 let mut rows_inserted = 0;
-                
+
                 for row_values in values {
                     // For simplicity, use first column as key, rest as value
                     // TODO: Proper schema-based serialization
                     if row_values.is_empty() {
                         continue;
                     }
-                    
+
                     // Extract key from first value
                     let key = match &row_values[0] {
                         PhysicalExpr::Literal(scalar) => {
@@ -227,7 +226,7 @@ impl Database {
                             ));
                         }
                     };
-                    
+
                     // Extract remaining values as JSON-serializable format
                     let mut value_vec = Vec::new();
                     for expr in &row_values[1..] {
@@ -238,11 +237,9 @@ impl Database {
                                     ScalarValue::Utf8(s) => serde_json::Value::String(s.clone()),
                                     ScalarValue::Int32(i) => serde_json::Value::Number((*i).into()),
                                     ScalarValue::Int64(i) => serde_json::Value::Number((*i).into()),
-                                    ScalarValue::Float64(f) => {
-                                        serde_json::Number::from_f64(*f)
-                                            .map(serde_json::Value::Number)
-                                            .unwrap_or(serde_json::Value::Null)
-                                    }
+                                    ScalarValue::Float64(f) => serde_json::Number::from_f64(*f)
+                                        .map(serde_json::Value::Number)
+                                        .unwrap_or(serde_json::Value::Null),
                                     ScalarValue::Boolean(b) => serde_json::Value::Bool(*b),
                                     ScalarValue::Null => serde_json::Value::Null,
                                 };
@@ -255,20 +252,20 @@ impl Database {
                             }
                         }
                     }
-                    
+
                     // Serialize values as JSON
                     let value_json = serde_json::to_vec(&value_vec)
                         .map_err(|e| DbxError::Serialization(e.to_string()))?;
-                    
+
                     // Insert into Delta Store
                     self.insert(table, &key, &value_json)?;
                     rows_inserted += 1;
                 }
-                
+
                 // Return result batch indicating success
                 use arrow::array::{Int64Array, RecordBatch};
                 use arrow::datatypes::{DataType, Field, Schema};
-                
+
                 let schema = Arc::new(Schema::new(vec![Field::new(
                     "rows_inserted",
                     DataType::Int64,
@@ -277,7 +274,7 @@ impl Database {
                 let array = Int64Array::from(vec![rows_inserted as i64]);
                 let batch = RecordBatch::try_new(schema, vec![Arc::new(array)])
                     .map_err(|e| DbxError::from(e))?;
-                
+
                 Ok(vec![batch])
             }
             PhysicalPlan::Update {
@@ -293,7 +290,9 @@ impl Database {
                 let column_index_map = {
                     let schemas = self.table_schemas.read().unwrap();
                     schemas.get(table.as_str()).map(|schema| {
-                        schema.fields().iter()
+                        schema
+                            .fields()
+                            .iter()
                             .enumerate()
                             .map(|(i, field)| (field.name().clone(), i))
                             .collect::<std::collections::HashMap<String, usize>>()
@@ -304,15 +303,11 @@ impl Database {
                     // Reconstruct full record: prepend key (col 0) to value
                     // INSERT stores row_values[1..] as JSON, so key must be re-added
                     let full_record = reconstruct_full_record(&key, &value_bytes);
-                    let should_update = evaluate_filter_for_record(
-                        filter.as_ref(),
-                        &full_record,
-                    )?;
+                    let should_update = evaluate_filter_for_record(filter.as_ref(), &full_record)?;
 
                     if should_update {
                         let mut current_values: Vec<serde_json::Value> =
-                            serde_json::from_slice(&full_record)
-                                .unwrap_or_else(|_| vec![]);
+                            serde_json::from_slice(&full_record).unwrap_or_else(|_| vec![]);
 
                         // Apply assignments using schema-based column mapping
                         for (column_name, expr) in assignments.iter() {
@@ -321,7 +316,8 @@ impl Database {
                                 .and_then(|map| map.get(column_name).copied())
                                 .unwrap_or_else(|| {
                                     // Fallback: linear search by position
-                                    assignments.iter()
+                                    assignments
+                                        .iter()
                                         .position(|(n, _)| n == column_name)
                                         .unwrap_or(0)
                                 });
@@ -332,11 +328,9 @@ impl Database {
                                     ScalarValue::Utf8(s) => serde_json::Value::String(s.clone()),
                                     ScalarValue::Int32(v) => serde_json::Value::Number((*v).into()),
                                     ScalarValue::Int64(v) => serde_json::Value::Number((*v).into()),
-                                    ScalarValue::Float64(f) => {
-                                        serde_json::Number::from_f64(*f)
-                                            .map(serde_json::Value::Number)
-                                            .unwrap_or(serde_json::Value::Null)
-                                    }
+                                    ScalarValue::Float64(f) => serde_json::Number::from_f64(*f)
+                                        .map(serde_json::Value::Number)
+                                        .unwrap_or(serde_json::Value::Null),
                                     ScalarValue::Boolean(b) => serde_json::Value::Bool(*b),
                                     ScalarValue::Null => serde_json::Value::Null,
                                 };
@@ -360,11 +354,11 @@ impl Database {
                         rows_updated += 1;
                     }
                 }
-                
+
                 // Return result batch
                 use arrow::array::{Int64Array, RecordBatch};
                 use arrow::datatypes::{DataType, Field, Schema};
-                
+
                 let schema = Arc::new(Schema::new(vec![Field::new(
                     "rows_updated",
                     DataType::Int64,
@@ -373,37 +367,34 @@ impl Database {
                 let array = Int64Array::from(vec![rows_updated]);
                 let batch = RecordBatch::try_new(schema, vec![Arc::new(array)])
                     .map_err(|e| DbxError::from(e))?;
-                
+
                 Ok(vec![batch])
             }
-            PhysicalPlan::Delete {
-                table,
-                filter,
-            } => {
+            PhysicalPlan::Delete { table, filter } => {
                 // Execute DELETE: scan table, evaluate filter, delete matching records
-                
+
                 // Step 1: Scan all records from the table
                 let all_records = self.scan(table)?;
-                
+
                 let mut rows_deleted = 0_i64;
-                
+
                 // Step 2: Process each record
                 for (key, value_bytes) in all_records {
                     // Reconstruct full record: prepend key (col 0) to value
                     let full_record = reconstruct_full_record(&key, &value_bytes);
                     let should_delete = evaluate_filter_for_record(filter.as_ref(), &full_record)?;
-                    
+
                     if should_delete {
                         // Delete from Delta Store
                         self.delete(table, &key)?;
                         rows_deleted += 1;
                     }
                 }
-                
+
                 // Return result batch
                 use arrow::array::{Int64Array, RecordBatch};
                 use arrow::datatypes::{DataType, Field, Schema};
-                
+
                 let schema = Arc::new(Schema::new(vec![Field::new(
                     "rows_deleted",
                     DataType::Int64,
@@ -412,33 +403,33 @@ impl Database {
                 let array = Int64Array::from(vec![rows_deleted]);
                 let batch = RecordBatch::try_new(schema, vec![Arc::new(array)])
                     .map_err(|e| DbxError::from(e))?;
-                
+
                 Ok(vec![batch])
             }
             PhysicalPlan::DropTable { table, if_exists } => {
                 // DROP TABLE implementation
                 use arrow::array::{Int64Array, RecordBatch};
                 use arrow::datatypes::{DataType, Field, Schema};
-                
+
                 // Check if table exists
                 let exists = self.table_schemas.read().unwrap().contains_key(table);
-                
+
                 if !exists && !if_exists {
                     return Err(DbxError::TableNotFound(table.clone()));
                 }
-                
+
                 if exists {
                     // Remove table schema from memory
                     self.table_schemas.write().unwrap().remove(table);
-                    
+
                     // Delete schema from persistent storage
                     self.wos.delete_schema_metadata(table)?;
-                    
+
                     // Note: Data deletion from Delta Store/WOS would require
                     // scanning and deleting all keys with table prefix
                     // For now, we just remove the schema metadata
                 }
-                
+
                 // Return success
                 let schema = Arc::new(Schema::new(vec![Field::new(
                     "rows_affected",
@@ -448,43 +439,56 @@ impl Database {
                 let array = Int64Array::from(vec![1]);
                 let batch = RecordBatch::try_new(schema, vec![Arc::new(array)])
                     .map_err(|e| DbxError::from(e))?;
-                
+
                 Ok(vec![batch])
             }
-            PhysicalPlan::CreateTable { table, columns, if_not_exists } => {
+            PhysicalPlan::CreateTable {
+                table,
+                columns,
+                if_not_exists,
+            } => {
                 // CREATE TABLE implementation
                 use arrow::array::{Int64Array, RecordBatch};
                 use arrow::datatypes::{DataType, Field, Schema};
-                
+
                 // Check if table already exists
                 let exists = self.table_schemas.read().unwrap().contains_key(table);
-                
+
                 if exists && !if_not_exists {
-                    return Err(DbxError::Schema(format!("Table '{}' already exists", table)));
+                    return Err(DbxError::Schema(format!(
+                        "Table '{}' already exists",
+                        table
+                    )));
                 }
-                
+
                 if !exists {
                     // Create Arrow schema from column definitions
-                    let fields: Vec<Field> = columns.iter().map(|(name, type_str)| {
-                        let data_type = match type_str.to_uppercase().as_str() {
-                            "INT" | "INTEGER" => DataType::Int64,
-                            "TEXT" | "STRING" | "VARCHAR" => DataType::Utf8,
-                            "FLOAT" | "DOUBLE" => DataType::Float64,
-                            "BOOL" | "BOOLEAN" => DataType::Boolean,
-                            _ => DataType::Utf8, // Default to string
-                        };
-                        Field::new(name, data_type, true)
-                    }).collect();
-                    
+                    let fields: Vec<Field> = columns
+                        .iter()
+                        .map(|(name, type_str)| {
+                            let data_type = match type_str.to_uppercase().as_str() {
+                                "INT" | "INTEGER" => DataType::Int64,
+                                "TEXT" | "STRING" | "VARCHAR" => DataType::Utf8,
+                                "FLOAT" | "DOUBLE" => DataType::Float64,
+                                "BOOL" | "BOOLEAN" => DataType::Boolean,
+                                _ => DataType::Utf8, // Default to string
+                            };
+                            Field::new(name, data_type, true)
+                        })
+                        .collect();
+
                     let schema = Arc::new(Schema::new(fields));
-                    
+
                     // Store schema in memory
-                    self.table_schemas.write().unwrap().insert(table.clone(), schema.clone());
-                    
+                    self.table_schemas
+                        .write()
+                        .unwrap()
+                        .insert(table.clone(), schema.clone());
+
                     // Persist schema to storage
                     self.wos.save_schema_metadata(table, &schema)?;
                 }
-                
+
                 // Return success
                 let schema = Arc::new(Schema::new(vec![Field::new(
                     "rows_affected",
@@ -494,10 +498,15 @@ impl Database {
                 let array = Int64Array::from(vec![1]);
                 let batch = RecordBatch::try_new(schema, vec![Arc::new(array)])
                     .map_err(|e| DbxError::from(e))?;
-                
+
                 Ok(vec![batch])
             }
-            PhysicalPlan::CreateIndex { table, index_name, columns, if_not_exists } => {
+            PhysicalPlan::CreateIndex {
+                table,
+                index_name,
+                columns,
+                if_not_exists,
+            } => {
                 use arrow::array::{Int64Array, RecordBatch};
                 use arrow::datatypes::{DataType, Field, Schema};
 
@@ -505,9 +514,10 @@ impl Database {
                 {
                     let schemas = self.table_schemas.read().unwrap();
                     if !schemas.contains_key(table.as_str()) {
-                        return Err(DbxError::Schema(
-                            format!("Table '{}' does not exist", table),
-                        ));
+                        return Err(DbxError::Schema(format!(
+                            "Table '{}' does not exist",
+                            table
+                        )));
                     }
                 }
 
@@ -528,11 +538,11 @@ impl Database {
                     self.index.create_index(table, column)?;
 
                     // Register index_name → (table, column) mapping in memory
-                    self.index_registry.write().unwrap().insert(
-                        index_name.clone(),
-                        (table.clone(), column.clone()),
-                    );
-                    
+                    self.index_registry
+                        .write()
+                        .unwrap()
+                        .insert(index_name.clone(), (table.clone(), column.clone()));
+
                     // Persist index metadata to storage
                     self.wos.save_index_metadata(index_name, table, column)?;
                 }
@@ -548,20 +558,24 @@ impl Database {
 
                 Ok(vec![batch])
             }
-            PhysicalPlan::DropIndex { table, index_name, if_exists } => {
+            PhysicalPlan::DropIndex {
+                table,
+                index_name,
+                if_exists,
+            } => {
                 use arrow::array::{Int64Array, RecordBatch};
                 use arrow::datatypes::{DataType, Field, Schema};
 
                 // Resolve index_name → actual column via registry
                 let resolved_column = {
                     let registry = self.index_registry.read().unwrap();
-                    registry.get(index_name.as_str()).map(|(_, col)| col.clone())
+                    registry
+                        .get(index_name.as_str())
+                        .map(|(_, col)| col.clone())
                 };
 
                 // Fallback: if not in registry, try index_name as column name
-                let column = resolved_column
-                    .as_deref()
-                    .unwrap_or(index_name.as_str());
+                let column = resolved_column.as_deref().unwrap_or(index_name.as_str());
 
                 let exists = self.index.has_index(table, column);
 
@@ -576,8 +590,11 @@ impl Database {
                     self.index.drop_index(table, column)?;
 
                     // Remove from registry in memory
-                    self.index_registry.write().unwrap().remove(index_name.as_str());
-                    
+                    self.index_registry
+                        .write()
+                        .unwrap()
+                        .remove(index_name.as_str());
+
                     // Delete index metadata from storage
                     self.wos.delete_index_metadata(index_name)?;
                 }
@@ -595,18 +612,21 @@ impl Database {
             }
             PhysicalPlan::AlterTable { table, operation } => {
                 // ALTER TABLE implementation
+                use crate::sql::planner::types::AlterTableOperation;
                 use arrow::array::{Int64Array, RecordBatch};
                 use arrow::datatypes::{DataType, Field, Schema};
-                use crate::sql::planner::types::AlterTableOperation;
-                
+
                 match operation {
-                    AlterTableOperation::AddColumn { column_name, data_type } => {
+                    AlterTableOperation::AddColumn {
+                        column_name,
+                        data_type,
+                    } => {
                         // Get current schema
                         let mut schemas = self.table_schemas.write().unwrap();
                         let current_schema = schemas.get(table).ok_or_else(|| {
                             DbxError::Schema(format!("Table '{}' not found", table))
                         })?;
-                        
+
                         // Convert data type string to Arrow DataType
                         let arrow_type = match data_type.to_uppercase().as_str() {
                             "INT" | "INTEGER" => DataType::Int64,
@@ -615,18 +635,22 @@ impl Database {
                             "BOOL" | "BOOLEAN" => DataType::Boolean,
                             _ => DataType::Utf8, // Default to string
                         };
-                        
+
                         // Create new field
                         let new_field = Field::new(column_name, arrow_type, true);
-                        
+
                         // Create new schema with added column
-                        let mut fields: Vec<Field> = current_schema.fields().iter().map(|f| f.as_ref().clone()).collect();
+                        let mut fields: Vec<Field> = current_schema
+                            .fields()
+                            .iter()
+                            .map(|f| f.as_ref().clone())
+                            .collect();
                         fields.push(new_field);
                         let new_schema = Arc::new(Schema::new(fields));
-                        
+
                         // Update schema in memory
                         schemas.insert(table.clone(), new_schema.clone());
-                        
+
                         // Persist updated schema
                         drop(schemas); // Release lock before calling wos
                         self.wos.save_schema_metadata(table, &new_schema)?;
@@ -637,14 +661,15 @@ impl Database {
                         let current_schema = schemas.get(table).ok_or_else(|| {
                             DbxError::Schema(format!("Table '{}' not found", table))
                         })?;
-                        
+
                         // Find the column to drop
-                        let fields: Vec<Field> = current_schema.fields()
+                        let fields: Vec<Field> = current_schema
+                            .fields()
                             .iter()
                             .filter(|f| f.name() != column_name)
                             .map(|f| f.as_ref().clone())
                             .collect();
-                        
+
                         // Check if column was found
                         if fields.len() == current_schema.fields().len() {
                             return Err(DbxError::Schema(format!(
@@ -652,13 +677,13 @@ impl Database {
                                 column_name, table
                             )));
                         }
-                        
+
                         // Create new schema without the dropped column
                         let new_schema = Arc::new(Schema::new(fields));
-                        
+
                         // Update schema in memory
                         schemas.insert(table.clone(), new_schema.clone());
-                        
+
                         // Persist updated schema
                         drop(schemas); // Release lock
                         self.wos.save_schema_metadata(table, &new_schema)?;
@@ -669,10 +694,11 @@ impl Database {
                         let current_schema = schemas.get(table).ok_or_else(|| {
                             DbxError::Schema(format!("Table '{}' not found", table))
                         })?;
-                        
+
                         // Find and rename the column
                         let mut found = false;
-                        let fields: Vec<Field> = current_schema.fields()
+                        let fields: Vec<Field> = current_schema
+                            .fields()
                             .iter()
                             .map(|f| {
                                 if f.name() == old_name {
@@ -683,7 +709,7 @@ impl Database {
                                 }
                             })
                             .collect();
-                        
+
                         // Check if column was found
                         if !found {
                             return Err(DbxError::Schema(format!(
@@ -691,19 +717,19 @@ impl Database {
                                 old_name, table
                             )));
                         }
-                        
+
                         // Create new schema with renamed column
                         let new_schema = Arc::new(Schema::new(fields));
-                        
+
                         // Update schema in memory
                         schemas.insert(table.clone(), new_schema.clone());
-                        
+
                         // Persist updated schema
                         drop(schemas); // Release lock
                         self.wos.save_schema_metadata(table, &new_schema)?;
                     }
                 }
-                
+
                 // Return success
                 let schema = Arc::new(Schema::new(vec![Field::new(
                     "rows_affected",
@@ -713,7 +739,7 @@ impl Database {
                 let array = Int64Array::from(vec![1]);
                 let batch = RecordBatch::try_new(schema, vec![Arc::new(array)])
                     .map_err(|e| DbxError::from(e))?;
-                
+
                 Ok(vec![batch])
             }
             _ => {
@@ -722,7 +748,7 @@ impl Database {
             }
         }
     }
-    
+
     /// Execute SELECT query plans (original logic)
     fn execute_select_plan(&self, plan: &PhysicalPlan) -> DbxResult<Vec<RecordBatch>> {
         // Phase 6.3: Automatic Tier Selection & Loading
@@ -950,7 +976,7 @@ impl Database {
                     *join_type,
                 )))
             }
-            
+
             PhysicalPlan::Insert { .. } => {
                 // INSERT should be handled in execute_physical_plan, not here
                 unreachable!("INSERT should not reach build_operator")
@@ -997,4 +1023,3 @@ impl Database {
         Ok(results)
     }
 }
-

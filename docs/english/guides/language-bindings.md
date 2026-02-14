@@ -1,8 +1,8 @@
 ---
 layout: default
 title: Language Bindings
-nav_order: 7
-parent: Guides
+nav_order: 28
+parent: English
 ---
 
 # Language Bindings

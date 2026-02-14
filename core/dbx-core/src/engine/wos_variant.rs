@@ -105,11 +105,13 @@ impl WosVariant {
     // ════════════════════════════════════════════
 
     /// Save schema metadata (only for Plain WOS, no-op for encrypted/in-memory)
-    pub fn save_schema_metadata(&self, table: &str, schema: &arrow::datatypes::Schema) -> DbxResult<()> {
+    pub fn save_schema_metadata(
+        &self,
+        table: &str,
+        schema: &arrow::datatypes::Schema,
+    ) -> DbxResult<()> {
         match self {
-            Self::Plain(wos) => {
-                crate::engine::metadata::save_schema(wos.as_ref(), table, schema)
-            }
+            Self::Plain(wos) => crate::engine::metadata::save_schema(wos.as_ref(), table, schema),
             Self::Encrypted(_) | Self::InMemory(_) => {
                 // Encrypted and in-memory WOS don't persist metadata
                 Ok(())
@@ -120,15 +122,18 @@ impl WosVariant {
     /// Delete schema metadata (only for Plain WOS)
     pub fn delete_schema_metadata(&self, table: &str) -> DbxResult<()> {
         match self {
-            Self::Plain(wos) => {
-                crate::engine::metadata::delete_schema(wos.as_ref(), table)
-            }
+            Self::Plain(wos) => crate::engine::metadata::delete_schema(wos.as_ref(), table),
             Self::Encrypted(_) | Self::InMemory(_) => Ok(()),
         }
     }
 
     /// Save index metadata (only for Plain WOS)
-    pub fn save_index_metadata(&self, index_name: &str, table: &str, column: &str) -> DbxResult<()> {
+    pub fn save_index_metadata(
+        &self,
+        index_name: &str,
+        table: &str,
+        column: &str,
+    ) -> DbxResult<()> {
         match self {
             Self::Plain(wos) => {
                 crate::engine::metadata::save_index(wos.as_ref(), index_name, table, column)
@@ -140,9 +145,7 @@ impl WosVariant {
     /// Delete index metadata (only for Plain WOS)
     pub fn delete_index_metadata(&self, index_name: &str) -> DbxResult<()> {
         match self {
-            Self::Plain(wos) => {
-                crate::engine::metadata::delete_index(wos.as_ref(), index_name)
-            }
+            Self::Plain(wos) => crate::engine::metadata::delete_index(wos.as_ref(), index_name),
             Self::Encrypted(_) | Self::InMemory(_) => Ok(()),
         }
     }

@@ -1,7 +1,8 @@
 ---
 layout: default
 title: Roadmap
-nav_order: 10
+nav_order: 50
+parent: 한국어
 ---
 
 # DBX Roadmap

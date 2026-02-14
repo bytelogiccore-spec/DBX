@@ -5,11 +5,11 @@ use sqlparser::parser::Parser;
 
 fn main() {
     let dialect = GenericDialect {};
-    
+
     // Test DELETE
     let delete_sql = "DELETE FROM users WHERE id = 1";
     let delete_ast = Parser::parse_sql(&dialect, delete_sql).unwrap();
-    
+
     // Print all fields
     match &delete_ast[0] {
         Statement::Delete { .. } => {

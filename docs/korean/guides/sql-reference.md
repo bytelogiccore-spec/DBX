@@ -1,8 +1,8 @@
 ---
 layout: default
 title: SQL 레퍼런스
-parent: Guides
-nav_order: 3
+parent: 한국어
+nav_order: 21
 description: "DBX를 위한 전체 SQL 구문 레퍼런스"
 ---
 

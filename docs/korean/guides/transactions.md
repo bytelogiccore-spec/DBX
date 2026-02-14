@@ -1,8 +1,8 @@
 ---
 layout: default
 title: 트랜잭션
-parent: Guides
-nav_order: 2
+parent: 한국어
+nav_order: 22
 description: "DBX의 MVCC 트랜잭션 및 동시성 제어"
 ---
 

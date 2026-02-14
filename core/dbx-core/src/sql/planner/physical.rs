@@ -227,7 +227,13 @@ impl PhysicalPlanner {
                     let schemas = self.table_schemas.read().unwrap();
                     let column_names: Vec<String> = schemas
                         .get(table)
-                        .map(|schema| schema.fields().iter().map(|field| field.name().clone()).collect())
+                        .map(|schema| {
+                            schema
+                                .fields()
+                                .iter()
+                                .map(|field| field.name().clone())
+                                .collect()
+                        })
                         .unwrap_or_default();
                     drop(schemas);
                     Some(self.plan_physical_expr(f, &column_names)?)
@@ -247,7 +253,13 @@ impl PhysicalPlanner {
                     let schemas = self.table_schemas.read().unwrap();
                     let column_names: Vec<String> = schemas
                         .get(table)
-                        .map(|schema| schema.fields().iter().map(|field| field.name().clone()).collect())
+                        .map(|schema| {
+                            schema
+                                .fields()
+                                .iter()
+                                .map(|field| field.name().clone())
+                                .collect()
+                        })
                         .unwrap_or_default();
                     drop(schemas);
                     Some(self.plan_physical_expr(f, &column_names)?)
@@ -260,40 +272,43 @@ impl PhysicalPlanner {
                     filter: physical_filter,
                 })
             }
-            LogicalPlan::DropTable { table, if_exists } => {
-                Ok(PhysicalPlan::DropTable {
-                    table: table.clone(),
-                    if_exists: *if_exists,
-                })
-            }
-            LogicalPlan::CreateTable { table, columns, if_not_exists } => {
-                Ok(PhysicalPlan::CreateTable {
-                    table: table.clone(),
-                    columns: columns.clone(),
-                    if_not_exists: *if_not_exists,
-                })
-            }
-            LogicalPlan::CreateIndex { table, index_name, columns, if_not_exists } => {
-                Ok(PhysicalPlan::CreateIndex {
-                    table: table.clone(),
-                    index_name: index_name.clone(),
-                    columns: columns.clone(),
-                    if_not_exists: *if_not_exists,
-                })
-            }
-            LogicalPlan::DropIndex { table, index_name, if_exists } => {
-                Ok(PhysicalPlan::DropIndex {
-                    table: table.clone(),
-                    index_name: index_name.clone(),
-                    if_exists: *if_exists,
-                })
-            }
-            LogicalPlan::AlterTable { table, operation } => {
-                Ok(PhysicalPlan::AlterTable {
-                    table: table.clone(),
-                    operation: operation.clone(),
-                })
-            }
+            LogicalPlan::DropTable { table, if_exists } => Ok(PhysicalPlan::DropTable {
+                table: table.clone(),
+                if_exists: *if_exists,
+            }),
+            LogicalPlan::CreateTable {
+                table,
+                columns,
+                if_not_exists,
+            } => Ok(PhysicalPlan::CreateTable {
+                table: table.clone(),
+                columns: columns.clone(),
+                if_not_exists: *if_not_exists,
+            }),
+            LogicalPlan::CreateIndex {
+                table,
+                index_name,
+                columns,
+                if_not_exists,
+            } => Ok(PhysicalPlan::CreateIndex {
+                table: table.clone(),
+                index_name: index_name.clone(),
+                columns: columns.clone(),
+                if_not_exists: *if_not_exists,
+            }),
+            LogicalPlan::DropIndex {
+                table,
+                index_name,
+                if_exists,
+            } => Ok(PhysicalPlan::DropIndex {
+                table: table.clone(),
+                index_name: index_name.clone(),
+                if_exists: *if_exists,
+            }),
+            LogicalPlan::AlterTable { table, operation } => Ok(PhysicalPlan::AlterTable {
+                table: table.clone(),
+                operation: operation.clone(),
+            }),
         }
     }
 

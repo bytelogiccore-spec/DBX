@@ -1,8 +1,8 @@
 ---
 layout: default
 title: GPU Acceleration
-parent: Guides
-nav_order: 5
+parent: English
+nav_order: 24
 description: "CUDA-based GPU acceleration for analytical queries in DBX"
 ---
 

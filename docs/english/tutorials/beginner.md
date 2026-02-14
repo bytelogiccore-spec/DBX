@@ -1,8 +1,8 @@
 ---
 layout: default
 title: Beginner Tutorial
-parent: Tutorials
-nav_order: 1
+parent: English
+nav_order: 30
 description: "Step-by-step tutorial for DBX beginners"
 ---
 

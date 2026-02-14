@@ -55,7 +55,9 @@ impl ShardManager {
     /// Shard a RecordBatch across devices
     pub fn shard_batch(&self, batch: &RecordBatch) -> DbxResult<Vec<DataShard>> {
         if self.device_count == 0 {
-            return Err(DbxError::Gpu("No devices available for sharding".to_string()));
+            return Err(DbxError::Gpu(
+                "No devices available for sharding".to_string(),
+            ));
         }
 
         if self.device_count == 1 {
@@ -98,8 +100,7 @@ impl ShardManager {
             }
 
             let end_row = std::cmp::min(start_row + rows_per_shard, total_rows);
-            let shard_batch = batch
-                .slice(start_row, end_row - start_row);
+            let shard_batch = batch.slice(start_row, end_row - start_row);
 
             shards.push(DataShard {
                 device_id,

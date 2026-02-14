@@ -2,6 +2,7 @@
 layout: default
 title: 라이선스
 nav_order: 100
+parent: 한국어
 ---
 
 # DBX 이중 라이선스 (Dual License)
@@ -30,9 +31,11 @@ DBX는 **이중 라이선스 모델**로 제공됩니다.
 - 연간 매출이 **5,000,000 USD 이상**이거나,
 - 외부 투자 유치 금액이 **10,000,000 USD 이상**인 경우
 
-**📄 참고:** 상업용 라이선스 약관은 [LICENSE-COMMERCIAL.md](../../legal/korean/LICENSE-COMMERCIAL.md)를 확인하세요.
+**📄 참고:** 상업용 라이선스 약관은 [LICENSE-COMMERCIAL.md](https://github.com/bytelogiccore-spec/DBX/blob/main/legal/korean/LICENSE-COMMERCIAL.md)를 확인하세요.
 
-**❓ 어떤 라이선스를 써야 할지 모르겠나요?** [라이선스 정책 가이드](../../legal/korean/LICENSE-POLICY.md)를 읽어보세요.
+**❓ 어떤 라이선스를 써야 할지 모르겠나요?** [라이선스 정책 가이드](https://github.com/bytelogiccore-spec/DBX/blob/main/legal/korean/LICENSE-POLICY.md)를 읽어보세요.
+
+
 
 **📧 문의:** license@bytelogic.studio
 
@@ -79,4 +82,4 @@ DBX는 모든 사람에게 **무료이자 오픈 소스**인 고성능 순수 Ru
 
 DBX는 여러 오픈 소스 라이브러리를 사용합니다. 전체 의존성 목록과 라이선스는 다음을 참조하세요:
 
-**[THIRD_PARTY_LICENSES.md](../../legal/korean/THIRD_PARTY_LICENSES.md)**
+**[THIRD_PARTY_LICENSES.md](https://github.com/bytelogiccore-spec/DBX/blob/main/legal/korean/THIRD_PARTY_LICENSES.md)**

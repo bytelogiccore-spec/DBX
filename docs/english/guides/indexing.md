@@ -1,8 +1,8 @@
 ---
 layout: default
 title: Indexing
-parent: Examples
-nav_order: 5
+parent: English
+nav_order: 27
 ---
 
 # Indexing

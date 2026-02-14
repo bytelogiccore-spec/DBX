@@ -1,8 +1,8 @@
 ---
 layout: default
 title: Quick Start
-parent: Examples
-nav_order: 1
+parent: 한국어
+nav_order: 11
 ---
 
 # Quick Start

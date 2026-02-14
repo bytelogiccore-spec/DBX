@@ -1,8 +1,8 @@
 ---
 layout: default
 title: SQL API
-nav_order: 3
-parent: API Reference
+nav_order: 41
+parent: English
 ---
 
 # SQL API

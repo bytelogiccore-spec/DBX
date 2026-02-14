@@ -60,15 +60,9 @@ pub enum LogicalPlan {
         filter: Option<Expr>,
     },
     /// DELETE
-    Delete {
-        table: String,
-        filter: Option<Expr>,
-    },
+    Delete { table: String, filter: Option<Expr> },
     /// DROP TABLE
-    DropTable {
-        table: String,
-        if_exists: bool,
-    },
+    DropTable { table: String, if_exists: bool },
     /// CREATE TABLE
     CreateTable {
         table: String,
@@ -104,14 +98,9 @@ pub enum AlterTableOperation {
         data_type: String,
     },
     /// DROP COLUMN (future)
-    DropColumn {
-        column_name: String,
-    },
+    DropColumn { column_name: String },
     /// RENAME COLUMN (future)
-    RenameColumn {
-        old_name: String,
-        new_name: String,
-    },
+    RenameColumn { old_name: String, new_name: String },
 }
 
 /// 표현식 — 컬럼, 리터럴, 연산자, 함수
@@ -292,10 +281,7 @@ pub enum PhysicalPlan {
         filter: Option<PhysicalExpr>,
     },
     /// Drop Table
-    DropTable {
-        table: String,
-        if_exists: bool,
-    },
+    DropTable { table: String, if_exists: bool },
     /// Create Table
     CreateTable {
         table: String,

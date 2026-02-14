@@ -57,16 +57,14 @@ impl OccupancyCalculator {
 
         // Constrain by shared memory
         if params.shared_mem_per_block > 0 {
-            let max_blocks_by_shmem =
-                self.max_shared_mem_per_block / params.shared_mem_per_block;
+            let max_blocks_by_shmem = self.max_shared_mem_per_block / params.shared_mem_per_block;
             let max_threads_by_shmem = max_blocks_by_shmem * params.threads_per_block;
             block_size = block_size.min(max_threads_by_shmem);
         }
 
         // Constrain by registers
         if params.registers_per_thread > 0 {
-            let max_threads_by_regs =
-                self.max_registers_per_block / params.registers_per_thread;
+            let max_threads_by_regs = self.max_registers_per_block / params.registers_per_thread;
             block_size = block_size.min(max_threads_by_regs);
         }
 

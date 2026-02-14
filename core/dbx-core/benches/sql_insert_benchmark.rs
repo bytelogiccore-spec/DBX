@@ -2,7 +2,7 @@
 //!
 //! Compares the performance of SQL INSERT statements against direct KV API calls.
 
-use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
+use criterion::{BenchmarkId, Criterion, black_box, criterion_group, criterion_main};
 use dbx_core::Database;
 
 /// Generate SQL INSERT statement with multiple rows
@@ -22,8 +22,8 @@ fn generate_kv_batch(count: usize) -> Vec<(Vec<u8>, Vec<u8>)> {
     (0..count)
         .map(|i| {
             let key = i.to_le_bytes().to_vec();
-            let value = format!(r#"{{"name":"user{}","email":"user{}@example.com"}}"#, i, i)
-                .into_bytes();
+            let value =
+                format!(r#"{{"name":"user{}","email":"user{}@example.com"}}"#, i, i).into_bytes();
             (key, value)
         })
         .collect()
@@ -118,5 +118,10 @@ fn bench_throughput(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(benches, bench_single_insert, bench_batch_insert, bench_throughput);
+criterion_group!(
+    benches,
+    bench_single_insert,
+    bench_batch_insert,
+    bench_throughput
+);
 criterion_main!(benches);

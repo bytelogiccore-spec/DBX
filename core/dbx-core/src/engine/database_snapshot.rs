@@ -73,8 +73,8 @@ impl Database {
         let json = std::fs::read_to_string(path)?;
 
         // 2. Deserialize snapshot
-        let snapshot: DatabaseSnapshot = serde_json::from_str(&json)
-            .map_err(|e| DbxError::Serialization(e.to_string()))?;
+        let snapshot: DatabaseSnapshot =
+            serde_json::from_str(&json).map_err(|e| DbxError::Serialization(e.to_string()))?;
 
         // 3. Create new in-memory DB
         let db = Self::open_in_memory()?;
@@ -109,10 +109,12 @@ impl Database {
 
         // 3. Capture table data
         // Use row_counters to get table list (more reliable than WOS table_names for in-memory)
-        let table_list: Vec<String> = self.row_counters.iter()
+        let table_list: Vec<String> = self
+            .row_counters
+            .iter()
             .map(|entry| entry.key().clone())
             .collect();
-        
+
         for table_name in table_list {
             // Skip metadata tables
             if table_name.starts_with("__meta__") {
@@ -120,9 +122,7 @@ impl Database {
             }
 
             let entries = self.wos.scan(&table_name, ..)?;
-            snapshot
-                .tables
-                .insert(table_name, TableData { entries });
+            snapshot.tables.insert(table_name, TableData { entries });
         }
 
         // 4. Capture row counters
@@ -200,9 +200,6 @@ mod tests {
         let result = db.save_to_file(temp_file.path());
 
         assert!(result.is_err());
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("in-memory"));
+        assert!(result.unwrap_err().to_string().contains("in-memory"));
     }
 }

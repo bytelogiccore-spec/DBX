@@ -4,7 +4,7 @@
 //! to the sled backend, enabling automatic restoration on database reopen.
 
 use crate::error::{DbxError, DbxResult};
-use crate::storage::{wos::WosBackend, StorageBackend};
+use crate::storage::{StorageBackend, wos::WosBackend};
 use arrow::datatypes::{DataType, Field, Schema};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -69,11 +69,7 @@ impl TryFrom<SchemaMetadata> for Schema {
             .iter()
             .map(|field_meta| {
                 let data_type = string_to_datatype(&field_meta.data_type)?;
-                Ok(Field::new(
-                    &field_meta.name,
-                    data_type,
-                    field_meta.nullable,
-                ))
+                Ok(Field::new(&field_meta.name, data_type, field_meta.nullable))
             })
             .collect();
 
@@ -128,10 +124,7 @@ fn string_to_datatype(s: &str) -> DbxResult<DataType> {
         "Binary" => Ok(DataType::Binary),
         "Date32" => Ok(DataType::Date32),
         "Date64" => Ok(DataType::Date64),
-        _ => Err(DbxError::Schema(format!(
-            "Unsupported data type: {}",
-            s
-        ))),
+        _ => Err(DbxError::Schema(format!("Unsupported data type: {}", s))),
     }
 }
 
@@ -144,8 +137,8 @@ pub fn save_schema(wos: &WosBackend, table: &str, schema: &Schema) -> DbxResult<
     let mut metadata = SchemaMetadata::from(schema);
     metadata.table_name = table.to_string();
 
-    let json_bytes = serde_json::to_vec(&metadata)
-        .map_err(|e| DbxError::Serialization(e.to_string()))?;
+    let json_bytes =
+        serde_json::to_vec(&metadata).map_err(|e| DbxError::Serialization(e.to_string()))?;
 
     wos.insert("__meta__/schemas", table.as_bytes(), &json_bytes)?;
     Ok(())
@@ -176,8 +169,8 @@ pub fn load_all_schemas(wos: &WosBackend) -> DbxResult<HashMap<String, Arc<Schem
     let all_records = wos.scan("__meta__/schemas", ..)?;
 
     for (key_vec, value_vec) in all_records {
-        let table_name = String::from_utf8(key_vec)
-            .map_err(|e| DbxError::Serialization(e.to_string()))?;
+        let table_name =
+            String::from_utf8(key_vec).map_err(|e| DbxError::Serialization(e.to_string()))?;
         let metadata: SchemaMetadata = serde_json::from_slice(&value_vec)
             .map_err(|e| DbxError::Serialization(e.to_string()))?;
         let schema = Schema::try_from(metadata)?;
@@ -192,20 +185,15 @@ pub fn load_all_schemas(wos: &WosBackend) -> DbxResult<HashMap<String, Arc<Schem
 // ════════════════════════════════════════════
 
 /// Save index metadata to persistent storage
-pub fn save_index(
-    wos: &WosBackend,
-    index_name: &str,
-    table: &str,
-    column: &str,
-) -> DbxResult<()> {
+pub fn save_index(wos: &WosBackend, index_name: &str, table: &str, column: &str) -> DbxResult<()> {
     let metadata = IndexMetadata {
         index_name: index_name.to_string(),
         table_name: table.to_string(),
         column_name: column.to_string(),
     };
 
-    let json_bytes = serde_json::to_vec(&metadata)
-        .map_err(|e| DbxError::Serialization(e.to_string()))?;
+    let json_bytes =
+        serde_json::to_vec(&metadata).map_err(|e| DbxError::Serialization(e.to_string()))?;
 
     wos.insert("__meta__/indexes", index_name.as_bytes(), &json_bytes)?;
     Ok(())
@@ -223,8 +211,8 @@ pub fn load_all_indexes(wos: &WosBackend) -> DbxResult<HashMap<String, (String, 
     let all_records = wos.scan("__meta__/indexes", ..)?;
 
     for (key_vec, value_vec) in all_records {
-        let index_name = String::from_utf8(key_vec)
-            .map_err(|e| DbxError::Serialization(e.to_string()))?;
+        let index_name =
+            String::from_utf8(key_vec).map_err(|e| DbxError::Serialization(e.to_string()))?;
         let metadata: IndexMetadata = serde_json::from_slice(&value_vec)
             .map_err(|e| DbxError::Serialization(e.to_string()))?;
         indexes.insert(index_name, (metadata.table_name, metadata.column_name));

@@ -1,8 +1,8 @@
 ---
 layout: default
 title: 암호화
-parent: Guides
-nav_order: 8
+parent: 한국어
+nav_order: 25
 ---
 
 # 암호화

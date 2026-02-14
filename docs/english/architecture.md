@@ -1,7 +1,8 @@
 ---
 layout: default
 title: Architecture
-nav_order: 3
+nav_order: 2
+parent: English
 description: "DBX 5-Tier Hybrid Storage architecture"
 ---
 

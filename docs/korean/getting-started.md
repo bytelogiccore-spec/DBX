@@ -1,7 +1,8 @@
 ---
 layout: default
 title: 시작하기
-nav_order: 2
+nav_order: 1
+parent: 한국어
 description: "DBX 데이터베이스 빠른 시작 가이드"
 ---
 

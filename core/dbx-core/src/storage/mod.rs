@@ -3,6 +3,7 @@
 //! All storage engines implement the [`StorageBackend`] trait.
 //! The SQL layer depends only on this trait (Dependency Inversion Principle).
 
+pub mod arrow_ipc;
 pub mod cache;
 pub mod columnar;
 pub mod columnar_cache;
@@ -20,7 +21,6 @@ pub mod opfs;
 pub mod parquet_io;
 pub mod versioned_batch;
 pub mod wos;
-pub mod arrow_ipc;
 
 use crate::error::DbxResult;
 use std::ops::RangeBounds;

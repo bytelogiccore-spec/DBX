@@ -16,18 +16,20 @@ use std::io::Cursor;
 /// - 95% faster than JSON
 pub fn write_ipc_batch(batch: &RecordBatch) -> DbxResult<Vec<u8>> {
     let mut buffer = Vec::new();
-    
+
     {
         let mut writer = writer::FileWriter::try_new(&mut buffer, &batch.schema())
             .map_err(|e| DbxError::Storage(format!("Arrow IPC write error: {}", e)))?;
-        
-        writer.write(batch)
+
+        writer
+            .write(batch)
             .map_err(|e| DbxError::Storage(format!("Arrow IPC batch write error: {}", e)))?;
-        
-        writer.finish()
+
+        writer
+            .finish()
             .map_err(|e| DbxError::Storage(format!("Arrow IPC finish error: {}", e)))?;
     }
-    
+
     Ok(buffer)
 }
 
@@ -39,15 +41,15 @@ pub fn write_ipc_batch(batch: &RecordBatch) -> DbxResult<Vec<u8>> {
 /// - No parsing overhead
 pub fn read_ipc_batch(bytes: &[u8]) -> DbxResult<RecordBatch> {
     let cursor = Cursor::new(bytes);
-    
+
     let mut reader = reader::FileReader::try_new(cursor, None)
         .map_err(|e| DbxError::Storage(format!("Arrow IPC read error: {}", e)))?;
-    
+
     let batch = reader
         .next()
         .ok_or_else(|| DbxError::Storage("No batch in Arrow IPC file".to_string()))?
         .map_err(|e| DbxError::Storage(format!("Arrow IPC batch read error: {}", e)))?;
-    
+
     Ok(batch)
 }
 
@@ -65,7 +67,7 @@ mod tests {
             Field::new("id", DataType::Int64, false),
             Field::new("name", DataType::Utf8, false),
         ]));
-        
+
         let batch = RecordBatch::try_new(
             schema.clone(),
             vec![
@@ -74,13 +76,13 @@ mod tests {
             ],
         )
         .unwrap();
-        
+
         // Write to IPC
         let ipc_bytes = write_ipc_batch(&batch).unwrap();
-        
+
         // Read from IPC
         let restored_batch = read_ipc_batch(&ipc_bytes).unwrap();
-        
+
         // Verify
         assert_eq!(batch.num_rows(), restored_batch.num_rows());
         assert_eq!(batch.num_columns(), restored_batch.num_columns());

@@ -1,7 +1,8 @@
 ---
 layout: default
 title: 소개 (README)
-nav_order: 1
+nav_order: 0
+parent: 한국어
 ---
 
 # DBX — 고성능 임베디드 데이터베이스

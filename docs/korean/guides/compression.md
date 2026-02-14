@@ -1,8 +1,8 @@
 ---
 layout: default
 title: 압축
-parent: Guides
-nav_order: 9
+parent: 한국어
+nav_order: 26
 ---
 
 # 압축 (Compression)

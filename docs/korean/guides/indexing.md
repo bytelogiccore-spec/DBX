@@ -1,8 +1,8 @@
 ---
 layout: default
 title: 인덱싱
-parent: Guides
-nav_order: 10
+parent: 한국어
+nav_order: 27
 ---
 
 # 인덱싱 (Indexing)

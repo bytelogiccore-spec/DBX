@@ -26,8 +26,15 @@ struct DbxTransactionInternal {
 
 /// Transaction operation
 enum TxOperation {
-    Insert { table: String, key: Vec<u8>, value: Vec<u8> },
-    Delete { table: String, key: Vec<u8> },
+    Insert {
+        table: String,
+        key: Vec<u8>,
+        value: Vec<u8>,
+    },
+    Delete {
+        table: String,
+        key: Vec<u8>,
+    },
 }
 
 /// Error codes
@@ -79,7 +86,7 @@ pub unsafe extern "C" fn dbx_insert(
     }
 
     let handle = &*(handle as *const DbxHandleInternal);
-    
+
     let table_str = match CStr::from_ptr(table).to_str() {
         Ok(s) => s,
         Err(_) => return DBX_ERR_INVALID_UTF8,
@@ -104,12 +111,17 @@ pub unsafe extern "C" fn dbx_get(
     out_value: *mut *mut u8,
     out_len: *mut usize,
 ) -> c_int {
-    if handle.is_null() || table.is_null() || key.is_null() || out_value.is_null() || out_len.is_null() {
+    if handle.is_null()
+        || table.is_null()
+        || key.is_null()
+        || out_value.is_null()
+        || out_len.is_null()
+    {
         return DBX_ERR_NULL_PTR;
     }
 
     let handle = &*(handle as *const DbxHandleInternal);
-    
+
     let table_str = match CStr::from_ptr(table).to_str() {
         Ok(s) => s,
         Err(_) => return DBX_ERR_INVALID_UTF8,
@@ -143,7 +155,7 @@ pub unsafe extern "C" fn dbx_delete(
     }
 
     let handle = &*(handle as *const DbxHandleInternal);
-    
+
     let table_str = match CStr::from_ptr(table).to_str() {
         Ok(s) => s,
         Err(_) => return DBX_ERR_INVALID_UTF8,
@@ -185,7 +197,7 @@ pub unsafe extern "C" fn dbx_transaction_insert(
     }
 
     let tx = &mut *(tx as *mut DbxTransactionInternal);
-    
+
     let table_str = match CStr::from_ptr(table).to_str() {
         Ok(s) => s.to_string(),
         Err(_) => return DBX_ERR_INVALID_UTF8,
@@ -216,7 +228,7 @@ pub unsafe extern "C" fn dbx_transaction_delete(
     }
 
     let tx = &mut *(tx as *mut DbxTransactionInternal);
-    
+
     let table_str = match CStr::from_ptr(table).to_str() {
         Ok(s) => s.to_string(),
         Err(_) => return DBX_ERR_INVALID_UTF8,
@@ -243,7 +255,7 @@ pub unsafe extern "C" fn dbx_transaction_commit(tx: *mut DbxTransaction) -> c_in
     let db_handle = &*tx.db_handle;
 
     // Group operations by table for batch processing
-    let mut insert_batches: std::collections::HashMap<String, Vec<(Vec<u8>, Vec<u8>)>> = 
+    let mut insert_batches: std::collections::HashMap<String, Vec<(Vec<u8>, Vec<u8>)>> =
         std::collections::HashMap::new();
     let mut delete_ops: Vec<(String, Vec<u8>)> = Vec::new();
 

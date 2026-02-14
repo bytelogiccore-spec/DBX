@@ -75,10 +75,7 @@ impl StorageBackend for InMemoryWosBackend {
     ) -> DbxResult<Option<(Vec<u8>, Vec<u8>)>> {
         let tables = self.tables.read().unwrap();
         if let Some(map) = tables.get(table) {
-            Ok(map
-                .range(range)
-                .map(|(k, v)| (k.clone(), v.clone()))
-                .next())
+            Ok(map.range(range).map(|(k, v)| (k.clone(), v.clone())).next())
         } else {
             Ok(None)
         }
@@ -107,9 +104,7 @@ mod tests {
     #[test]
     fn test_insert_and_get() {
         let backend = InMemoryWosBackend::new();
-        backend
-            .insert("test", b"key1", b"value1")
-            .unwrap();
+        backend.insert("test", b"key1", b"value1").unwrap();
 
         let result = backend.get("test", b"key1").unwrap();
         assert_eq!(result, Some(b"value1".to_vec()));
@@ -118,9 +113,7 @@ mod tests {
     #[test]
     fn test_delete() {
         let backend = InMemoryWosBackend::new();
-        backend
-            .insert("test", b"key1", b"value1")
-            .unwrap();
+        backend.insert("test", b"key1", b"value1").unwrap();
 
         assert!(backend.delete("test", b"key1").unwrap());
         assert_eq!(backend.get("test", b"key1").unwrap(), None);
@@ -129,15 +122,9 @@ mod tests {
     #[test]
     fn test_scan() {
         let backend = InMemoryWosBackend::new();
-        backend
-            .insert("test", b"key1", b"value1")
-            .unwrap();
-        backend
-            .insert("test", b"key2", b"value2")
-            .unwrap();
-        backend
-            .insert("test", b"key3", b"value3")
-            .unwrap();
+        backend.insert("test", b"key1", b"value1").unwrap();
+        backend.insert("test", b"key2", b"value2").unwrap();
+        backend.insert("test", b"key3", b"value3").unwrap();
 
         let results = backend
             .scan("test", b"key1".to_vec()..b"key3".to_vec())
@@ -148,12 +135,8 @@ mod tests {
     #[test]
     fn test_count() {
         let backend = InMemoryWosBackend::new();
-        backend
-            .insert("test", b"key1", b"value1")
-            .unwrap();
-        backend
-            .insert("test", b"key2", b"value2")
-            .unwrap();
+        backend.insert("test", b"key1", b"value1").unwrap();
+        backend.insert("test", b"key2", b"value2").unwrap();
 
         assert_eq!(backend.count("test").unwrap(), 2);
     }

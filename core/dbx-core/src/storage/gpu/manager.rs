@@ -1,6 +1,5 @@
 //! GPU Manager core - initialization, data upload, and cache management.
 
-
 #[cfg(feature = "gpu")]
 use arrow::array::{Array, Float64Array, Int32Array, Int64Array};
 #[cfg(feature = "gpu")]
@@ -57,7 +56,10 @@ impl GpuManager {
             let device = match CudaContext::new(0) {
                 Ok(d) => d,
                 Err(e) => {
-                    eprintln!("⚠️  GPU Manager: Failed to initialize CUDA device 0: {:?}", e);
+                    eprintln!(
+                        "⚠️  GPU Manager: Failed to initialize CUDA device 0: {:?}",
+                        e
+                    );
                     return None;
                 }
             };
@@ -70,7 +72,7 @@ impl GpuManager {
                     return None;
                 }
             };
-            
+
             let module = match device.load_module(ptx) {
                 Ok(m) => m,
                 Err(e) => {
@@ -137,7 +139,7 @@ impl GpuManager {
         {
             tracing::debug!(target: "gpu", table = %table, rows = batch.num_rows(), "GPU upload_batch start");
             let start = std::time::Instant::now();
-            
+
             let table_cache = self
                 .buffer_cache
                 .entry(table.to_string())
@@ -153,7 +155,7 @@ impl GpuManager {
                 let gpu_data = self.convert_and_upload(column)?;
                 table_cache.insert(column_name.clone(), Arc::new(gpu_data));
             }
-            
+
             tracing::debug!(target: "gpu", table = %table, elapsed_us = start.elapsed().as_micros(), "GPU upload_batch complete");
             Ok(())
         }

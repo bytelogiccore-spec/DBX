@@ -1,8 +1,8 @@
 ---
 layout: default
 title: WAL Recovery
-parent: Examples
-nav_order: 5
+parent: 한국어
+nav_order: 16
 ---
 
 # WAL Recovery Quick Start

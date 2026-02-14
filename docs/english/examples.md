@@ -1,8 +1,8 @@
 ---
 layout: default
 title: Examples
-nav_order: 5
-has_children: true
+nav_order: 10
+parent: English
 description: "Code examples for DBX"
 ---
 

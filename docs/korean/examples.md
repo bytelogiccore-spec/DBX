@@ -1,8 +1,8 @@
 ---
 layout: default
 title: 예제
-nav_order: 5
-has_children: true
+nav_order: 10
+parent: 한국어
 description: "DBX 코드 예제"
 ---
 

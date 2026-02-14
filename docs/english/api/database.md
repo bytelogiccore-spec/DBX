@@ -1,8 +1,8 @@
 ---
 layout: default
 title: Database API
-nav_order: 1
-parent: API Reference
+nav_order: 40
+parent: English
 ---
 
 # Database API

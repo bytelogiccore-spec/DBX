@@ -132,10 +132,10 @@ impl LogicalPlanner {
                         if names.is_empty() {
                             return Err(DbxError::Schema("DROP INDEX requires an index name".to_string()));
                         }
-                        
+
                         // Parse index name (may include table name)
                         let index_full_name = names[0].to_string();
-                        
+
                         // Try to split table.index_name format
                         let (table, index_name) = if index_full_name.contains('.') {
                             let parts: Vec<&str> = index_full_name.splitn(2, '.').collect();
@@ -145,7 +145,7 @@ impl LogicalPlanner {
                             // For now, use empty string as placeholder
                             ("".to_string(), index_full_name)
                         };
-                        
+
                         Ok(LogicalPlan::DropIndex {
                             table,
                             index_name,
@@ -168,7 +168,7 @@ impl LogicalPlanner {
                     let type_str = col.data_type.to_string();
                     (name, type_str)
                 }).collect();
-                
+
                 Ok(LogicalPlan::CreateTable {
                     table,
                     columns,
@@ -178,12 +178,12 @@ impl LogicalPlanner {
             Statement::AlterTable { name, operations, .. } => {
                 // ALTER TABLE parsing (simplified - only ADD COLUMN for now)
                 let table = name.to_string();
-                
+
                 // Get the first operation
                 let operation = operations.get(0).ok_or_else(|| {
                     DbxError::Schema("ALTER TABLE requires at least one operation".to_string())
                 })?;
-                
+
                 use sqlparser::ast::AlterTableOperation as SqlAlterOp;
                 let alter_op = match operation {
                     SqlAlterOp::AddColumn { column_def, .. } => {
@@ -215,7 +215,7 @@ impl LogicalPlanner {
                         });
                     }
                 };
-                
+
                 Ok(LogicalPlan::AlterTable {
                     table,
                     operation: alter_op,
@@ -226,15 +226,15 @@ impl LogicalPlanner {
                 let index_name = create_index.name.as_ref()
                     .ok_or_else(|| DbxError::Schema("CREATE INDEX requires an index name".to_string()))?
                     .to_string();
-                
+
                 // In sqlparser 0.52, table_name is ObjectName (not Option)
                 let table = create_index.table_name.to_string();
-                
+
                 // Extract column names from OrderByExpr
                 if create_index.columns.is_empty() {
                     return Err(DbxError::Schema("CREATE INDEX requires at least one column".to_string()));
                 }
-                
+
                 let columns: Vec<String> = create_index.columns.iter()
                     .map(|order_by_expr| {
                         // Extract column name from the expression
@@ -247,7 +247,7 @@ impl LogicalPlanner {
                         }
                     })
                     .collect();
-                
+
                 Ok(LogicalPlan::CreateIndex {
                     table,
                     index_name,
@@ -312,14 +312,10 @@ impl LogicalPlanner {
     /// INSERT INTO → LogicalPlan 변환
     fn plan_insert(&self, insert: &sqlparser::ast::Insert) -> DbxResult<LogicalPlan> {
         let table = insert.table_name.to_string();
-        
+
         // Extract column names
-        let column_names: Vec<String> = insert
-            .columns
-            .iter()
-            .map(|c| c.value.clone())
-            .collect();
-        
+        let column_names: Vec<String> = insert.columns.iter().map(|c| c.value.clone()).collect();
+
         // Parse VALUES clause
         let values = if let Some(source) = &insert.source {
             match source.body.as_ref() {
@@ -347,7 +343,7 @@ impl LogicalPlanner {
                 hint: "INSERT INTO ... VALUES (...) is required".to_string(),
             });
         };
-        
+
         Ok(LogicalPlan::Insert {
             table,
             columns: column_names,
@@ -357,9 +353,15 @@ impl LogicalPlanner {
 
     /// UPDATE → LogicalPlan 변환
     fn plan_update(&self, statement: &Statement) -> DbxResult<LogicalPlan> {
-        if let Statement::Update { table, assignments, selection, .. } = statement {
+        if let Statement::Update {
+            table,
+            assignments,
+            selection,
+            ..
+        } = statement
+        {
             let table_name = table.relation.to_string();
-            
+
             // Parse SET assignments
             let mut parsed_assignments = Vec::new();
             for assignment in assignments {
@@ -367,14 +369,14 @@ impl LogicalPlanner {
                 let value = self.plan_expr(&assignment.value)?;
                 parsed_assignments.push((column, value));
             }
-            
+
             // Parse WHERE clause (optional)
             let filter = if let Some(sel) = selection {
                 Some(self.plan_expr(sel)?)
             } else {
                 None
             };
-            
+
             Ok(LogicalPlan::Update {
                 table: table_name,
                 assignments: parsed_assignments,
@@ -396,7 +398,8 @@ impl LogicalPlanner {
                 sqlparser::ast::FromTable::WithFromKeyword(t) => t,
                 sqlparser::ast::FromTable::WithoutKeyword(t) => t,
             };
-            let table_name = tables.first()
+            let table_name = tables
+                .first()
                 .map(|t| t.relation.to_string())
                 .unwrap_or_default();
 

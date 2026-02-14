@@ -1,8 +1,8 @@
 ---
 layout: default
 title: Encryption
-parent: Examples
-nav_order: 3
+parent: 한국어
+nav_order: 13
 ---
 
 # Encryption Quick Start

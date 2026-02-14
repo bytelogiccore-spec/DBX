@@ -1,8 +1,8 @@
 ---
 layout: default
 title: WAL 복구
-parent: Guides
-nav_order: 11
+parent: 한국어
+nav_order: 29
 ---
 
 # WAL 복구 (WAL Recovery)
