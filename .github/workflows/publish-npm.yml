@@ -4,11 +4,6 @@ on:
   workflow_dispatch:
   workflow_call:
 
-# npm OIDC trusted publishing 사용 시 필요
-permissions:
-  contents: read
-  id-token: write
-
 jobs:
   publish:
     name: npm 배포
