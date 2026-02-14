@@ -70,7 +70,10 @@ tx.Commit();
 
 ## Requirements
 
-- .NET 9.0+
+- .NET Standard 2.0+
+  - .NET Framework 4.6.1+
+  - .NET Core 2.0+
+  - .NET 5, 6, 7, 8, 9+
 - Windows x64 (native DLL included)
 
 ## License
