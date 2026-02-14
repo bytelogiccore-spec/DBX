@@ -1,37 +1,71 @@
-# Rust Build
+# ═══════════════════════════════════════
+# Rust
+# ═══════════════════════════════════════
 /target
+**/target/
 Cargo.lock
 
+# ═══════════════════════════════════════
+# .NET / C#
+# ═══════════════════════════════════════
+**/bin/
+**/obj/
+*.nupkg
+*.snupkg
+
+# ═══════════════════════════════════════
+# Python
+# ═══════════════════════════════════════
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+*.whl
+
+# ═══════════════════════════════════════
+# Node.js
+# ═══════════════════════════════════════
+node_modules/
+*.tgz
+
+# ═══════════════════════════════════════
 # DBX Data & Logs
+# ═══════════════════════════════════════
 *.db
 *.parquet
 *.log
 data/
 
-# .NET (C# bindings)
-lang/csharp/bin/
-lang/csharp/obj/
-*.nupkg
-
+# ═══════════════════════════════════════
 # IDE & OS
+# ═══════════════════════════════════════
 .idea/
 .vscode/
 .DS_Store
 Thumbs.db
 
+# ═══════════════════════════════════════
 # Benchmarks
+# ═══════════════════════════════════════
 testing/benchmarks/*.txt
 testing/benchmarks/src/bin/
 dbx_bench_data_*/
 sqlite_bench_*.db
 
+# ═══════════════════════════════════════
 # Temporary & Build Files
+# ═══════════════════════════════════════
 **/temp_*.txt
 **/build_errors.txt
 **/*_temp.txt
 **/physical_temp.txt
+dotnet_err.txt
 
-# Project Config (hidden folders & files)
+# ═══════════════════════════════════════
+# Project Config
+# ═══════════════════════════════════════
 .agent/
 .gemini/
 .specify/

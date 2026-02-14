@@ -81,11 +81,11 @@ jobs:
       - run: cargo build --release --locked -p dbx-ffi
 
       - name: NuGet 패키징
-        run: dotnet pack lang/dotnet/DBX.Client/DBX.Client.csproj --configuration Release
+        run: dotnet pack lang/dotnet/DBX.Dotnet/DBX.Dotnet.csproj --configuration Release
 
       - name: NuGet 배포
         run: >
-          dotnet nuget push lang/dotnet/DBX.Client/bin/Release/*.nupkg
+          dotnet nuget push lang/dotnet/DBX.Dotnet/bin/Release/*.nupkg
           --api-key ${{ secrets.NUGET_API_KEY }}
           --source https://api.nuget.org/v3/index.json
           --skip-duplicate
@@ -94,7 +94,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: nuget-package
-          path: lang/dotnet/DBX.Client/bin/Release/*.nupkg
+          path: lang/dotnet/DBX.Dotnet/bin/Release/*.nupkg
 
   # 2-3. Python → PyPI
   publish-pypi:

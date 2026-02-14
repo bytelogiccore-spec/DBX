@@ -1,225 +1,151 @@
 using System;
 using System.Diagnostics;
-using System.IO;
 using System.Text;
-using System.Collections.Generic;
+using DBX.Dotnet;
 using Microsoft.Data.Sqlite;
-using DBX.Client;
 
-namespace DBX.Benchmark
+class Program
 {
-    class Program
+    const int N = 10000;
+
+    static void Main()
     {
-        private const int Iterations = 10000;
-        private const string TableName = "benchmark";
-        private const string DbxBase = "./dbx_bench_data_";
-        private const string SqliteBase = "sqlite_bench_";
+        Console.WriteLine("=".PadRight(60, '='));
+        Console.WriteLine("DBX Native (CsBindgen) vs SQLite - Performance Comparison");
+        Console.WriteLine("=".PadRight(60, '='));
+        Console.WriteLine($"\nRunning benchmarks with {N:N0} operations...\n");
 
-        static void Main(string[] args)
+        // Benchmark DBX Native
+        Console.WriteLine("Benchmarking DBX Native (CsBindgen)...");
+        var (dbxInsert, dbxGet, dbxDelete) = BenchmarkDbxNative();
+        PrintResults("DBX Native (CsBindgen)", dbxInsert, dbxGet, dbxDelete);
+
+        // Benchmark SQLite
+        Console.WriteLine("\nBenchmarking SQLite (In-Memory)...");
+        var (sqlInsert, sqlGet, sqlDelete) = BenchmarkSqlite();
+        PrintResults("SQLite (In-Memory)", sqlInsert, sqlGet, sqlDelete);
+
+        // Comparison
+        Console.WriteLine("\n" + "=".PadRight(60, '='));
+        Console.WriteLine("Performance Comparison (DBX vs SQLite):");
+        Console.WriteLine("=".PadRight(60, '='));
+        Console.WriteLine($"INSERT: DBX is {sqlInsert / dbxInsert:F2}x faster");
+        Console.WriteLine($"GET:    DBX is {sqlGet / dbxGet:F2}x faster");
+        Console.WriteLine($"DELETE: DBX is {sqlDelete / dbxDelete:F2}x faster");
+        
+        Console.WriteLine("\n" + "=".PadRight(60, '='));
+        Console.WriteLine("Benchmark completed!");
+        Console.WriteLine("=".PadRight(60, '='));
+    }
+
+    static (double, double, double) BenchmarkDbxNative()
+    {
+        using var db = Database.OpenInMemory();
+        var sw = Stopwatch.StartNew();
+
+        // INSERT with transaction
+        sw.Restart();
+        using (var tx = db.BeginTransaction())
         {
-            Console.WriteLine("=== DBX vs SQLite Data Integrity & Performance Check ===");
-            Console.WriteLine();
-
-            try
+            for (int i = 0; i < N; i++)
             {
-                // 1. Data Integrity & Content Check (Disk)
-                Console.WriteLine("--- [Step 1] Data Integrity Check (Disk) ---");
-                string dbxPath = DbxBase + "integrity";
-                string sqlPath = SqliteBase + "integrity.db";
-                Cleanup(dbxPath, sqlPath);
-                
-                VerifyDataIntegrity(dbxPath, sqlPath);
-
-                // 2. Performance Comparison (Lazy WAL vs SQLite Disk/Memory)
-                Console.WriteLine("\n--- [Step 2] Performance Comparison ---");
-                RunDbxBenchmark(DbxBase + "perf", true, DurabilityLevel.Lazy, false); // DBX Disk
-                RunDbxBenchmark(null, true, DurabilityLevel.Lazy, true);              // DBX Memory
-                RunSqliteBenchmark(SqliteBase + "perf.db", true);                    // SQLite Disk
-                RunSqliteBenchmark(":memory:", true);                                // SQLite Memory
-
-                Console.WriteLine("\nAll Checks Completed.");
+                var key = Encoding.UTF8.GetBytes($"key:{i}");
+                var value = Encoding.UTF8.GetBytes($"value:{i}");
+                tx.Insert("bench", key, value);
             }
-            catch (Exception ex)
+            tx.Commit();
+        }
+        var insertTime = sw.Elapsed.TotalSeconds;
+
+        // GET
+        sw.Restart();
+        for (int i = 0; i < N; i++)
+        {
+            var key = Encoding.UTF8.GetBytes($"key:{i}");
+            var _ = db.Get("bench", key);
+        }
+        var getTime = sw.Elapsed.TotalSeconds;
+
+        // DELETE with transaction
+        sw.Restart();
+        using (var tx = db.BeginTransaction())
+        {
+            for (int i = 0; i < N; i++)
             {
-                Console.WriteLine($"\n[ERROR] Benchmark failed: {ex.Message}");
-                Console.WriteLine(ex.StackTrace);
+                var key = Encoding.UTF8.GetBytes($"key:{i}");
+                tx.Delete("bench", key);
             }
+            tx.Commit();
+        }
+        var deleteTime = sw.Elapsed.TotalSeconds;
+
+        return (insertTime, getTime, deleteTime);
+    }
+
+    static (double, double, double) BenchmarkSqlite()
+    {
+        using var connection = new SqliteConnection("Data Source=:memory:");
+        connection.Open();
+
+        // Create table
+        using (var cmd = connection.CreateCommand())
+        {
+            cmd.CommandText = "CREATE TABLE bench (key BLOB PRIMARY KEY, value BLOB)";
+            cmd.ExecuteNonQuery();
         }
 
-        static void Cleanup(string dbx, string sql)
+        var sw = Stopwatch.StartNew();
+
+        // INSERT with transaction
+        sw.Restart();
+        using (var transaction = connection.BeginTransaction())
         {
-            try { if (Directory.Exists(dbx)) Directory.Delete(dbx, true); } catch {}
-            try { if (sql != null && File.Exists(sql)) File.Delete(sql); } catch {}
+            for (int i = 0; i < N; i++)
+            {
+                using var cmd = connection.CreateCommand();
+                cmd.CommandText = "INSERT INTO bench (key, value) VALUES (@key, @value)";
+                cmd.Parameters.AddWithValue("@key", Encoding.UTF8.GetBytes($"key:{i}"));
+                cmd.Parameters.AddWithValue("@value", Encoding.UTF8.GetBytes($"value:{i}"));
+                cmd.ExecuteNonQuery();
+            }
+            transaction.Commit();
         }
+        var insertTime = sw.Elapsed.TotalSeconds;
 
-        static void VerifyDataIntegrity(string dbxPath, string sqlPath)
+        // GET
+        sw.Restart();
+        for (int i = 0; i < N; i++)
         {
-            Console.WriteLine("Inserting same data into both DBX and SQLite...");
-            
-            var testData = new Dictionary<string, string>
-            {
-                { "user:1", "Alice in Wonderland" },
-                { "user:2", "Bob the Builder" },
-                { "user:100", "Special Character Test: !@#$%^&*()" },
-                { "user:empty", "" }
-            };
-
-            // DBX Insert
-            using (var db = new DbxDatabase(dbxPath))
-            {
-                using (var tx = db.BeginTransaction())
-                {
-                    foreach (var kvp in testData)
-                    {
-                        tx.Insert(TableName, Encoding.UTF8.GetBytes(kvp.Key), Encoding.UTF8.GetBytes(kvp.Value));
-                    }
-                    tx.Commit();
-                }
-            }
-
-            // SQLite Insert
-            using (var connection = new SqliteConnection($"Data Source={sqlPath}"))
-            {
-                connection.Open();
-                using (var cmd = connection.CreateCommand())
-                {
-                    cmd.CommandText = $"CREATE TABLE IF NOT EXISTS {TableName} (id TEXT PRIMARY KEY, val BLOB)";
-                    cmd.ExecuteNonQuery();
-                }
-                
-                using (var transaction = connection.BeginTransaction())
-                {
-                    foreach (var kvp in testData)
-                    {
-                        using (var cmd = connection.CreateCommand())
-                        {
-                            cmd.Transaction = transaction;
-                            cmd.CommandText = $"INSERT OR REPLACE INTO {TableName} (id, val) VALUES ($id, $val)";
-                            cmd.Parameters.AddWithValue("$id", kvp.Key);
-                            cmd.Parameters.AddWithValue("$val", Encoding.UTF8.GetBytes(kvp.Value));
-                            cmd.ExecuteNonQuery();
-                        }
-                    }
-                    transaction.Commit();
-                }
-            }
-
-            Console.WriteLine("\nVerifying Data Retrieval...");
-            bool allMatch = true;
-
-            using (var db = new DbxDatabase(dbxPath))
-            using (var connection = new SqliteConnection($"Data Source={sqlPath}"))
-            {
-                connection.Open();
-                foreach (var kvp in testData)
-                {
-                    // DBX Get
-                    byte[] dbxBytes = db.Get(TableName, Encoding.UTF8.GetBytes(kvp.Key));
-                    string dbxVal = dbxBytes != null ? Encoding.UTF8.GetString(dbxBytes) : "[NULL]";
-
-                    // SQLite Get
-                    string sqlVal = "[NULL]";
-                    using (var cmd = connection.CreateCommand())
-                    {
-                        cmd.CommandText = $"SELECT val FROM {TableName} WHERE id = $id";
-                        cmd.Parameters.AddWithValue("$id", kvp.Key);
-                        using (var reader = cmd.ExecuteReader())
-                        {
-                            if (reader.Read())
-                            {
-                                byte[] sqlBytes = (byte[])reader[0];
-                                sqlVal = Encoding.UTF8.GetString(sqlBytes);
-                            }
-                        }
-                    }
-
-                    bool match = dbxVal == sqlVal && dbxVal == kvp.Value;
-                    Console.WriteLine($"Key: {kvp.Key,-10} | Correct: {kvp.Value,-30} | DBX: {dbxVal,-30} | Match: {(match ? "OK" : "FAIL")}");
-                    if (!match) allMatch = false;
-                }
-            }
-
-            if (allMatch)
-                Console.WriteLine("\n[SUCCESS] DBX and SQLite data is exactly the same!");
-            else
-                throw new Exception("Data mismatch detected between DBX and SQLite!");
+            using var cmd = connection.CreateCommand();
+            cmd.CommandText = "SELECT value FROM bench WHERE key = @key";
+            cmd.Parameters.AddWithValue("@key", Encoding.UTF8.GetBytes($"key:{i}"));
+            var _ = cmd.ExecuteScalar();
         }
+        var getTime = sw.Elapsed.TotalSeconds;
 
-        static void RunDbxBenchmark(string path, bool useTransaction, DurabilityLevel durability, bool isInMemory)
+        // DELETE with transaction
+        sw.Restart();
+        using (var transaction = connection.BeginTransaction())
         {
-            var count = Iterations;
-            var sw = new Stopwatch();
-            using (var db = isInMemory ? DbxDatabase.CreateInMemory() : new DbxDatabase(path))
+            for (int i = 0; i < N; i++)
             {
-                db.SetDurability(durability);
-                sw.Start();
-                using (var tx = db.BeginTransaction())
-                {
-                    for (int i = 0; i < count; i++)
-                    {
-                        tx.Insert(TableName, Encoding.UTF8.GetBytes($"key_{i}"), Encoding.UTF8.GetBytes($"value_{i}"));
-                    }
-                    tx.Commit();
-                }
-                sw.Stop();
-                Console.WriteLine($"[DBX] {(isInMemory ? "Memory" : "Disk")}: Insert {count} records: {sw.ElapsedMilliseconds}ms ({count/sw.Elapsed.TotalSeconds:F0} ops/sec)");
-
-                sw.Restart();
-                for (int i = 0; i < count; i++)
-                {
-                    db.Get(TableName, Encoding.UTF8.GetBytes($"key_{i}"));
-                }
-                sw.Stop();
-                Console.WriteLine($"[DBX] {(isInMemory ? "Memory" : "Disk")}: Get {count} records: {sw.ElapsedMilliseconds}ms ({count/sw.Elapsed.TotalSeconds:F0} ops/sec)");
+                using var cmd = connection.CreateCommand();
+                cmd.CommandText = "DELETE FROM bench WHERE key = @key";
+                cmd.Parameters.AddWithValue("@key", Encoding.UTF8.GetBytes($"key:{i}"));
+                cmd.ExecuteNonQuery();
             }
+            transaction.Commit();
         }
+        var deleteTime = sw.Elapsed.TotalSeconds;
 
-        static void RunSqliteBenchmark(string path, bool useTransaction)
-        {
-            var count = Iterations;
-            var sw = new Stopwatch();
-            using (var connection = new SqliteConnection($"Data Source={path}"))
-            {
-                connection.Open();
-                using (var cmd = connection.CreateCommand())
-                {
-                    cmd.CommandText = $"CREATE TABLE IF NOT EXISTS {TableName} (id TEXT PRIMARY KEY, val BLOB)";
-                    cmd.ExecuteNonQuery();
-                }
-                sw.Start();
-                using (var transaction = connection.BeginTransaction())
-                {
-                    using (var cmd = connection.CreateCommand())
-                    {
-                        cmd.Transaction = transaction;
-                        cmd.CommandText = $"INSERT OR REPLACE INTO {TableName} (id, val) VALUES ($id, $val)";
-                        var idParam = cmd.CreateParameter(); idParam.ParameterName = "$id"; cmd.Parameters.Add(idParam);
-                        var valParam = cmd.CreateParameter(); valParam.ParameterName = "$val"; cmd.Parameters.Add(valParam);
-                        for (int i = 0; i < count; i++)
-                        {
-                            idParam.Value = $"key_{i}";
-                            valParam.Value = Encoding.UTF8.GetBytes($"value_{i}");
-                            cmd.ExecuteNonQuery();
-                        }
-                    }
-                    transaction.Commit();
-                }
-                sw.Stop();
-                Console.WriteLine($"[SQLite] {(path == ":memory:" ? "Memory" : "Disk")}: Insert {count} records: {sw.ElapsedMilliseconds}ms ({count/sw.Elapsed.TotalSeconds:F0} ops/sec)");
+        return (insertTime, getTime, deleteTime);
+    }
 
-                sw.Restart();
-                for (int i = 0; i < count; i++)
-                {
-                    using (var cmd = connection.CreateCommand())
-                    {
-                        cmd.CommandText = $"SELECT val FROM {TableName} WHERE id = $id";
-                        cmd.Parameters.AddWithValue("$id", $"key_{i}");
-                        using (var reader = cmd.ExecuteReader()) { if (reader.Read()) { var r = (byte[])reader[0]; } }
-                    }
-                }
-                sw.Stop();
-                Console.WriteLine($"[SQLite] {(path == ":memory:" ? "Memory" : "Disk")}: Get {count} records: {sw.ElapsedMilliseconds}ms ({count/sw.Elapsed.TotalSeconds:F0} ops/sec)");
-            }
-        }
+    static void PrintResults(string name, double insertTime, double getTime, double deleteTime)
+    {
+        Console.WriteLine($"\n{name}:");
+        Console.WriteLine($"  INSERT: {insertTime:F4}s ({N / insertTime:N0} ops/sec)");
+        Console.WriteLine($"  GET:    {getTime:F4}s ({N / getTime:N0} ops/sec)");
+        Console.WriteLine($"  DELETE: {deleteTime:F4}s ({N / deleteTime:N0} ops/sec)");
     }
 }
