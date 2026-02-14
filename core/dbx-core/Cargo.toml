@@ -9,9 +9,6 @@ description = "High-performance file-based database engine with 5-Tier Hybrid St
 readme = "README.md"
 
 [dependencies]
-# Derive macros
-dbx-derive = { path = "../dbx-derive", version = "0.0.2-beta" }
-
 # Error handling
 thiserror = "2.0"
 

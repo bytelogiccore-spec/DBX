@@ -38,7 +38,7 @@ impl RowCache {
     }
 
     /// Auto-tuning: adjusts capacity based on hit ratio
-    /// 
+    ///
     /// Increases capacity if hit ratio is low, maintains if high
     pub fn auto_tune(&self) -> Option<usize> {
         let ratio = self.hit_ratio();

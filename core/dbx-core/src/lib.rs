@@ -109,6 +109,3 @@ pub mod logging;
 // Re-export commonly used types
 pub use engine::{Database, DurabilityLevel};
 pub use error::{DbxError, DbxResult};
-
-// Re-export derive macros
-pub use dbx_derive::Table;
