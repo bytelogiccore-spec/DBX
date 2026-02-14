@@ -272,8 +272,8 @@ impl Database {
                     false,
                 )]));
                 let array = Int64Array::from(vec![rows_inserted as i64]);
-                let batch = RecordBatch::try_new(schema, vec![Arc::new(array)])
-                    .map_err(DbxError::from)?;
+                let batch =
+                    RecordBatch::try_new(schema, vec![Arc::new(array)]).map_err(DbxError::from)?;
 
                 Ok(vec![batch])
             }
@@ -365,8 +365,8 @@ impl Database {
                     false,
                 )]));
                 let array = Int64Array::from(vec![rows_updated]);
-                let batch = RecordBatch::try_new(schema, vec![Arc::new(array)])
-                    .map_err(DbxError::from)?;
+                let batch =
+                    RecordBatch::try_new(schema, vec![Arc::new(array)]).map_err(DbxError::from)?;
 
                 Ok(vec![batch])
             }
@@ -401,8 +401,8 @@ impl Database {
                     false,
                 )]));
                 let array = Int64Array::from(vec![rows_deleted]);
-                let batch = RecordBatch::try_new(schema, vec![Arc::new(array)])
-                    .map_err(DbxError::from)?;
+                let batch =
+                    RecordBatch::try_new(schema, vec![Arc::new(array)]).map_err(DbxError::from)?;
 
                 Ok(vec![batch])
             }
@@ -437,8 +437,8 @@ impl Database {
                     false,
                 )]));
                 let array = Int64Array::from(vec![1]);
-                let batch = RecordBatch::try_new(schema, vec![Arc::new(array)])
-                    .map_err(DbxError::from)?;
+                let batch =
+                    RecordBatch::try_new(schema, vec![Arc::new(array)]).map_err(DbxError::from)?;
 
                 Ok(vec![batch])
             }
@@ -496,8 +496,8 @@ impl Database {
                     false,
                 )]));
                 let array = Int64Array::from(vec![1]);
-                let batch = RecordBatch::try_new(schema, vec![Arc::new(array)])
-                    .map_err(DbxError::from)?;
+                let batch =
+                    RecordBatch::try_new(schema, vec![Arc::new(array)]).map_err(DbxError::from)?;
 
                 Ok(vec![batch])
             }
@@ -553,8 +553,8 @@ impl Database {
                     false,
                 )]));
                 let array = Int64Array::from(vec![1]);
-                let batch = RecordBatch::try_new(schema, vec![Arc::new(array)])
-                    .map_err(DbxError::from)?;
+                let batch =
+                    RecordBatch::try_new(schema, vec![Arc::new(array)]).map_err(DbxError::from)?;
 
                 Ok(vec![batch])
             }
@@ -605,8 +605,8 @@ impl Database {
                     false,
                 )]));
                 let array = Int64Array::from(vec![1]);
-                let batch = RecordBatch::try_new(schema, vec![Arc::new(array)])
-                    .map_err(DbxError::from)?;
+                let batch =
+                    RecordBatch::try_new(schema, vec![Arc::new(array)]).map_err(DbxError::from)?;
 
                 Ok(vec![batch])
             }
@@ -737,8 +737,8 @@ impl Database {
                     false,
                 )]));
                 let array = Int64Array::from(vec![1]);
-                let batch = RecordBatch::try_new(schema, vec![Arc::new(array)])
-                    .map_err(DbxError::from)?;
+                let batch =
+                    RecordBatch::try_new(schema, vec![Arc::new(array)]).map_err(DbxError::from)?;
 
                 Ok(vec![batch])
             }

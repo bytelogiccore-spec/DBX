@@ -104,9 +104,10 @@ impl VersionInfo {
     pub fn get_visible_version(&self, batches: &[VersionedBatch], read_ts: u64) -> Option<u64> {
         for &seq in &self.batch_sequences {
             if let Some(batch) = batches.iter().find(|b| b.sequence == seq)
-                && batch.is_visible(read_ts) {
-                    return Some(seq);
-                }
+                && batch.is_visible(read_ts)
+            {
+                return Some(seq);
+            }
         }
         None
     }

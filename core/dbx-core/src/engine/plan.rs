@@ -54,9 +54,9 @@ impl PlanCache {
                 .iter()
                 .min_by_key(|(_, plan)| plan.hit_count)
                 .map(|(k, _)| k.clone())
-            {
-                cache.remove(&lru_key);
-            }
+        {
+            cache.remove(&lru_key);
+        }
 
         cache.insert(
             sql,

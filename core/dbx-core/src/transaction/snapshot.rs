@@ -78,58 +78,60 @@ impl Snapshot {
         // Process WOS entries first (lower priority)
         for (encoded_key, encoded_value) in wos_entries {
             if let Ok(vk) = crate::transaction::version::VersionedKey::decode(&encoded_key)
-                && vk.commit_ts <= self.read_ts {
-                    // Decode value
-                    let value = if encoded_value.is_empty() {
-                        Vec::new()
-                    } else if encoded_value[0] == b'v' {
-                        encoded_value[1..].to_vec()
-                    } else if encoded_value[0] == b'd' {
-                        Vec::new()
-                    } else {
-                        encoded_value.clone() // Legacy
-                    };
+                && vk.commit_ts <= self.read_ts
+            {
+                // Decode value
+                let value = if encoded_value.is_empty() {
+                    Vec::new()
+                } else if encoded_value[0] == b'v' {
+                    encoded_value[1..].to_vec()
+                } else if encoded_value[0] == b'd' {
+                    Vec::new()
+                } else {
+                    encoded_value.clone() // Legacy
+                };
 
-                    // Insert or update if this version is newer
-                    visible_keys
-                        .entry(vk.user_key.clone())
-                        .and_modify(|(existing_val, existing_ts)| {
-                            if vk.commit_ts > *existing_ts {
-                                *existing_val = value.clone();
-                                *existing_ts = vk.commit_ts;
-                            }
-                        })
-                        .or_insert((value, vk.commit_ts));
-                }
+                // Insert or update if this version is newer
+                visible_keys
+                    .entry(vk.user_key.clone())
+                    .and_modify(|(existing_val, existing_ts)| {
+                        if vk.commit_ts > *existing_ts {
+                            *existing_val = value.clone();
+                            *existing_ts = vk.commit_ts;
+                        }
+                    })
+                    .or_insert((value, vk.commit_ts));
+            }
         }
 
         // Process Delta entries (higher priority - overrides WOS)
         for (encoded_key, encoded_value) in delta_entries {
             if let Ok(vk) = crate::transaction::version::VersionedKey::decode(&encoded_key)
-                && vk.commit_ts <= self.read_ts {
-                    // Decode value - handle legacy (no prefix) and versioned (v/d prefix)
-                    let value = if encoded_value.is_empty() {
-                        Vec::new() // Should not happen but handle gracefully
-                    } else if encoded_value[0] == b'v' {
-                        encoded_value[1..].to_vec()
-                    } else if encoded_value[0] == b'd' {
-                        Vec::new() // Tombstone
-                    } else {
-                        // Legacy value (no prefix)
-                        encoded_value.clone()
-                    };
+                && vk.commit_ts <= self.read_ts
+            {
+                // Decode value - handle legacy (no prefix) and versioned (v/d prefix)
+                let value = if encoded_value.is_empty() {
+                    Vec::new() // Should not happen but handle gracefully
+                } else if encoded_value[0] == b'v' {
+                    encoded_value[1..].to_vec()
+                } else if encoded_value[0] == b'd' {
+                    Vec::new() // Tombstone
+                } else {
+                    // Legacy value (no prefix)
+                    encoded_value.clone()
+                };
 
-                    // Insert or update if this version is newer
-                    visible_keys
-                        .entry(vk.user_key.clone())
-                        .and_modify(|(existing_val, existing_ts)| {
-                            if vk.commit_ts > *existing_ts {
-                                *existing_val = value.clone();
-                                *existing_ts = vk.commit_ts;
-                            }
-                        })
-                        .or_insert((value, vk.commit_ts));
-                }
+                // Insert or update if this version is newer
+                visible_keys
+                    .entry(vk.user_key.clone())
+                    .and_modify(|(existing_val, existing_ts)| {
+                        if vk.commit_ts > *existing_ts {
+                            *existing_val = value.clone();
+                            *existing_ts = vk.commit_ts;
+                        }
+                    })
+                    .or_insert((value, vk.commit_ts));
+            }
         }
 
         // Filter out tombstones and convert to Vec

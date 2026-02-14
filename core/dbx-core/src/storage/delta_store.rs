@@ -91,9 +91,10 @@ impl DeltaStore {
         // If it looks like a versioned key (length > 8), try to decode it.
         // Versioned keys are [user_key] + [8 bytes timestamp].
         if key.len() > 8
-            && let Ok(vk) = VersionedKey::decode(key) {
-                return vk;
-            }
+            && let Ok(vk) = VersionedKey::decode(key)
+        {
+            return vk;
+        }
         VersionedKey::new(key.to_vec(), default_ts)
     }
 
