@@ -1,7 +1,7 @@
 ---
 layout: default
 title: API 레퍼런스
-parent: Node.js (dbx-native)
+parent: Node.js (dbx-py)
 grand_parent: 패키지
 great_grand_parent: 한국어
 nav_order: 6
@@ -196,7 +196,7 @@ try {
 ## TypeScript 타입 정의
 
 ```typescript
-declare module 'dbx-native' {
+declare module 'dbx-py' {
     export class Database {
         static open(path: string): Database;
         static openInMemory(): Database;

@@ -59,7 +59,7 @@ db.close()
 
 ## Version Info
 
-- **Current Version**: 0.0.4b0
+- **Current Version**: 0.0.3-beta
 - **Python Requirements**: 3.8+
 - **Platform**: Windows x64 (Linux/macOS planned)
 

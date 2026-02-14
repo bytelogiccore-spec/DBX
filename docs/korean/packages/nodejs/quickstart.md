@@ -1,7 +1,7 @@
 ---
 layout: default
 title: 빠른 시작
-parent: Node.js (dbx-native)
+parent: Node.js (dbx-py)
 grand_parent: 패키지
 great_grand_parent: 한국어
 nav_order: 2
@@ -14,13 +14,13 @@ nav_order: 2
 ## 설치
 
 ```bash
-npm install dbx-native
+npm install dbx-py
 ```
 
 ## 첫 번째 프로그램
 
 ```typescript
-import { Database } from 'dbx-native';
+import { Database } from 'dbx-py';
 
 // 인메모리 데이터베이스
 const db = Database.openInMemory();

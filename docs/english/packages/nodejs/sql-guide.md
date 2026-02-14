@@ -1,7 +1,7 @@
 ---
 layout: default
 title: SQL Guide
-parent: Node.js (dbx-native)
+parent: Node.js (dbx-py)
 grand_parent: Packages
 great_grand_parent: English
 nav_order: 3
@@ -14,7 +14,7 @@ DBX supports standard SQL. You can use it via the `executeSql` method in Node.js
 ## CREATE TABLE
 
 ```typescript
-import { Database } from 'dbx-native';
+import { Database } from 'dbx-py';
 
 const db = Database.open('mydb.db');
 

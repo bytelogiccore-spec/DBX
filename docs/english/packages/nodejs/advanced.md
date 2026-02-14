@@ -1,7 +1,7 @@
 ---
 layout: default
 title: Advanced
-parent: Node.js (dbx-native)
+parent: Node.js (dbx-py)
 grand_parent: Packages
 great_grand_parent: English
 nav_order: 5
@@ -12,7 +12,7 @@ nav_order: 5
 ## Transactions
 
 ```typescript
-import { Database } from 'dbx-native';
+import { Database } from 'dbx-py';
 
 const db = Database.open('mydb.db');
 
@@ -57,7 +57,7 @@ import { Worker } from 'worker_threads';
 
 function createWorker(dbPath: string, workerId: number) {
   return new Worker(`
-    const { Database } = require('dbx-native');
+    const { Database } = require('dbx-py');
     const db = Database.open('${dbPath}');
     for (let i = 0; i < 1000; i++) {
       db.insert('data', 

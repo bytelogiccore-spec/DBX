@@ -1,15 +1,15 @@
 ---
 layout: default
-title: Node.js (dbx-native)
+title: Node.js (dbx-py)
 nav_order: 4
 parent: Packages
 grand_parent: English
 has_children: true
 ---
 
-# Node.js — dbx-native
+# Node.js — dbx-py
 
-[![npm](https://img.shields.io/npm/v/dbx-native.svg)](https://www.npmjs.com/package/dbx-native)
+[![npm](https://img.shields.io/npm/v/dbx-py.svg)](https://www.npmjs.com/package/dbx-py)
 
 Official Node.js bindings for DBX high-performance embedded database.
 
@@ -25,11 +25,11 @@ Official Node.js bindings for DBX high-performance embedded database.
 ## Quick Start
 
 ```bash
-npm install dbx-native
+npm install dbx-py
 ```
 
 ```typescript
-import { Database } from 'dbx-native';
+import { Database } from 'dbx-py';
 
 const db = Database.openInMemory();
 

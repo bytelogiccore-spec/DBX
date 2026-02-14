@@ -1,7 +1,7 @@
 ---
 layout: default
 title: API Reference
-parent: Node.js (dbx-native)
+parent: Node.js (dbx-py)
 grand_parent: Packages
 great_grand_parent: English
 nav_order: 6

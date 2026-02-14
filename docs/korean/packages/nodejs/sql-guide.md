@@ -1,7 +1,7 @@
 ---
 layout: default
 title: SQL 가이드
-parent: Node.js (dbx-native)
+parent: Node.js (dbx-py)
 grand_parent: 패키지
 great_grand_parent: 한국어
 nav_order: 4
@@ -14,7 +14,7 @@ DBX는 표준 SQL을 지원합니다. Node.js에서 동기/비동기 모두 사�
 ## 테이블 생성 (CREATE TABLE)
 
 ```typescript
-import { Database } from 'dbx-native';
+import { Database } from 'dbx-py';
 
 const db = Database.open('mydb.db');
 
@@ -257,7 +257,7 @@ db.close();
 
 ```typescript
 import express from 'express';
-import { Database } from 'dbx-native';
+import { Database } from 'dbx-py';
 
 const app = express();
 const db = Database.open('api.db');

@@ -1,7 +1,7 @@
 ---
 layout: default
 title: 설치
-parent: Node.js (dbx-native)
+parent: Node.js (dbx-py)
 grand_parent: 패키지
 great_grand_parent: 한국어
 nav_order: 1
@@ -12,19 +12,19 @@ nav_order: 1
 ## npm에서 설치
 
 ```bash
-npm install dbx-native
+npm install dbx-py
 ```
 
 ## yarn 사용
 
 ```bash
-yarn add dbx-native
+yarn add dbx-py
 ```
 
 ## pnpm 사용
 
 ```bash
-pnpm add dbx-native
+pnpm add dbx-py
 ```
 
 ## 요구사항
@@ -37,7 +37,7 @@ pnpm add dbx-native
 ## 설치 확인
 
 ```javascript
-const { Database } = require('dbx-native');
+const { Database } = require('dbx-py');
 
 const db = Database.openInMemory();
 console.log('DBX Native loaded successfully!');

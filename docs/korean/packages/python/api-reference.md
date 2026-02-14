@@ -262,7 +262,7 @@ class Database:
 ```python
 import dbx_py
 
-print(dbx_py.__version__)  # 0.0.4b0
+print(dbx_py.__version__)  # 0.0.3-beta
 ```
 
 ## 다음 단계

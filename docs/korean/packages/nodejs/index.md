@@ -1,15 +1,15 @@
 ---
 layout: default
-title: Node.js (dbx-native)
+title: Node.js (dbx-py)
 nav_order: 4
 parent: 패키지
 grand_parent: 한국어
 has_children: true
 ---
 
-# Node.js — dbx-native
+# Node.js — dbx-py
 
-[![npm](https://img.shields.io/npm/v/dbx-native.svg)](https://www.npmjs.com/package/dbx-native)
+[![npm](https://img.shields.io/npm/v/dbx-py.svg)](https://www.npmjs.com/package/dbx-py)
 
 고성능 임베디드 데이터베이스 DBX의 공식 Node.js 바인딩입니다.
 
@@ -25,11 +25,11 @@ has_children: true
 ## 빠른 시작
 
 ```bash
-npm install dbx-native
+npm install dbx-py
 ```
 
 ```typescript
-import { Database } from 'dbx-native';
+import { Database } from 'dbx-py';
 
 const db = Database.openInMemory();
 

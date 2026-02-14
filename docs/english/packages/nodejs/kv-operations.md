@@ -1,7 +1,7 @@
 ---
 layout: default
 title: KV Operations
-parent: Node.js (dbx-native)
+parent: Node.js (dbx-py)
 grand_parent: Packages
 great_grand_parent: English
 nav_order: 4
@@ -16,7 +16,7 @@ DBX can be used as a high-performance Key-Value store in addition to SQL.
 ### Insert
 
 ```typescript
-import { Database } from 'dbx-native';
+import { Database } from 'dbx-py';
 
 const db = Database.openInMemory();
 

@@ -1,7 +1,7 @@
 ---
 layout: default
 title: Installation
-parent: Node.js (dbx-native)
+parent: Node.js (dbx-py)
 grand_parent: Packages
 great_grand_parent: English
 nav_order: 1
@@ -12,19 +12,19 @@ nav_order: 1
 ## Install from npm
 
 ```bash
-npm install dbx-native
+npm install dbx-py
 ```
 
 ## Install with yarn
 
 ```bash
-yarn add dbx-native
+yarn add dbx-py
 ```
 
 ## Install with pnpm
 
 ```bash
-pnpm add dbx-native
+pnpm add dbx-py
 ```
 
 ## Requirements
@@ -37,7 +37,7 @@ pnpm add dbx-native
 ## Verify Installation
 
 ```javascript
-const { Database } = require('dbx-native');
+const { Database } = require('dbx-py');
 
 const db = Database.openInMemory();
 console.log('DBX Node.js loaded successfully!');
@@ -66,7 +66,7 @@ Type definitions are included in the package.
 ### Example
 
 ```typescript
-import { Database } from 'dbx-native';
+import { Database } from 'dbx-py';
 
 const db: Database = Database.openInMemory();
 db.insert('users', Buffer.from('user:1'), Buffer.from('Alice'));
@@ -85,8 +85,8 @@ db.close();
 node --version  # Should be 16+
 
 # Reinstall
-npm uninstall dbx-native
-npm install dbx-native
+npm uninstall dbx-py
+npm install dbx-py
 ```
 
 ### Native Module Error on Windows
@@ -100,7 +100,7 @@ npm install dbx-native
 ### Version Check
 
 ```bash
-npm list dbx-native
+npm list dbx-py
 ```
 
 ## Next Steps

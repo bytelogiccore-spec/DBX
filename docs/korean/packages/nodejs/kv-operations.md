@@ -1,7 +1,7 @@
 ---
 layout: default
 title: KV 작업
-parent: Node.js (dbx-native)
+parent: Node.js (dbx-py)
 grand_parent: 패키지
 great_grand_parent: 한국어
 nav_order: 3
@@ -16,7 +16,7 @@ DBX는 SQL 외에도 고성능 Key-Value 스토어로 사용할 수 있습니다
 ### 삽입 (Insert)
 
 ```typescript
-import { Database } from 'dbx-native';
+import { Database } from 'dbx-py';
 
 const db = Database.openInMemory();
 
@@ -86,7 +86,7 @@ db.flush();
 ### 세션 저장소
 
 ```typescript
-import { Database } from 'dbx-native';
+import { Database } from 'dbx-py';
 
 interface SessionData {
     userId: number;

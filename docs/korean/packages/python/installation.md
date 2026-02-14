@@ -35,7 +35,7 @@ maturin develop --release
 
 ```python
 import dbx_py
-print(dbx_py.__version__)  # 0.0.4b0
+print(dbx_py.__version__)  # 0.0.3-beta
 ```
 
 ## 가상 환경 (권장)
@@ -81,5 +81,5 @@ pip install dbx-py
 pip install dbx-py --pre
 
 # 특정 버전
-pip install dbx-py==0.0.4b0
+pip install dbx-py==0.0.3-beta
 ```

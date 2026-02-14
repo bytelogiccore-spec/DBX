@@ -1,7 +1,7 @@
 ---
 layout: default
 title: Quick Start
-parent: Node.js (dbx-native)
+parent: Node.js (dbx-py)
 grand_parent: Packages
 great_grand_parent: English
 nav_order: 2
@@ -14,13 +14,13 @@ Get started with DBX in 5 minutes!
 ## Installation
 
 ```bash
-npm install dbx-native
+npm install dbx-py
 ```
 
 ## First Program
 
 ```typescript
-import { Database } from 'dbx-native';
+import { Database } from 'dbx-py';
 
 // Open in-memory database
 const db = Database.openInMemory();

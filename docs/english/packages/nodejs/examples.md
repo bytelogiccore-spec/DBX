@@ -1,7 +1,7 @@
 ---
 layout: default
 title: Examples
-parent: Node.js (dbx-native)
+parent: Node.js (dbx-py)
 grand_parent: Packages
 great_grand_parent: English
 nav_order: 7
@@ -13,7 +13,7 @@ nav_order: 7
 
 ```typescript
 import express from 'express';
-import { Database } from 'dbx-native';
+import { Database } from 'dbx-py';
 
 const app = express();
 const db = Database.open('api.db');
@@ -42,7 +42,7 @@ app.listen(3000, () => console.log('Server running on port 3000'));
 
 ```typescript
 import { WebSocketServer } from 'ws';
-import { Database } from 'dbx-native';
+import { Database } from 'dbx-py';
 
 const wss = new WebSocketServer({ port: 8080 });
 const db = Database.open('chat.db');
@@ -69,7 +69,7 @@ wss.on('connection', (ws) => {
 ## Redis-like Cache
 
 ```typescript
-import { Database } from 'dbx-native';
+import { Database } from 'dbx-py';
 
 class RedisLikeCache {
   private db: Database;
