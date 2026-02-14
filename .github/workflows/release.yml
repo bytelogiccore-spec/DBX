@@ -75,10 +75,10 @@ jobs:
         with:
           dotnet-version: 8.0.x
 
-      - name: Rust FFI 빌드
+      - name: Rust C# FFI 빌드
         uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - run: cargo build --release --locked -p dbx-ffi
+      - run: cargo build --release --locked -p dbx-csharp
 
       - name: NuGet 패키징
         run: dotnet pack lang/dotnet/DBX.Dotnet/DBX.Dotnet.csproj --configuration Release
@@ -118,11 +118,11 @@ jobs:
         run: Copy-Item target/release/dbx_ffi.dll lang/python/dbx_py/dbx_ffi.dll -Force
 
       - name: 빌드 도구 설치
-        run: pip install build twine
+        run: pip install setuptools wheel twine
 
       - name: 패키지 빌드
         working-directory: lang/python
-        run: python -m build
+        run: python setup.py sdist bdist_wheel
 
       - name: PyPI 배포
         working-directory: lang/python
@@ -155,6 +155,10 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - run: cargo build --release --locked -p dbx-ffi
+
+      - name: npm 의존성 설치
+        working-directory: lang/nodejs
+        run: npm install
 
       - name: npm 패키지 생성
         working-directory: lang/nodejs
