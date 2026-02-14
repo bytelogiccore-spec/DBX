@@ -49,15 +49,14 @@ impl PlanCache {
         let mut cache = self.cache.lock().unwrap();
 
         // 캐시가 가득 차면 가장 적게 사용된 항목 제거
-        if cache.len() >= self.max_size {
-            if let Some(lru_key) = cache
+        if cache.len() >= self.max_size
+            && let Some(lru_key) = cache
                 .iter()
                 .min_by_key(|(_, plan)| plan.hit_count)
                 .map(|(k, _)| k.clone())
             {
                 cache.remove(&lru_key);
             }
-        }
 
         cache.insert(
             sql,

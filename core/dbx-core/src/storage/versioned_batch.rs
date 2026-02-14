@@ -47,7 +47,7 @@ impl VersionedBatch {
     /// - begin_ts <= read_ts
     /// - end_ts is None OR end_ts > read_ts
     pub fn is_visible(&self, read_ts: u64) -> bool {
-        self.begin_ts <= read_ts && self.end_ts.map_or(true, |end| end > read_ts)
+        self.begin_ts <= read_ts && self.end_ts.is_none_or(|end| end > read_ts)
     }
 
     /// Check if this batch is obsolete (has an end_ts).
@@ -103,11 +103,10 @@ impl VersionInfo {
     /// Get the latest version visible to the given read timestamp.
     pub fn get_visible_version(&self, batches: &[VersionedBatch], read_ts: u64) -> Option<u64> {
         for &seq in &self.batch_sequences {
-            if let Some(batch) = batches.iter().find(|b| b.sequence == seq) {
-                if batch.is_visible(read_ts) {
+            if let Some(batch) = batches.iter().find(|b| b.sequence == seq)
+                && batch.is_visible(read_ts) {
                     return Some(seq);
                 }
-            }
         }
         None
     }

@@ -67,11 +67,10 @@ impl HashAggregateOperator {
         // Phase 3: Adaptive Execution
         // If GPU is available and data is large enough, try GPU acceleration
         const GPU_THRESHOLD: usize = 100_000;
-        if total_rows >= GPU_THRESHOLD && self.gpu_manager.is_some() && self.group_by.is_empty() {
-            if let Some(result) = self.try_gpu_global_aggregate(&batches)? {
+        if total_rows >= GPU_THRESHOLD && self.gpu_manager.is_some() && self.group_by.is_empty()
+            && let Some(result) = self.try_gpu_global_aggregate(&batches)? {
                 return Ok(Some(result));
             }
-        }
 
         // Phase 1.3: Choose between Hash and Sort for GROUP BY
         let use_sort_agg = total_rows > 1_000_000; // Simplified cardinality check

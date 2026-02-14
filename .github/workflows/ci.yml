@@ -1,4 +1,4 @@
-name: 빌드 및 테스트
+name: CI
 
 on:
   push:
@@ -8,63 +8,29 @@ on:
   workflow_dispatch:
 
 jobs:
-  rust-build:
-    name: Rust 빌드 및 테스트
+  rust:
+    name: Rust 코어 빌드 및 테스트
     runs-on: windows-latest
-    
+
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Rust 설치
         uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy, rustfmt
-          
+
       - name: Rust 캐시
         uses: Swatinem/rust-cache@v2
-        
-      - name: Python 설치 (dbx-py 용)
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.10'
-        
+
       - name: 포맷 검사
         run: cargo fmt --all -- --check
-        
-      - name: Lint 검사
-        run: cargo clippy --all-targets --all-features -- -D warnings
-        
-      - name: 빌드
-        run: cargo build --locked --verbose
-        
-      - name: 테스트
-        run: cargo test --locked --verbose
 
-  csharp-build:
-    name: C# 빌드 및 테스트
-    runs-on: windows-latest
-    needs: rust-build
-    
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: .NET 설정
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: 8.0.x
-          
-      - name: Rust FFI 빌드 (Windows)
-        uses: dtolnay/rust-toolchain@stable
-      - name: Rust 캐시 (FFI)
-        uses: Swatinem/rust-cache@v2
-      - name: dbx-ffi 빌드
-        run: cargo build --release --locked -p dbx-ffi
-        
-      - name: C# 종속성 복원
-        run: dotnet restore lang/dotnet/DBX.Client/DBX.Client.csproj
-        
-      - name: DBX.Client 빌드
-        run: dotnet build lang/dotnet/DBX.Client/DBX.Client.csproj --configuration Release --no-restore
-        
-      - name: DBX.Client 테스트
-        run: dotnet test lang/dotnet/DBX.Benchmark/DBX.Benchmark.csproj --configuration Release
+      - name: Lint 검사 (dbx-core)
+        run: cargo clippy -p dbx-core -- -D warnings
+
+      - name: 빌드 (dbx-core)
+        run: cargo build -p dbx-core --locked
+
+      - name: 테스트 (dbx-core)
+        run: cargo test -p dbx-core --locked

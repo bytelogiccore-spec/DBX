@@ -87,7 +87,7 @@ fn json_record_to_batch(value_bytes: &[u8]) -> DbxResult<RecordBatch> {
     }
 
     let schema = Arc::new(Schema::new(fields));
-    RecordBatch::try_new(schema, columns).map_err(|e| DbxError::from(e))
+    RecordBatch::try_new(schema, columns).map_err(DbxError::from)
 }
 
 /// Evaluate a filter expression for a single record
@@ -273,7 +273,7 @@ impl Database {
                 )]));
                 let array = Int64Array::from(vec![rows_inserted as i64]);
                 let batch = RecordBatch::try_new(schema, vec![Arc::new(array)])
-                    .map_err(|e| DbxError::from(e))?;
+                    .map_err(DbxError::from)?;
 
                 Ok(vec![batch])
             }
@@ -366,7 +366,7 @@ impl Database {
                 )]));
                 let array = Int64Array::from(vec![rows_updated]);
                 let batch = RecordBatch::try_new(schema, vec![Arc::new(array)])
-                    .map_err(|e| DbxError::from(e))?;
+                    .map_err(DbxError::from)?;
 
                 Ok(vec![batch])
             }
@@ -402,7 +402,7 @@ impl Database {
                 )]));
                 let array = Int64Array::from(vec![rows_deleted]);
                 let batch = RecordBatch::try_new(schema, vec![Arc::new(array)])
-                    .map_err(|e| DbxError::from(e))?;
+                    .map_err(DbxError::from)?;
 
                 Ok(vec![batch])
             }
@@ -438,7 +438,7 @@ impl Database {
                 )]));
                 let array = Int64Array::from(vec![1]);
                 let batch = RecordBatch::try_new(schema, vec![Arc::new(array)])
-                    .map_err(|e| DbxError::from(e))?;
+                    .map_err(DbxError::from)?;
 
                 Ok(vec![batch])
             }
@@ -497,7 +497,7 @@ impl Database {
                 )]));
                 let array = Int64Array::from(vec![1]);
                 let batch = RecordBatch::try_new(schema, vec![Arc::new(array)])
-                    .map_err(|e| DbxError::from(e))?;
+                    .map_err(DbxError::from)?;
 
                 Ok(vec![batch])
             }
@@ -521,7 +521,7 @@ impl Database {
                     }
                 }
 
-                let column = columns.get(0).ok_or_else(|| {
+                let column = columns.first().ok_or_else(|| {
                     DbxError::Schema("CREATE INDEX requires at least one column".to_string())
                 })?;
 
@@ -554,7 +554,7 @@ impl Database {
                 )]));
                 let array = Int64Array::from(vec![1]);
                 let batch = RecordBatch::try_new(schema, vec![Arc::new(array)])
-                    .map_err(|e| DbxError::from(e))?;
+                    .map_err(DbxError::from)?;
 
                 Ok(vec![batch])
             }
@@ -606,7 +606,7 @@ impl Database {
                 )]));
                 let array = Int64Array::from(vec![1]);
                 let batch = RecordBatch::try_new(schema, vec![Arc::new(array)])
-                    .map_err(|e| DbxError::from(e))?;
+                    .map_err(DbxError::from)?;
 
                 Ok(vec![batch])
             }
@@ -738,7 +738,7 @@ impl Database {
                 )]));
                 let array = Int64Array::from(vec![1]);
                 let batch = RecordBatch::try_new(schema, vec![Arc::new(array)])
-                    .map_err(|e| DbxError::from(e))?;
+                    .map_err(DbxError::from)?;
 
                 Ok(vec![batch])
             }

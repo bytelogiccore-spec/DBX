@@ -63,7 +63,7 @@ impl ColumnarDelta {
 
         self.tables
             .entry(table.to_string())
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(versioned);
 
         Ok(())
@@ -178,12 +178,12 @@ fn apply_range_filter<R: RangeBounds<Vec<u8>>>(
     // Build filter mask
     let mut mask = vec![true; batch.num_rows()];
 
-    for i in 0..key_array.len() {
+    for (i, mask_val) in mask.iter_mut().enumerate().take(key_array.len()) {
         if !key_array.is_null(i) {
             let key = key_array.value(i).to_vec();
-            mask[i] = range.contains(&key);
+            *mask_val = range.contains(&key);
         } else {
-            mask[i] = false;
+            *mask_val = false;
         }
     }
 

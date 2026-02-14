@@ -180,7 +180,7 @@ impl LogicalPlanner {
                 let table = name.to_string();
 
                 // Get the first operation
-                let operation = operations.get(0).ok_or_else(|| {
+                let operation = operations.first().ok_or_else(|| {
                     DbxError::Schema("ALTER TABLE requires at least one operation".to_string())
                 })?;
 

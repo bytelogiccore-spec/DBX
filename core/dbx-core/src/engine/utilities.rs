@@ -91,7 +91,7 @@ impl Database {
 
     /// GPU Manager에 대한 참조를 반환합니다 (있는 경우).
     pub fn gpu_manager(&self) -> Option<&crate::storage::gpu::GpuManager> {
-        self.gpu_manager.as_ref().map(|v| &**v)
+        self.gpu_manager.as_deref()
     }
 
     /// Delta Store의 모든 데이터를 WOS로 flush합니다.

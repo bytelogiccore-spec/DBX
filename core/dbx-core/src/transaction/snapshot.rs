@@ -23,6 +23,7 @@ pub struct Snapshot {
     /// Cache of visible versions for this snapshot
     /// (table, key) -> value
     /// This cache is populated lazily as keys are accessed
+    #[allow(clippy::type_complexity)]
     visible_cache: Arc<DashMap<(String, Vec<u8>), Option<Vec<u8>>>>,
 }
 
@@ -76,8 +77,8 @@ impl Snapshot {
 
         // Process WOS entries first (lower priority)
         for (encoded_key, encoded_value) in wos_entries {
-            if let Ok(vk) = crate::transaction::version::VersionedKey::decode(&encoded_key) {
-                if vk.commit_ts <= self.read_ts {
+            if let Ok(vk) = crate::transaction::version::VersionedKey::decode(&encoded_key)
+                && vk.commit_ts <= self.read_ts {
                     // Decode value
                     let value = if encoded_value.is_empty() {
                         Vec::new()
@@ -100,13 +101,12 @@ impl Snapshot {
                         })
                         .or_insert((value, vk.commit_ts));
                 }
-            }
         }
 
         // Process Delta entries (higher priority - overrides WOS)
         for (encoded_key, encoded_value) in delta_entries {
-            if let Ok(vk) = crate::transaction::version::VersionedKey::decode(&encoded_key) {
-                if vk.commit_ts <= self.read_ts {
+            if let Ok(vk) = crate::transaction::version::VersionedKey::decode(&encoded_key)
+                && vk.commit_ts <= self.read_ts {
                     // Decode value - handle legacy (no prefix) and versioned (v/d prefix)
                     let value = if encoded_value.is_empty() {
                         Vec::new() // Should not happen but handle gracefully
@@ -130,7 +130,6 @@ impl Snapshot {
                         })
                         .or_insert((value, vk.commit_ts));
                 }
-            }
         }
 
         // Filter out tombstones and convert to Vec

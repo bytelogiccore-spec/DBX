@@ -22,6 +22,7 @@ const DEFAULT_FLUSH_THRESHOLD: usize = 10_000;
 pub struct DeltaStore {
     /// Table name → SkipMap mapping
     /// Using DashMap for O(1) table access
+    #[allow(clippy::type_complexity)]
     tables: DashMap<String, Arc<SkipMap<VersionedKey, Arc<Vec<u8>>>>>,
     /// Threshold to trigger flush
     flush_threshold: usize,
@@ -89,11 +90,10 @@ impl DeltaStore {
     fn to_versioned_key(key: &[u8], default_ts: u64) -> VersionedKey {
         // If it looks like a versioned key (length > 8), try to decode it.
         // Versioned keys are [user_key] + [8 bytes timestamp].
-        if key.len() > 8 {
-            if let Ok(vk) = VersionedKey::decode(key) {
+        if key.len() > 8
+            && let Ok(vk) = VersionedKey::decode(key) {
                 return vk;
             }
-        }
         VersionedKey::new(key.to_vec(), default_ts)
     }
 

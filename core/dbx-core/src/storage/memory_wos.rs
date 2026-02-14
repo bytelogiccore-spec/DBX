@@ -10,6 +10,7 @@ use std::sync::RwLock;
 
 /// In-memory WOS backend using BTreeMap
 pub struct InMemoryWosBackend {
+    #[allow(clippy::type_complexity)]
     tables: RwLock<HashMap<String, BTreeMap<Vec<u8>, Vec<u8>>>>,
 }
 
@@ -33,7 +34,7 @@ impl StorageBackend for InMemoryWosBackend {
         let mut tables = self.tables.write().unwrap();
         tables
             .entry(table.to_string())
-            .or_insert_with(BTreeMap::new)
+            .or_default()
             .insert(key.to_vec(), value.to_vec());
         Ok(())
     }

@@ -16,7 +16,7 @@ pub enum GpuHashStrategy {
 
 impl GpuHashStrategy {
     /// Parse from string (case-insensitive)
-    pub fn from_str(s: &str) -> DbxResult<Self> {
+    pub fn parse(s: &str) -> DbxResult<Self> {
         match s.to_lowercase().as_str() {
             "linear" => Ok(GpuHashStrategy::Linear),
             "cuckoo" => Ok(GpuHashStrategy::Cuckoo),
@@ -54,7 +54,7 @@ pub enum GpuReductionStrategy {
 
 impl GpuReductionStrategy {
     /// Parse from string (case-insensitive)
-    pub fn from_str(s: &str) -> DbxResult<Self> {
+    pub fn parse(s: &str) -> DbxResult<Self> {
         match s.to_lowercase().as_str() {
             "auto" => Ok(GpuReductionStrategy::Auto),
             "single" | "single_pass" => Ok(GpuReductionStrategy::SinglePass),
