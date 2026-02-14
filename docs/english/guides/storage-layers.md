@@ -38,7 +38,7 @@ DBX uses a sophisticated **5-Tier Hybrid Storage** architecture designed to opti
 └─────────────────┬───────────────────────┘
                   │
 ┌─────────────────▼───────────────────────┐
-│  Tier 3: WOS (sled)                     │  ← Persistent storage
+│  Tier 3: WOS (BTreeMap)                     │  ← Persistent storage
 │     - Write-Optimized Store             │
 │     - MVCC with Snapshot Isolation      │
 └─────────────────┬───────────────────────┘
@@ -226,12 +226,12 @@ WOS provides **persistent transactional storage**:
 
 ### Implementation
 
-Built on `sled` embedded database:
+Built on BTreeMap in-memory storage:
 
 ```rust
 // Internal structure (conceptual)
 struct WOS {
-    db: sled::Db,
+    db: BTreeMap<Vec<u8>, Vec<u8>>,
     mvcc: MvccManager,
 }
 ```
@@ -240,7 +240,7 @@ struct WOS {
 
 | Feature | Details |
 |---------|---------|
-| **Backend** | sled (embedded KV store) |
+| **Backend** | BTreeMap (in-memory KV store) |
 | **Persistence** | Disk-based |
 | **Transactions** | MVCC Snapshot Isolation |
 | **Durability** | fsync on commit |

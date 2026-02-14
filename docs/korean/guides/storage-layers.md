@@ -34,7 +34,7 @@ DBX는 트랜잭션(OLTP)과 분석(OLAP) 워크로드를 모두 최적화하기
 └─────────────────┬───────────────────────┘
                   │
 ┌─────────────────▼───────────────────────┐
-│  Tier 3: WOS (Write-Optimized Store)    │  ← 영구 트랜잭션 저장소 (sled 기반)
+│  Tier 3: WOS (Write-Optimized Store)    │  ← 인메모리 저장소 (BTreeMap)
 └─────────────────┬───────────────────────┘
                   │ Compaction
 ┌─────────────────▼───────────────────────┐
@@ -60,7 +60,7 @@ DBX는 트랜잭션(OLTP)과 분석(OLAP) 워크로드를 모두 최적화하기
 
 ### Tier 3: WOS (Write-Optimized Store)
 - **목적**: 영구적인 트랜잭션 저장 및 ACID 보장
-- **특징**: `sled` 기반의 KV 저장소, MVCC 스냅샷 격리 구현
+- **특징**: BTreeMap 기반 인메모리 KV 저장소, MVCC 스냅샷 격리 구현
 
 ### Tier 4: Index (Bloom Filter)
 - **목적**: 불필요한 디스크 I/O 최소화

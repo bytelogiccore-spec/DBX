@@ -38,7 +38,7 @@ DBX uses a sophisticated 5-tier architecture optimized for both OLTP and OLAP wo
 └─────────────────┬───────────────────────┘
                   │
 ┌─────────────────▼───────────────────────┐
-│  Tier 3: WOS (sled)                     │  ← Persistent storage
+│  Tier 3: WOS (BTreeMap)                     │  ← In-memory storage
 │     - Write-Optimized Store             │
 │     - MVCC with Snapshot Isolation      │
 └─────────────────┬───────────────────────┘
@@ -91,7 +91,7 @@ DBX uses a sophisticated 5-tier architecture optimized for both OLTP and OLAP wo
 
 **Purpose**: Persistent transactional storage
 
-**Implementation**: `sled` embedded database
+**Implementation**: BTreeMap-based in-memory storage (persistent storage planned)
 
 **Features**:
 - MVCC with Snapshot Isolation
