@@ -129,6 +129,7 @@ db.flush();
 
 ### 세션 저장소 (C++)
 
+{% raw %}
 ```cpp
 #include "dbx.hpp"
 #include <chrono>
@@ -197,9 +198,11 @@ int main() {
     return 0;
 }
 ```
+{% endraw %}
 
 ### 캐시 시스템 (C++)
 
+{% raw %}
 ```cpp
 template<typename T>
 class Cache {
@@ -273,6 +276,7 @@ int main() {
     return 0;
 }
 ```
+{% endraw %}
 
 ## 성능 최적화
 
