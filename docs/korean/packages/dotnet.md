@@ -1,7 +1,7 @@
 ---
 layout: default
 title: .NET (DBX.Dotnet)
-parent: Packages
+parent: 패키지
 grand_parent: 한국어
 nav_order: 2
 ---

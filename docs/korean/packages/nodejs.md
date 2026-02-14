@@ -1,7 +1,7 @@
 ---
 layout: default
 title: Node.js (dbx-native)
-parent: Packages
+parent: 패키지
 grand_parent: 한국어
 nav_order: 4
 ---
