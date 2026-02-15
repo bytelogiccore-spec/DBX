@@ -102,5 +102,6 @@ pub struct Database {
     pub(crate) trigger_registry: crate::engine::automation_api::TriggerRegistry,
 
     /// Parallel Execution Engine for multi-threaded query execution
+    #[allow(dead_code)]
     pub(crate) parallel_engine: Arc<crate::engine::parallel_engine::ParallelExecutionEngine>,
 }

@@ -16,6 +16,6 @@ mod integration_tests;
 
 pub use callable::{Callable, ExecutionContext, Signature};
 pub use executor::ExecutionEngine;
-pub use scheduler::{ScheduledJob, Schedule, ScheduleType, Scheduler};
+pub use scheduler::{Schedule, ScheduleType, ScheduledJob, Scheduler};
 pub use trigger::{Trigger, TriggerAction, TriggerCondition, TriggerEvent, TriggerEventType};
 pub use udf::{AggregateState, AggregateUDF, ScalarUDF, TableUDF};

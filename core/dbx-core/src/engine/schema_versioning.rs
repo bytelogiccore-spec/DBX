@@ -1,11 +1,11 @@
 //! Schema Versioning — Phase 2: Section 6.1
 //!
 //! MVCC 기반 스키마 버전 관리: 무중단 DDL (ALTER TABLE) 지원
-//! 
+//!
 //! 최적화: DashMap + 현재 스키마 캐싱으로 get_current O(1)
 
 use crate::error::{DbxError, DbxResult};
-use arrow::datatypes::{Field, Schema};
+use arrow::datatypes::Schema;
 use dashmap::DashMap;
 use std::sync::Arc;
 
@@ -70,7 +70,8 @@ impl SchemaVersionManager {
         new_schema: Arc<Schema>,
         description: &str,
     ) -> DbxResult<u64> {
-        let mut history = self.versions
+        let mut history = self
+            .versions
             .get_mut(table)
             .ok_or_else(|| DbxError::TableNotFound(table.to_string()))?;
 
@@ -99,7 +100,8 @@ impl SchemaVersionManager {
 
     /// 특정 시점의 스키마 조회 (MVCC 스냅샷)
     pub fn get_at_version(&self, table: &str, version: u64) -> DbxResult<Arc<Schema>> {
-        let history = self.versions
+        let history = self
+            .versions
             .get(table)
             .ok_or_else(|| DbxError::TableNotFound(table.to_string()))?;
 
@@ -107,7 +109,9 @@ impl SchemaVersionManager {
             .iter()
             .find(|v| v.version == version)
             .map(|v| v.schema.clone())
-            .ok_or_else(|| DbxError::Serialization(format!("Version {version} not found for {table}")))
+            .ok_or_else(|| {
+                DbxError::Serialization(format!("Version {version} not found for {table}"))
+            })
     }
 
     /// 스키마 버전 히스토리 조회
@@ -130,7 +134,8 @@ impl SchemaVersionManager {
     pub fn rollback(&self, table: &str, target_version: u64) -> DbxResult<()> {
         // 대상 버전이 존재하는지 확인 + 스키마 가져오기
         let schema = {
-            let history = self.versions
+            let history = self
+                .versions
                 .get(table)
                 .ok_or_else(|| DbxError::TableNotFound(table.to_string()))?;
 
@@ -138,12 +143,15 @@ impl SchemaVersionManager {
                 .iter()
                 .find(|v| v.version == target_version)
                 .map(|v| v.schema.clone())
-                .ok_or_else(|| DbxError::Serialization(format!(
-                    "Version {target_version} not found for {table}"
-                )))?
+                .ok_or_else(|| {
+                    DbxError::Serialization(format!(
+                        "Version {target_version} not found for {table}"
+                    ))
+                })?
         };
 
-        self.current_versions.insert(table.to_string(), target_version);
+        self.current_versions
+            .insert(table.to_string(), target_version);
         self.current_cache.insert(table.to_string(), schema);
 
         Ok(())
@@ -170,7 +178,10 @@ mod tests {
 
     fn make_schema(fields: &[(&str, DataType)]) -> Arc<Schema> {
         Arc::new(Schema::new(
-            fields.iter().map(|(n, t)| Field::new(*n, t.clone(), true)).collect::<Vec<_>>(),
+            fields
+                .iter()
+                .map(|(n, t)| Field::new(*n, t.clone(), true))
+                .collect::<Vec<_>>(),
         ))
     }
 

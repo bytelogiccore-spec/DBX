@@ -86,14 +86,13 @@ impl HashJoinOperator {
         let left_rows: usize = left_batches.iter().map(|b| b.num_rows()).sum();
         let right_rows: usize = right_batches.iter().map(|b| b.num_rows()).sum();
 
-        let (build_batches, probe_batches, build_is_left) = if right_rows < left_rows
-            && matches!(self.join_type, JoinType::Inner)
-        {
-            // Swap only for INNER JOIN (LEFT/RIGHT swap requires type conversion)
-            (right_batches, left_batches, false)
-        } else {
-            (left_batches, right_batches, true)
-        };
+        let (build_batches, probe_batches, build_is_left) =
+            if right_rows < left_rows && matches!(self.join_type, JoinType::Inner) {
+                // Swap only for INNER JOIN (LEFT/RIGHT swap requires type conversion)
+                (right_batches, left_batches, false)
+            } else {
+                (left_batches, right_batches, true)
+            };
 
         // Build hash table (병렬 처리)
         let schema = build_batches[0].schema();

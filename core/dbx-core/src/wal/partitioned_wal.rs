@@ -48,7 +48,7 @@ impl PartitionedWalWriter {
         let seq = self.sequence.fetch_add(1, Ordering::SeqCst);
         let table = Self::extract_table(&record);
 
-        let mut partition = self.partitions.entry(table).or_insert_with(Vec::new);
+        let mut partition = self.partitions.entry(table).or_default();
         partition.push(record);
 
         // 임계값 도달 시 자동 플러시
@@ -80,7 +80,7 @@ impl PartitionedWalWriter {
         let results: Vec<DbxResult<()>> = grouped
             .into_par_iter()
             .map(|(table, partition_records)| {
-                let mut partition = self.partitions.entry(table.clone()).or_insert_with(Vec::new);
+                let mut partition = self.partitions.entry(table.clone()).or_default();
                 partition.extend(partition_records);
 
                 if partition.len() >= self.flush_threshold {
@@ -180,7 +180,8 @@ impl PartitionedWalWriter {
             .append(true)
             .open(&path)
             .map_err(|source| DbxError::Io { source })?;
-        file.write_all(&serialized).map_err(|source| DbxError::Io { source })?;
+        file.write_all(&serialized)
+            .map_err(|source| DbxError::Io { source })?;
         file.flush().map_err(|source| DbxError::Io { source })?;
 
         Ok(())
@@ -278,7 +279,8 @@ mod tests {
         let wal = PartitionedWalWriter::new(dir.path().to_path_buf(), 100).unwrap();
 
         for i in 0..10 {
-            wal.append(insert_record("users", format!("k{i}").as_bytes(), b"v")).unwrap();
+            wal.append(insert_record("users", format!("k{i}").as_bytes(), b"v"))
+                .unwrap();
         }
 
         let flushed = wal.flush_all().unwrap();
@@ -296,7 +298,8 @@ mod tests {
 
         // 5개 추가 시 자동 플러시
         for i in 0..5 {
-            wal.append(insert_record("users", format!("k{i}").as_bytes(), b"v")).unwrap();
+            wal.append(insert_record("users", format!("k{i}").as_bytes(), b"v"))
+                .unwrap();
         }
 
         // 자동 플러시 후 버퍼는 비어 있어야 함

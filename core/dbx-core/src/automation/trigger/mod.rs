@@ -2,8 +2,8 @@
 //!
 //! 이벤트 기반 자동화 트리거 시스템
 
+pub mod core;
 pub mod event;
-pub mod trigger;
 
+pub use core::{Trigger, TriggerAction, TriggerCondition};
 pub use event::{TriggerEvent, TriggerEventType};
-pub use trigger::{Trigger, TriggerAction, TriggerCondition};

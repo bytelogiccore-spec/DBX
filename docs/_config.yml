@@ -6,10 +6,10 @@ theme: just-the-docs
 color_scheme: dark
 
 # Version (single source of truth for all docs)
-dbx_version: "0.0.4-beta"
-dbx_py_version: "0.0.4-beta"
-dbx_node_version: "0.0.4-beta"
-dbx_dotnet_version: "0.0.4-beta"
+dbx_version: "0.0.5-beta"
+dbx_py_version: "0.0.5-beta"
+dbx_node_version: "0.0.5-beta"
+dbx_dotnet_version: "0.0.5-beta"
 
 # Site settings
 url: https://bytelogiccore-spec.github.io

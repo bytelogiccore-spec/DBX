@@ -11,7 +11,7 @@ fn main() {
         .csharp_namespace("DBX.Native")
         .csharp_class_name("NativeMethods")
         .csharp_class_accessibility("public")
-        .generate_csharp_file(&format!("{}/NativeMethods.g.cs", output_dir))
+        .generate_csharp_file(format!("{}/NativeMethods.g.cs", output_dir))
         .unwrap();
 
     println!("cargo:rerun-if-changed=src/lib.rs");

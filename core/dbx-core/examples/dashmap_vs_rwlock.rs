@@ -14,14 +14,18 @@ const TABLES: usize = 50;
 
 fn make_schema(n: usize) -> Arc<Schema> {
     Arc::new(Schema::new(
-        (0..n).map(|i| Field::new(format!("col_{i}"), DataType::Int64, true)).collect::<Vec<_>>(),
+        (0..n)
+            .map(|i| Field::new(format!("col_{i}"), DataType::Int64, true))
+            .collect::<Vec<_>>(),
     ))
 }
 
 fn bench_rwlock(threads: usize) -> Duration {
     let map: Arc<RwLock<HashMap<String, Arc<Schema>>>> = Arc::new(RwLock::new(HashMap::new()));
     for i in 0..TABLES {
-        map.write().unwrap().insert(format!("table_{i}"), make_schema(3));
+        map.write()
+            .unwrap()
+            .insert(format!("table_{i}"), make_schema(3));
     }
 
     let start = Instant::now();
@@ -63,7 +67,10 @@ fn bench_dashmap(threads: usize) -> Duration {
 fn main() {
     println!("╔══════════════════════════════════════════════════════════════╗");
     println!("║   멀티스레드 스키마 조회: RwLock<HashMap> vs DashMap        ║");
-    println!("║   각 스레드당 {} ops                           ║", OPS_PER_THREAD);
+    println!(
+        "║   각 스레드당 {} ops                           ║",
+        OPS_PER_THREAD
+    );
     println!("╠══════════════════════════════════════════════════════════════╣");
     println!("║ Threads │ RwLock        │ DashMap       │ 속도 향상         ║");
     println!("╠═════════╪═══════════════╪═══════════════╪═══════════════════╣");
@@ -95,7 +102,13 @@ fn main() {
             rwlock_ops / 1_000_000.0,
             dashmap_ops / 1_000_000.0,
             speedup,
-            if speedup > 1.5 { "🔥" } else if speedup > 1.0 { "✅" } else { "⚠️" }
+            if speedup > 1.5 {
+                "🔥"
+            } else if speedup > 1.0 {
+                "✅"
+            } else {
+                "⚠️"
+            }
         );
     }
     println!("╚══════════════════════════════════════════════════════════════╝");

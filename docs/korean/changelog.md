@@ -14,6 +14,40 @@ DBX의 주요 변경사항을 기록합니다.
 
 ---
 
+## [0.0.5-beta] - 2026-02-16
+
+전체 언어 바인딩 API 동기화 릴리스. ● = 기존, 🆕 = 이번 릴리스에서 추가.
+
+### 바인딩 API 매트릭스
+
+| API | Node.js | Python | FFI/C | C# | C++ |
+|-----|:-------:|:------:|:-----:|:--:|:---:|
+| `open` / `open_in_memory` | ● | ● | ● | ● | ● |
+| `insert` / `get` / `delete` | ● | ● | ● | ● | ● |
+| `count` | 🆕 | 🆕 | ● | 🆕 | ● |
+| `flush` | 🆕 | 🆕 | ● | 🆕 | ● |
+| `insert_batch` | ● | 🆕 | 🆕 | 🆕 | 🆕 |
+| `scan` | 🆕 | 🆕 | 🆕 | 🆕 | 🆕 |
+| `range` | 🆕 | 🆕 | 🆕 | 🆕 | 🆕 |
+| `table_names` | 🆕 | 🆕 | 🆕 | 🆕 | 🆕 |
+| `gc` | 🆕 | 🆕 | 🆕 | 🆕 | 🆕 |
+| `is_encrypted` | 🆕 | 🆕 | 🆕 | 🆕 | 🆕 |
+| `execute_sql` | ● | 🆕 | 🆕 | 🆕 | 🆕 |
+| `create_index` / `drop_index` / `has_index` | 🆕 | 🆕 | 🆕 | 🆕 | 🆕 |
+| `save_to_file` / `load_from_file` | 🆕 | 🆕 | 🆕 | 🆕 | 🆕 |
+| `insert_versioned` | 🆕 | 🆕 | 🆕 | 🆕 | 🆕 |
+| `get_snapshot` | 🆕 | 🆕 | 🆕 | 🆕 | 🆕 |
+| `current_timestamp` / `allocate_commit_ts` | 🆕 | 🆕 | 🆕 | 🆕 | 🆕 |
+| Transaction (`begin` / `commit` / `rollback`) | ● | ● | ● | ● | 🆕 |
+
+> **FFI 참고**: 컬렉션 반환은 opaque 핸들 패턴 (`DbxScanResult`, `DbxStringList`) + 접근자 + free 함수로 구현.
+
+### 수정
+
+- `dbx-ffi`의 `clippy::manual-c-str-literals` 경고 수정 (`b"No error\0"` → `c"No error"`)
+
+---
+
 ## [0.0.4-beta] - 2026-02-15
 
 첫 번째 기능 릴리스. 쿼리 실행 파이프라인 전면 최적화.

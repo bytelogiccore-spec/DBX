@@ -8,20 +8,15 @@ use rayon::ThreadPoolBuilder;
 use std::sync::Arc;
 
 /// Parallelization policy for the execution engine
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ParallelizationPolicy {
     /// Automatically determine the number of threads based on system resources
+    #[default]
     Auto,
     /// Use a fixed number of threads
     Fixed(usize),
     /// Dynamically adjust thread count based on workload
     Adaptive,
-}
-
-impl Default for ParallelizationPolicy {
-    fn default() -> Self {
-        Self::Auto
-    }
 }
 
 /// Parallel execution engine using Rayon thread pool
@@ -34,12 +29,14 @@ impl ParallelExecutionEngine {
     /// Create a new parallel execution engine with the specified policy
     pub fn new(policy: ParallelizationPolicy) -> DbxResult<Self> {
         let num_threads = Self::determine_thread_count(policy);
-        
+
         let thread_pool = ThreadPoolBuilder::new()
             .num_threads(num_threads)
             .thread_name(|i| format!("dbx-parallel-{}", i))
             .build()
-            .map_err(|e| DbxError::NotImplemented(format!("Failed to create thread pool: {}", e)))?;
+            .map_err(|e| {
+                DbxError::NotImplemented(format!("Failed to create thread pool: {}", e))
+            })?;
 
         Ok(Self {
             thread_pool: Arc::new(thread_pool),
@@ -116,15 +113,16 @@ impl ParallelExecutionEngine {
     /// Higher complexity = fewer items per thread needed to justify parallelism
     pub fn auto_tune_weighted(&self, workload_size: usize, avg_complexity: f64) -> usize {
         let thread_count = self.thread_count();
-        
+
         match self.policy {
             ParallelizationPolicy::Auto | ParallelizationPolicy::Adaptive => {
                 // Base threshold adjusted by complexity
                 // Simple queries (complexity ~1.0): need 1000 items per thread
                 // Complex queries (complexity ~10.0): need 100 items per thread
                 let base_threshold: f64 = 1000.0;
-                let adjusted_threshold = (base_threshold / avg_complexity.max(0.1)).max(1.0) as usize;
-                
+                let adjusted_threshold =
+                    (base_threshold / avg_complexity.max(0.1)).max(1.0) as usize;
+
                 if workload_size < adjusted_threshold {
                     1
                 } else {
@@ -132,9 +130,7 @@ impl ParallelExecutionEngine {
                     optimal.max(1)
                 }
             }
-            ParallelizationPolicy::Fixed(_) => {
-                thread_count
-            }
+            ParallelizationPolicy::Fixed(_) => thread_count,
         }
     }
 
@@ -144,42 +140,48 @@ impl ParallelExecutionEngine {
     pub fn estimate_query_complexity(sql: &str) -> f64 {
         let sql_upper = sql.to_uppercase();
         let mut score = 1.0;
-        
+
         // JOIN adds complexity
         let join_count = sql_upper.matches("JOIN").count();
         score += join_count as f64 * 2.0;
-        
+
         // Subqueries
         let subquery_depth = sql_upper.matches("SELECT").count().saturating_sub(1);
         score += subquery_depth as f64 * 3.0;
-        
+
         // CTE (WITH)
         if sql_upper.contains("WITH ") {
             score += 4.0;
         }
-        
+
         // UNION
         let union_count = sql_upper.matches("UNION").count();
         score += union_count as f64 * 2.5;
-        
+
         // Aggregate functions
         for func in ["COUNT(", "SUM(", "AVG(", "MAX(", "MIN("] {
             score += sql_upper.matches(func).count() as f64 * 0.5;
         }
-        
+
         // Window functions
         if sql_upper.contains("OVER(") || sql_upper.contains("OVER (") {
             score += 3.0;
         }
-        
+
         // ORDER BY, GROUP BY
-        if sql_upper.contains("ORDER BY") { score += 0.5; }
-        if sql_upper.contains("GROUP BY") { score += 1.0; }
-        if sql_upper.contains("HAVING") { score += 1.0; }
-        
+        if sql_upper.contains("ORDER BY") {
+            score += 0.5;
+        }
+        if sql_upper.contains("GROUP BY") {
+            score += 1.0;
+        }
+        if sql_upper.contains("HAVING") {
+            score += 1.0;
+        }
+
         // Query length as proxy for complexity
         score += (sql.len() as f64 / 200.0).min(5.0);
-        
+
         score
     }
 

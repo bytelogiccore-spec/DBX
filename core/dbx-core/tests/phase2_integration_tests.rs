@@ -2,20 +2,20 @@
 //
 // 종단 간 통합 테스트: Phase 2 컴포넌트 간 상호작용 검증
 
+use dbx_core::engine::index_versioning::{IndexType, IndexVersionManager};
 use dbx_core::engine::plan::PlanCache;
+use dbx_core::engine::schema_versioning::SchemaVersionManager;
+use dbx_core::engine::{BenchmarkRunner, Feature, FeatureFlags};
 use dbx_core::error::DbxResult;
 use dbx_core::sql::executor::parallel_query::{AggregateType, ParallelQueryExecutor};
-use dbx_core::engine::schema_versioning::SchemaVersionManager;
-use dbx_core::engine::index_versioning::{IndexVersionManager, IndexType};
-use dbx_core::wal::partitioned_wal::{PartitionedWalWriter, ParallelCheckpointManager};
 use dbx_core::wal::WalRecord;
-use dbx_core::engine::{BenchmarkRunner, FeatureFlags, Feature};
+use dbx_core::wal::partitioned_wal::{ParallelCheckpointManager, PartitionedWalWriter};
 
-use arrow::array::{Int64Array, StringArray, RecordBatch};
+use arrow::array::{Int64Array, RecordBatch, StringArray};
 use arrow::datatypes::{DataType, Field, Schema};
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
-use std::path::PathBuf;
 use tempfile::tempdir;
 
 // ─── Helpers ────────────────────────────────────────────
@@ -91,8 +91,11 @@ fn test_query_plan_cache_integration() -> DbxResult<()> {
     // 캐시 크기 확인
     assert_eq!(cache.len(), 3);
 
-    println!("✅ test_query_plan_cache_integration: hit_rate={:.1}%, entries={}",
-        stats.hit_rate() * 100.0, cache.len());
+    println!(
+        "✅ test_query_plan_cache_integration: hit_rate={:.1}%, entries={}",
+        stats.hit_rate() * 100.0,
+        cache.len()
+    );
     drop(stats);
     Ok(())
 }
@@ -123,23 +126,33 @@ fn test_parallel_query_execution() {
     }
 
     // 2단계: 병렬 집계 (SUM)
-    let sum_result = executor.par_aggregate(&batches, 0, AggregateType::Sum).unwrap();
+    let sum_result = executor
+        .par_aggregate(&batches, 0, AggregateType::Sum)
+        .unwrap();
     let expected_sum: f64 = (1..=15).map(|x| x as f64).sum();
     assert_eq!(sum_result.value, expected_sum);
     assert_eq!(sum_result.count, 15);
 
     // 3단계: 병렬 집계 (AVG, MIN, MAX)
-    let avg_result = executor.par_aggregate(&batches, 0, AggregateType::Avg).unwrap();
+    let avg_result = executor
+        .par_aggregate(&batches, 0, AggregateType::Avg)
+        .unwrap();
     assert!((avg_result.value - 8.0).abs() < 0.01);
 
-    let min_result = executor.par_aggregate(&batches, 0, AggregateType::Min).unwrap();
+    let min_result = executor
+        .par_aggregate(&batches, 0, AggregateType::Min)
+        .unwrap();
     assert_eq!(min_result.value, 1.0);
 
-    let max_result = executor.par_aggregate(&batches, 0, AggregateType::Max).unwrap();
+    let max_result = executor
+        .par_aggregate(&batches, 0, AggregateType::Max)
+        .unwrap();
     assert_eq!(max_result.value, 15.0);
 
-    println!("✅ test_parallel_query_execution: SUM={}, AVG={:.1}, MIN={}, MAX={}",
-        sum_result.value, avg_result.value, min_result.value, max_result.value);
+    println!(
+        "✅ test_parallel_query_execution: SUM={}, AVG={:.1}, MIN={}, MAX={}",
+        sum_result.value, avg_result.value, min_result.value, max_result.value
+    );
 }
 
 /// 테스트 3: 무중단 DDL (Schema Versioning)
@@ -192,7 +205,10 @@ fn test_zero_downtime_ddl() -> DbxResult<()> {
     let rolled_back = mgr.get_current("users")?;
     assert_eq!(rolled_back.fields().len(), 3); // V2의 3필드
 
-    println!("✅ test_zero_downtime_ddl: {} versions, rollback OK", history.len());
+    println!(
+        "✅ test_zero_downtime_ddl: {} versions, rollback OK",
+        history.len()
+    );
     Ok(())
 }
 
@@ -223,12 +239,17 @@ fn test_wal_parallel_write() -> DbxResult<()> {
 
     // WAL 파일 존재 확인
     for table in &tables {
-        assert!(dir.path().join(format!("{table}.wal")).exists(),
-            "{table}.wal 파일이 없음");
+        assert!(
+            dir.path().join(format!("{table}.wal")).exists(),
+            "{table}.wal 파일이 없음"
+        );
     }
 
-    println!("✅ test_wal_parallel_write: {} records across {} partitions",
-        flushed, tables.len());
+    println!(
+        "✅ test_wal_parallel_write: {} records across {} partitions",
+        flushed,
+        tables.len()
+    );
     Ok(())
 }
 
@@ -266,21 +287,31 @@ fn test_schema_versioning() -> DbxResult<()> {
     let mgr = SchemaVersionManager::new();
 
     // 2개 테이블 등록
-    mgr.register_table("users", Arc::new(Schema::new(vec![
-        Field::new("id", DataType::Int64, false),
-        Field::new("name", DataType::Utf8, false),
-    ])))?;
-    mgr.register_table("orders", Arc::new(Schema::new(vec![
-        Field::new("order_id", DataType::Int64, false),
-        Field::new("total", DataType::Float64, false),
-    ])))?;
+    mgr.register_table(
+        "users",
+        Arc::new(Schema::new(vec![
+            Field::new("id", DataType::Int64, false),
+            Field::new("name", DataType::Utf8, false),
+        ])),
+    )?;
+    mgr.register_table(
+        "orders",
+        Arc::new(Schema::new(vec![
+            Field::new("order_id", DataType::Int64, false),
+            Field::new("total", DataType::Float64, false),
+        ])),
+    )?;
 
     // users만 ALTER
-    mgr.alter_table("users", Arc::new(Schema::new(vec![
-        Field::new("id", DataType::Int64, false),
-        Field::new("name", DataType::Utf8, false),
-        Field::new("email", DataType::Utf8, true),
-    ])), "add email")?;
+    mgr.alter_table(
+        "users",
+        Arc::new(Schema::new(vec![
+            Field::new("id", DataType::Int64, false),
+            Field::new("name", DataType::Utf8, false),
+            Field::new("email", DataType::Utf8, true),
+        ])),
+        "add email",
+    )?;
 
     // 독립 버전 관리 확인
     let users_ver = mgr.current_version("users")?;
@@ -288,7 +319,10 @@ fn test_schema_versioning() -> DbxResult<()> {
     assert_eq!(users_ver, 2);
     assert_eq!(orders_ver, 1);
 
-    println!("✅ test_schema_versioning: users(v{}), orders(v{})", users_ver, orders_ver);
+    println!(
+        "✅ test_schema_versioning: users(v{}), orders(v{})",
+        users_ver, orders_ver
+    );
     Ok(())
 }
 
@@ -298,7 +332,12 @@ fn test_index_versioning() -> DbxResult<()> {
     let mgr = IndexVersionManager::new();
 
     // 인덱스 생성 (Building 상태)
-    let v1 = mgr.create_index("users_email", "users", vec!["email".into()], IndexType::Hash)?;
+    let v1 = mgr.create_index(
+        "users_email",
+        "users",
+        vec!["email".into()],
+        IndexType::Hash,
+    )?;
 
     // REINDEX 시작 (새 버전 Building)
     let v2 = mgr.start_reindex("users_email", vec!["email".into()], IndexType::BTree)?;
@@ -350,9 +389,10 @@ fn test_full_optimization_stack() -> DbxResult<()> {
 
     // 4. Schema versioning
     let schema_mgr = SchemaVersionManager::new();
-    schema_mgr.register_table("users", Arc::new(Schema::new(vec![
-        Field::new("id", DataType::Int64, false),
-    ])))?;
+    schema_mgr.register_table(
+        "users",
+        Arc::new(Schema::new(vec![Field::new("id", DataType::Int64, false)])),
+    )?;
 
     // 5. Index versioning
     let idx_mgr = IndexVersionManager::new();
@@ -446,7 +486,9 @@ fn test_feature_flag_toggle() {
             make_batch(&[1, 2], &["a", "b"]),
             make_batch(&[3, 4], &["c", "d"]),
         ];
-        let result = executor.par_aggregate(&batches, 0, AggregateType::Count).unwrap();
+        let result = executor
+            .par_aggregate(&batches, 0, AggregateType::Count)
+            .unwrap();
         assert_eq!(result.count, 4);
     }
 
@@ -454,9 +496,7 @@ fn test_feature_flag_toggle() {
     flags.enable(Feature::MvccExtension);
     if flags.is_enabled(Feature::MvccExtension) {
         let mgr = SchemaVersionManager::new();
-        let schema = Arc::new(Schema::new(vec![
-            Field::new("id", DataType::Int64, false),
-        ]));
+        let schema = Arc::new(Schema::new(vec![Field::new("id", DataType::Int64, false)]));
         mgr.register_table("test", schema).unwrap();
         let ver = mgr.current_version("test").unwrap();
         assert_eq!(ver, 1);
@@ -502,9 +542,10 @@ fn test_wal_stress_write() -> DbxResult<()> {
 fn test_schema_stability() -> DbxResult<()> {
     let mgr = SchemaVersionManager::new();
 
-    mgr.register_table("evolving", Arc::new(Schema::new(vec![
-        Field::new("id", DataType::Int64, false),
-    ])))?;
+    mgr.register_table(
+        "evolving",
+        Arc::new(Schema::new(vec![Field::new("id", DataType::Int64, false)])),
+    )?;
 
     // 20번 ALTER TABLE
     for i in 1..=20 {
@@ -512,7 +553,11 @@ fn test_schema_stability() -> DbxResult<()> {
         for j in 1..=i {
             fields.push(Field::new(format!("col_{j}"), DataType::Utf8, true));
         }
-        mgr.alter_table("evolving", Arc::new(Schema::new(fields)), &format!("add col_{i}"))?;
+        mgr.alter_table(
+            "evolving",
+            Arc::new(Schema::new(fields)),
+            &format!("add col_{i}"),
+        )?;
     }
 
     let history = mgr.version_history("evolving")?;
@@ -560,7 +605,11 @@ fn test_concurrent_stability() -> DbxResult<()> {
     let stats = cache.stats();
     let hits = stats.hits.load(Ordering::Relaxed);
     let misses = stats.misses.load(Ordering::Relaxed);
-    println!("✅ test_concurrent_stability: entries={}, hits={}, misses={}",
-        cache.len(), hits, misses);
+    println!(
+        "✅ test_concurrent_stability: entries={}, hits={}, misses={}",
+        cache.len(),
+        hits,
+        misses
+    );
     Ok(())
 }

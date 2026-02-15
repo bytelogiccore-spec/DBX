@@ -36,7 +36,8 @@ impl GpuStreamContext {
     ) -> DbxResult<Self> {
         // cudarc 0.19.2: use fork_default_stream for separate stream creation
         // Note: cudarc doesn't expose priority-based stream creation directly
-        let stream = device.fork_default_stream()
+        let stream = device
+            .fork_default_stream()
             .map_err(|e| DbxError::Gpu(format!("Failed to create stream: {:?}", e)))?;
 
         Ok(Self {

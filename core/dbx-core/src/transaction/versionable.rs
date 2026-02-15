@@ -258,7 +258,8 @@ mod tests {
                 if bytes.len() < offset + 4 {
                     return Err(DbxError::Storage("Invalid tags count".into()));
                 }
-                let tags_count = u32::from_be_bytes(bytes[offset..offset + 4].try_into().unwrap()) as usize;
+                let tags_count =
+                    u32::from_be_bytes(bytes[offset..offset + 4].try_into().unwrap()) as usize;
                 offset += 4;
 
                 let mut tags = Vec::new();
@@ -266,7 +267,8 @@ mod tests {
                     if bytes.len() < offset + 4 {
                         return Err(DbxError::Storage("Invalid tag length".into()));
                     }
-                    let tag_len = u32::from_be_bytes(bytes[offset..offset + 4].try_into().unwrap()) as usize;
+                    let tag_len =
+                        u32::from_be_bytes(bytes[offset..offset + 4].try_into().unwrap()) as usize;
                     offset += 4;
                     if bytes.len() < offset + tag_len {
                         return Err(DbxError::Storage("Invalid tag data".into()));
@@ -281,7 +283,8 @@ mod tests {
                 if bytes.len() < offset + 4 {
                     return Err(DbxError::Storage("Invalid metadata count".into()));
                 }
-                let metadata_count = u32::from_be_bytes(bytes[offset..offset + 4].try_into().unwrap()) as usize;
+                let metadata_count =
+                    u32::from_be_bytes(bytes[offset..offset + 4].try_into().unwrap()) as usize;
                 offset += 4;
 
                 let mut metadata = Vec::new();
@@ -289,7 +292,8 @@ mod tests {
                     if bytes.len() < offset + 4 {
                         return Err(DbxError::Storage("Invalid metadata key length".into()));
                     }
-                    let k_len = u32::from_be_bytes(bytes[offset..offset + 4].try_into().unwrap()) as usize;
+                    let k_len =
+                        u32::from_be_bytes(bytes[offset..offset + 4].try_into().unwrap()) as usize;
                     offset += 4;
                     if bytes.len() < offset + k_len {
                         return Err(DbxError::Storage("Invalid metadata key data".into()));
@@ -301,7 +305,8 @@ mod tests {
                     if bytes.len() < offset + 4 {
                         return Err(DbxError::Storage("Invalid metadata value length".into()));
                     }
-                    let v_len = u32::from_be_bytes(bytes[offset..offset + 4].try_into().unwrap()) as usize;
+                    let v_len =
+                        u32::from_be_bytes(bytes[offset..offset + 4].try_into().unwrap()) as usize;
                     offset += 4;
                     if bytes.len() < offset + v_len {
                         return Err(DbxError::Storage("Invalid metadata value data".into()));
@@ -319,7 +324,11 @@ mod tests {
 
         let data = ComplexData {
             id: 999,
-            tags: vec!["rust".to_string(), "database".to_string(), "mvcc".to_string()],
+            tags: vec![
+                "rust".to_string(),
+                "database".to_string(),
+                "mvcc".to_string(),
+            ],
             metadata: vec![
                 ("author".to_string(), "Team C".to_string()),
                 ("version".to_string(), "1.0".to_string()),

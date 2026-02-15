@@ -110,13 +110,14 @@ impl LogicalPlanner {
                     unreachable!()
                 }
             }
-            Statement::Update { .. } => {
-                self.plan_update(statement)
-            }
-            Statement::Delete { .. } => {
-                self.plan_delete(statement)
-            }
-            Statement::Drop { names, object_type, if_exists, .. } => {
+            Statement::Update { .. } => self.plan_update(statement),
+            Statement::Delete { .. } => self.plan_delete(statement),
+            Statement::Drop {
+                names,
+                object_type,
+                if_exists,
+                ..
+            } => {
                 // DROP TABLE or DROP INDEX parsing
                 use sqlparser::ast::ObjectType;
                 match object_type {
@@ -130,7 +131,9 @@ impl LogicalPlanner {
                     ObjectType::Index => {
                         // DROP INDEX
                         if names.is_empty() {
-                            return Err(DbxError::Schema("DROP INDEX requires an index name".to_string()));
+                            return Err(DbxError::Schema(
+                                "DROP INDEX requires an index name".to_string(),
+                            ));
                         }
 
                         // Parse index name (may include table name)
@@ -152,22 +155,24 @@ impl LogicalPlanner {
                             if_exists: *if_exists,
                         })
                     }
-                    _ => {
-                        Err(DbxError::SqlNotSupported {
-                            feature: format!("DROP {:?}", object_type),
-                            hint: "Only DROP TABLE and DROP INDEX are currently supported".to_string(),
-                        })
-                    }
+                    _ => Err(DbxError::SqlNotSupported {
+                        feature: format!("DROP {:?}", object_type),
+                        hint: "Only DROP TABLE and DROP INDEX are currently supported".to_string(),
+                    }),
                 }
             }
             Statement::CreateTable(create_table) => {
                 // CREATE TABLE parsing
                 let table = create_table.name.to_string();
-                let columns: Vec<(String, String)> = create_table.columns.iter().map(|col| {
-                    let name = col.name.to_string();
-                    let type_str = col.data_type.to_string();
-                    (name, type_str)
-                }).collect();
+                let columns: Vec<(String, String)> = create_table
+                    .columns
+                    .iter()
+                    .map(|col| {
+                        let name = col.name.to_string();
+                        let type_str = col.data_type.to_string();
+                        (name, type_str)
+                    })
+                    .collect();
 
                 Ok(LogicalPlan::CreateTable {
                     table,
@@ -175,7 +180,9 @@ impl LogicalPlanner {
                     if_not_exists: create_table.if_not_exists,
                 })
             }
-            Statement::AlterTable { name, operations, .. } => {
+            Statement::AlterTable {
+                name, operations, ..
+            } => {
                 // ALTER TABLE parsing (simplified - only ADD COLUMN for now)
                 let table = name.to_string();
 
@@ -200,7 +207,10 @@ impl LogicalPlanner {
                             column_name: col_name,
                         }
                     }
-                    SqlAlterOp::RenameColumn { old_column_name, new_column_name } => {
+                    SqlAlterOp::RenameColumn {
+                        old_column_name,
+                        new_column_name,
+                    } => {
                         let old_name = old_column_name.to_string();
                         let new_name = new_column_name.to_string();
                         crate::sql::planner::types::AlterTableOperation::RenameColumn {
@@ -223,8 +233,12 @@ impl LogicalPlanner {
             }
             Statement::CreateIndex(create_index) => {
                 // CREATE INDEX parsing
-                let index_name = create_index.name.as_ref()
-                    .ok_or_else(|| DbxError::Schema("CREATE INDEX requires an index name".to_string()))?
+                let index_name = create_index
+                    .name
+                    .as_ref()
+                    .ok_or_else(|| {
+                        DbxError::Schema("CREATE INDEX requires an index name".to_string())
+                    })?
                     .to_string();
 
                 // In sqlparser 0.52, table_name is ObjectName (not Option)
@@ -232,17 +246,23 @@ impl LogicalPlanner {
 
                 // Extract column names from OrderByExpr
                 if create_index.columns.is_empty() {
-                    return Err(DbxError::Schema("CREATE INDEX requires at least one column".to_string()));
+                    return Err(DbxError::Schema(
+                        "CREATE INDEX requires at least one column".to_string(),
+                    ));
                 }
 
-                let columns: Vec<String> = create_index.columns.iter()
+                let columns: Vec<String> = create_index
+                    .columns
+                    .iter()
                     .map(|order_by_expr| {
                         // Extract column name from the expression
                         match &order_by_expr.expr {
                             sqlparser::ast::Expr::Identifier(ident) => ident.value.clone(),
-                            sqlparser::ast::Expr::CompoundIdentifier(idents) => {
-                                idents.iter().map(|i| i.value.clone()).collect::<Vec<_>>().join(".")
-                            }
+                            sqlparser::ast::Expr::CompoundIdentifier(idents) => idents
+                                .iter()
+                                .map(|i| i.value.clone())
+                                .collect::<Vec<_>>()
+                                .join("."),
                             _ => order_by_expr.expr.to_string(),
                         }
                     })
@@ -258,7 +278,10 @@ impl LogicalPlanner {
             _ => {
                 // Try to parse custom statements (CREATE FUNCTION, CREATE TRIGGER, CREATE JOB)
                 let sql = format!("{:?}", statement);
-                if sql.contains("CREATE FUNCTION") || sql.contains("CREATE TRIGGER") || sql.contains("CREATE JOB") {
+                if sql.contains("CREATE FUNCTION")
+                    || sql.contains("CREATE TRIGGER")
+                    || sql.contains("CREATE JOB")
+                {
                     self.parse_custom_statement(statement)
                 } else {
                     Err(DbxError::SqlNotSupported {
@@ -269,59 +292,59 @@ impl LogicalPlanner {
             }
         }
     }
-    
+
     /// Custom statement 파싱 (CREATE FUNCTION, CREATE TRIGGER, CREATE JOB)
     fn parse_custom_statement(&self, statement: &Statement) -> DbxResult<LogicalPlan> {
         // Statement를 문자열로 변환
         let sql = format!("{}", statement);
         let sql_upper = sql.to_uppercase();
-        
+
         // CREATE FUNCTION 파싱
         if sql_upper.contains("CREATE FUNCTION") {
             return self.parse_create_function(&sql);
         }
-        
+
         // CREATE TRIGGER 파싱
         if sql_upper.contains("CREATE TRIGGER") {
             return self.parse_create_trigger(&sql);
         }
-        
+
         // CREATE JOB 파싱
         if sql_upper.contains("CREATE JOB") {
             return self.parse_create_job(&sql);
         }
-        
+
         Err(DbxError::SqlNotSupported {
             feature: "Custom statement".to_string(),
             hint: "Only CREATE FUNCTION, CREATE TRIGGER, and CREATE JOB are supported".to_string(),
         })
     }
-    
+
     /// CREATE FUNCTION 파싱
     fn parse_create_function(&self, sql: &str) -> DbxResult<LogicalPlan> {
         // 간단한 문자열 파싱 (실제로는 더 정교한 파서 필요)
         // 예: CREATE FUNCTION add(a INT, b INT) RETURNS INT LANGUAGE rust AS 'fn add(a: i32, b: i32) -> i32 { a + b }'
-        
+
         let sql_upper = sql.to_uppercase();
-        
+
         // 함수 이름 추출 - FUNCTION 다음의 첫 단어
         let name = sql_upper
             .split("FUNCTION")
             .nth(1)
-            .and_then(|s| s.trim().split_whitespace().next())
-            .map(|s| s.to_string())
+            .and_then(|s| s.split_whitespace().next())
+            .map(ToString::to_string)
             .ok_or_else(|| DbxError::SqlParse {
                 message: "Failed to parse function name".to_string(),
                 sql: sql.to_string(),
             })?;
-        
+
         // 파라미터 추출: FUNCTION name(a INT, b INT) 형식에서 괄호 내 파라미터 파싱
         let params = if let (Some(open), Some(close)) = (sql.find('('), sql.find(')')) {
             let param_str = &sql[open + 1..close];
             param_str
                 .split(',')
                 .filter_map(|p| {
-                    let parts: Vec<&str> = p.trim().split_whitespace().collect();
+                    let parts: Vec<&str> = p.split_whitespace().collect();
                     if parts.len() >= 2 {
                         Some((parts[0].to_string(), parts[1].to_uppercase()))
                     } else {
@@ -332,7 +355,7 @@ impl LogicalPlanner {
         } else {
             vec![]
         };
-        
+
         // 반환 타입 추출
         let return_type = sql_upper
             .split("RETURNS")
@@ -340,7 +363,7 @@ impl LogicalPlanner {
             .and_then(|s| s.split("LANGUAGE").next())
             .map(|s| s.trim().to_string())
             .unwrap_or_else(|| "VOID".to_string());
-        
+
         // 언어 추출
         let language = sql_upper
             .split("LANGUAGE")
@@ -348,14 +371,14 @@ impl LogicalPlanner {
             .and_then(|s| s.split("AS").next())
             .map(|s| s.trim().to_lowercase())
             .unwrap_or_else(|| "sql".to_string());
-        
+
         // 함수 본문 추출
         let body = sql
             .split("AS")
             .nth(1)
             .map(|s| s.trim().trim_matches('\'').trim_matches('"').to_string())
             .unwrap_or_default();
-        
+
         Ok(LogicalPlan::CreateFunction {
             name,
             params,
@@ -364,11 +387,11 @@ impl LogicalPlanner {
             body,
         })
     }
-    
+
     /// CREATE TRIGGER 파싱
     fn parse_create_trigger(&self, sql: &str) -> DbxResult<LogicalPlan> {
         // 예: CREATE TRIGGER audit_log AFTER INSERT ON users FOR EACH ROW EXECUTE FUNCTION log_insert()
-        
+
         // 트리거 이름 추출
         let name = sql
             .split("TRIGGER")
@@ -379,14 +402,14 @@ impl LogicalPlanner {
                 message: "Failed to parse trigger name".to_string(),
                 sql: sql.to_string(),
             })?;
-        
+
         // 타이밍 추출 (BEFORE/AFTER)
         let timing = if sql.to_uppercase().contains("BEFORE") {
             TriggerTiming::Before
         } else {
             TriggerTiming::After
         };
-        
+
         // 이벤트 추출 (INSERT/UPDATE/DELETE)
         let event = if sql.to_uppercase().contains("INSERT") {
             TriggerEventKind::Insert
@@ -395,7 +418,7 @@ impl LogicalPlanner {
         } else {
             TriggerEventKind::Delete
         };
-        
+
         // 테이블 이름 추출
         let table = sql
             .split("ON")
@@ -403,14 +426,14 @@ impl LogicalPlanner {
             .and_then(|s| s.split_whitespace().next())
             .map(|s| s.trim().to_string())
             .unwrap_or_default();
-        
+
         // FOR EACH 추출
         let for_each = if sql.to_uppercase().contains("FOR EACH ROW") {
             ForEachKind::Row
         } else {
             ForEachKind::Statement
         };
-        
+
         // 함수 이름 추출
         let function = sql
             .split("FUNCTION")
@@ -418,7 +441,7 @@ impl LogicalPlanner {
             .and_then(|s| s.split('(').next())
             .map(|s| s.trim().to_string())
             .unwrap_or_default();
-        
+
         Ok(LogicalPlan::CreateTrigger {
             name,
             timing,
@@ -428,11 +451,11 @@ impl LogicalPlanner {
             function,
         })
     }
-    
+
     /// CREATE JOB 파싱
     fn parse_create_job(&self, sql: &str) -> DbxResult<LogicalPlan> {
         // 예: CREATE JOB cleanup_old_data SCHEDULE '0 0 * * *' EXECUTE FUNCTION cleanup()
-        
+
         // 작업 이름 추출
         let name = sql
             .split("JOB")
@@ -443,7 +466,7 @@ impl LogicalPlanner {
                 message: "Failed to parse job name".to_string(),
                 sql: sql.to_string(),
             })?;
-        
+
         // 스케줄 추출
         let schedule = sql
             .split("SCHEDULE")
@@ -451,7 +474,7 @@ impl LogicalPlanner {
             .and_then(|s| s.split("EXECUTE").next())
             .map(|s| s.trim().trim_matches('\'').trim_matches('"').to_string())
             .unwrap_or_default();
-        
+
         // 함수 이름 추출
         let function = sql
             .split("FUNCTION")
@@ -459,7 +482,7 @@ impl LogicalPlanner {
             .and_then(|s| s.split('(').next())
             .map(|s| s.trim().to_string())
             .unwrap_or_default();
-        
+
         Ok(LogicalPlan::CreateJob {
             name,
             schedule,
@@ -1260,16 +1283,22 @@ mod tests {
             _ => panic!("Expected INSERT plan"),
         }
     }
-    
+
     #[test]
     fn test_create_function_parser() {
         let planner = LogicalPlanner::new();
         let sql = "CREATE FUNCTION add RETURNS INT LANGUAGE rust AS 'fn add(a: i32, b: i32) -> i32 { a + b }'";
-        
+
         let result = planner.parse_create_function(sql);
         assert!(result.is_ok());
-        
-        if let Ok(LogicalPlan::CreateFunction { name, return_type, language, .. }) = result {
+
+        if let Ok(LogicalPlan::CreateFunction {
+            name,
+            return_type,
+            language,
+            ..
+        }) = result
+        {
             assert_eq!(name, "ADD"); // 대문자로 파싱됨
             assert_eq!(return_type, "INT");
             assert_eq!(language, "rust");
@@ -1277,16 +1306,24 @@ mod tests {
             panic!("Expected CreateFunction plan");
         }
     }
-    
+
     #[test]
     fn test_create_trigger_parser() {
         let planner = LogicalPlanner::new();
         let sql = "CREATE TRIGGER audit_log AFTER INSERT ON users FOR EACH ROW EXECUTE FUNCTION log_insert";
-        
+
         let result = planner.parse_create_trigger(sql);
         assert!(result.is_ok());
-        
-        if let Ok(LogicalPlan::CreateTrigger { name, timing, event, table, for_each, function }) = result {
+
+        if let Ok(LogicalPlan::CreateTrigger {
+            name,
+            timing,
+            event,
+            table,
+            for_each,
+            function,
+        }) = result
+        {
             assert_eq!(name, "audit_log");
             assert_eq!(timing, TriggerTiming::After);
             assert_eq!(event, TriggerEventKind::Insert);
@@ -1297,16 +1334,21 @@ mod tests {
             panic!("Expected CreateTrigger plan");
         }
     }
-    
+
     #[test]
     fn test_create_job_parser() {
         let planner = LogicalPlanner::new();
         let sql = "CREATE JOB cleanup_old_data SCHEDULE '0 0 * * *' EXECUTE FUNCTION cleanup";
-        
+
         let result = planner.parse_create_job(sql);
         assert!(result.is_ok());
-        
-        if let Ok(LogicalPlan::CreateJob { name, schedule, function }) = result {
+
+        if let Ok(LogicalPlan::CreateJob {
+            name,
+            schedule,
+            function,
+        }) = result
+        {
             assert_eq!(name, "cleanup_old_data");
             assert_eq!(schedule, "0 0 * * *");
             assert_eq!(function, "cleanup");

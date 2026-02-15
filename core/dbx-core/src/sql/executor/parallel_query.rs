@@ -72,13 +72,13 @@ impl ParallelQueryExecutor {
             // Sequential fallback (소규모 데이터)
             return batches
                 .iter()
-                .filter_map(|batch| {
-                    match Self::apply_filter_to_batch(batch, predicate) {
+                .filter_map(
+                    |batch| match Self::apply_filter_to_batch(batch, predicate) {
                         Ok(Some(b)) if b.num_rows() > 0 => Some(Ok(b)),
                         Ok(_) => None,
                         Err(e) => Some(Err(e)),
-                    }
-                })
+                    },
+                )
                 .collect();
         }
 
@@ -111,16 +111,16 @@ impl ParallelQueryExecutor {
         }
 
         // 행 수 기반 순차/병렬 분기
-        let partials: Vec<DbxResult<PartialAggregate>> =
-            if self.should_parallelize(batches) {
-                self.run_parallel(batches, |batch| {
-                    Self::partial_aggregate(batch, column_idx, agg_type)
-                })
-            } else {
-                batches.iter().map(|batch| {
-                    Self::partial_aggregate(batch, column_idx, agg_type)
-                }).collect()
-            };
+        let partials: Vec<DbxResult<PartialAggregate>> = if self.should_parallelize(batches) {
+            self.run_parallel(batches, |batch| {
+                Self::partial_aggregate(batch, column_idx, agg_type)
+            })
+        } else {
+            batches
+                .iter()
+                .map(|batch| Self::partial_aggregate(batch, column_idx, agg_type))
+                .collect()
+        };
 
         // Phase 2: merge partial results
         let mut merged = PartialAggregate::empty(agg_type);
@@ -226,9 +226,9 @@ impl ParallelQueryExecutor {
         F: Fn(&RecordBatch) -> T + Sync,
     {
         if let Some(pool) = &self.thread_pool {
-            pool.install(|| batches.par_iter().map(|b| op(b)).collect())
+            pool.install(|| batches.par_iter().map(&op).collect())
         } else {
-            batches.par_iter().map(|b| op(b)).collect()
+            batches.par_iter().map(&op).collect()
         }
     }
 }
@@ -273,27 +273,54 @@ impl PartialAggregate {
     fn accumulate(&mut self, val: f64) {
         self.sum += val;
         self.count += 1;
-        if val < self.min { self.min = val; }
-        if val > self.max { self.max = val; }
+        if val < self.min {
+            self.min = val;
+        }
+        if val > self.max {
+            self.max = val;
+        }
     }
 
     fn merge(&mut self, other: &PartialAggregate) {
         self.sum += other.sum;
         self.count += other.count;
-        if other.min < self.min { self.min = other.min; }
-        if other.max > self.max { self.max = other.max; }
+        if other.min < self.min {
+            self.min = other.min;
+        }
+        if other.max > self.max {
+            self.max = other.max;
+        }
     }
 
     fn finalize(&self) -> AggregateResult {
         match self.agg_type {
-            AggregateType::Sum => AggregateResult { value: self.sum, count: self.count },
-            AggregateType::Count => AggregateResult { value: self.count as f64, count: self.count },
+            AggregateType::Sum => AggregateResult {
+                value: self.sum,
+                count: self.count,
+            },
+            AggregateType::Count => AggregateResult {
+                value: self.count as f64,
+                count: self.count,
+            },
             AggregateType::Avg => {
-                let avg = if self.count > 0 { self.sum / self.count as f64 } else { 0.0 };
-                AggregateResult { value: avg, count: self.count }
+                let avg = if self.count > 0 {
+                    self.sum / self.count as f64
+                } else {
+                    0.0
+                };
+                AggregateResult {
+                    value: avg,
+                    count: self.count,
+                }
             }
-            AggregateType::Min => AggregateResult { value: self.min, count: self.count },
-            AggregateType::Max => AggregateResult { value: self.max, count: self.count },
+            AggregateType::Min => AggregateResult {
+                value: self.min,
+                count: self.count,
+            },
+            AggregateType::Max => AggregateResult {
+                value: self.max,
+                count: self.count,
+            },
         }
     }
 }
@@ -307,7 +334,10 @@ pub struct AggregateResult {
 
 impl AggregateResult {
     fn empty(_agg_type: AggregateType) -> Self {
-        Self { value: 0.0, count: 0 }
+        Self {
+            value: 0.0,
+            count: 0,
+        }
     }
 }
 
@@ -341,7 +371,9 @@ mod tests {
             make_test_batch(&[7, 8, 9], &["g", "h", "i"]),
         ];
 
-        let result = executor.par_aggregate(&batches, 0, AggregateType::Sum).unwrap();
+        let result = executor
+            .par_aggregate(&batches, 0, AggregateType::Sum)
+            .unwrap();
         assert_eq!(result.value, 45.0); // 1+2+...+9
         assert_eq!(result.count, 9);
     }
@@ -354,7 +386,9 @@ mod tests {
             make_test_batch(&[30, 40], &["c", "d"]),
         ];
 
-        let result = executor.par_aggregate(&batches, 0, AggregateType::Avg).unwrap();
+        let result = executor
+            .par_aggregate(&batches, 0, AggregateType::Avg)
+            .unwrap();
         assert_eq!(result.value, 25.0);
     }
 
@@ -366,10 +400,14 @@ mod tests {
             make_test_batch(&[3, 9, 2], &["d", "e", "f"]),
         ];
 
-        let min_result = executor.par_aggregate(&batches, 0, AggregateType::Min).unwrap();
+        let min_result = executor
+            .par_aggregate(&batches, 0, AggregateType::Min)
+            .unwrap();
         assert_eq!(min_result.value, 1.0);
 
-        let max_result = executor.par_aggregate(&batches, 0, AggregateType::Max).unwrap();
+        let max_result = executor
+            .par_aggregate(&batches, 0, AggregateType::Max)
+            .unwrap();
         assert_eq!(max_result.value, 9.0);
     }
 
@@ -393,7 +431,9 @@ mod tests {
         let executor = ParallelQueryExecutor::new();
         let batches: Vec<RecordBatch> = vec![];
 
-        let result = executor.par_aggregate(&batches, 0, AggregateType::Count).unwrap();
+        let result = executor
+            .par_aggregate(&batches, 0, AggregateType::Count)
+            .unwrap();
         assert_eq!(result.count, 0);
     }
 }

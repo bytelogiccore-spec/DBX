@@ -14,8 +14,11 @@ extern "C" {
 #include <stddef.h>
 #include <stdint.h>
 
-/* Opaque handle to a DBX database instance */
+/* Opaque handles */
 typedef struct DbxHandle DbxHandle;
+typedef struct DbxTransaction DbxTransaction;
+typedef struct DbxScanResult DbxScanResult;
+typedef struct DbxStringList DbxStringList;
 
 /* Error codes */
 #define DBX_OK 0
@@ -23,33 +26,20 @@ typedef struct DbxHandle DbxHandle;
 #define DBX_ERR_INVALID_UTF8 -2
 #define DBX_ERR_DATABASE -3
 #define DBX_ERR_NOT_FOUND -4
+#define DBX_ERR_INVALID_OP -5
 
-/**
- * Open a database at the given path
- * 
- * @param path Path to the database file (null-terminated string)
- * @return Database handle or NULL on error
- */
+/* ========================================
+ * Constructors
+ * ======================================== */
+
 DbxHandle* dbx_open(const char* path);
-
-/**
- * Open an in-memory database
- * 
- * @return Database handle or NULL on error
- */
 DbxHandle* dbx_open_in_memory(void);
+DbxHandle* dbx_load_from_file(const char* path);
 
-/**
- * Insert a key-value pair into a table
- * 
- * @param handle Database handle
- * @param table Table name (null-terminated string)
- * @param key Key data
- * @param key_len Length of key data
- * @param value Value data
- * @param value_len Length of value data
- * @return DBX_OK on success, error code otherwise
- */
+/* ========================================
+ * CRUD Operations
+ * ======================================== */
+
 int dbx_insert(
     DbxHandle* handle,
     const char* table,
@@ -59,17 +49,6 @@ int dbx_insert(
     size_t value_len
 );
 
-/**
- * Get a value by key from a table
- * 
- * @param handle Database handle
- * @param table Table name (null-terminated string)
- * @param key Key data
- * @param key_len Length of key data
- * @param out_value Pointer to receive value data (must be freed with dbx_free_value)
- * @param out_len Pointer to receive value length
- * @return DBX_OK on success, DBX_ERR_NOT_FOUND if key not found, error code otherwise
- */
 int dbx_get(
     DbxHandle* handle,
     const char* table,
@@ -79,15 +58,6 @@ int dbx_get(
     size_t* out_len
 );
 
-/**
- * Delete a key from a table
- * 
- * @param handle Database handle
- * @param table Table name (null-terminated string)
- * @param key Key data
- * @param key_len Length of key data
- * @return DBX_OK on success, error code otherwise
- */
 int dbx_delete(
     DbxHandle* handle,
     const char* table,
@@ -95,61 +65,122 @@ int dbx_delete(
     size_t key_len
 );
 
-/**
- * Count rows in a table
- * 
- * @param handle Database handle
- * @param table Table name (null-terminated string)
- * @param out_count Pointer to receive row count
- * @return DBX_OK on success, error code otherwise
- */
-int dbx_count(
+/* ========================================
+ * Batch Operations
+ * ======================================== */
+
+int dbx_insert_batch(
     DbxHandle* handle,
     const char* table,
-    size_t* out_count
+    const uint8_t** keys,
+    const size_t* key_lens,
+    const uint8_t** values,
+    const size_t* value_lens,
+    size_t count
 );
 
-/**
- * Flush database to disk
- * 
- * @param handle Database handle
- * @return DBX_OK on success, error code otherwise
- */
+int dbx_scan(
+    DbxHandle* handle,
+    const char* table,
+    DbxScanResult** out_result
+);
+
+int dbx_range(
+    DbxHandle* handle,
+    const char* table,
+    const uint8_t* start_key,
+    size_t start_key_len,
+    const uint8_t* end_key,
+    size_t end_key_len,
+    DbxScanResult** out_result
+);
+
+/* Scan result accessors */
+size_t dbx_scan_result_count(const DbxScanResult* result);
+int dbx_scan_result_key(const DbxScanResult* result, size_t index,
+                        const uint8_t** out_key, size_t* out_key_len);
+int dbx_scan_result_value(const DbxScanResult* result, size_t index,
+                          const uint8_t** out_value, size_t* out_value_len);
+void dbx_scan_result_free(DbxScanResult* result);
+
+/* ========================================
+ * Utility Operations
+ * ======================================== */
+
+int dbx_count(DbxHandle* handle, const char* table, size_t* out_count);
 int dbx_flush(DbxHandle* handle);
+int dbx_table_names(DbxHandle* handle, DbxStringList** out_list);
+int dbx_gc(DbxHandle* handle, size_t* out_deleted);
+int dbx_is_encrypted(DbxHandle* handle);
 
-/**
- * Free a value returned by dbx_get
- * 
- * @param value Value pointer to free
- * @param len Length of value
- */
+/* String list accessors */
+size_t dbx_string_list_count(const DbxStringList* list);
+int dbx_string_list_get(const DbxStringList* list, size_t index,
+                        const uint8_t** out_str, size_t* out_len);
+void dbx_string_list_free(DbxStringList* list);
+
+/* ========================================
+ * SQL Operations
+ * ======================================== */
+
+int dbx_execute_sql(
+    DbxHandle* handle,
+    const char* sql,
+    size_t* out_affected
+);
+
+/* ========================================
+ * Index Operations
+ * ======================================== */
+
+int dbx_create_index(DbxHandle* handle, const char* table, const char* column);
+int dbx_drop_index(DbxHandle* handle, const char* table, const char* column);
+int dbx_has_index(DbxHandle* handle, const char* table, const char* column);
+
+/* ========================================
+ * Snapshot Operations
+ * ======================================== */
+
+int dbx_save_to_file(DbxHandle* handle, const char* path);
+
+/* ========================================
+ * MVCC Operations
+ * ======================================== */
+
+uint64_t dbx_current_timestamp(DbxHandle* handle);
+uint64_t dbx_allocate_commit_ts(DbxHandle* handle);
+
+int dbx_insert_versioned(
+    DbxHandle* handle,
+    const char* table,
+    const uint8_t* key,
+    size_t key_len,
+    const uint8_t* value,
+    size_t value_len,
+    uint64_t commit_ts
+);
+
+int dbx_get_snapshot(
+    DbxHandle* handle,
+    const char* table,
+    const uint8_t* key,
+    size_t key_len,
+    uint64_t read_ts,
+    uint8_t** out_value,
+    size_t* out_len
+);
+
+/* ========================================
+ * Memory Management
+ * ======================================== */
+
 void dbx_free_value(uint8_t* value, size_t len);
-
-/**
- * Close the database and free resources
- * 
- * @param handle Database handle
- */
 void dbx_close(DbxHandle* handle);
-
-/**
- * Get the last error message
- * 
- * @return Error message string (static, do not free)
- */
 const char* dbx_last_error(void);
-
 
 /* ========================================
  * Transaction API
- * ========================================
- * 
- * IMPORTANT: Always use transactions for bulk operations!
- * Performance: ~235K ops/sec (vs ~80K without transactions)
- */
-
-/* Opaque handle to a transaction */
-typedef struct DbxTransaction DbxTransaction;
+ * ======================================== */
 
 DbxTransaction* dbx_begin_transaction(DbxHandle* handle);
 

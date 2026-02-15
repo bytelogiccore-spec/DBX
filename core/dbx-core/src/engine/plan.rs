@@ -2,12 +2,11 @@
 //!
 //! DashMap 기반 lock-free 캐시 + 2단계 캐싱(L1 메모리, L2 디스크) + 통계
 
-use crate::error::DbxResult;
 use dashmap::DashMap;
 use sqlparser::ast::Statement;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 /// SQL 실행 계획 캐시 (Phase 2: DashMap + 2-level + 통계)
 pub struct PlanCache {
@@ -50,7 +49,11 @@ impl CacheStats {
     pub fn hit_rate(&self) -> f64 {
         let hits = self.hits.load(Ordering::Relaxed);
         let total = hits + self.misses.load(Ordering::Relaxed);
-        if total == 0 { 0.0 } else { hits as f64 / total as f64 }
+        if total == 0 {
+            0.0
+        } else {
+            hits as f64 / total as f64
+        }
     }
 
     /// Total requests
@@ -115,17 +118,20 @@ impl PlanCache {
     /// L1에만 삽입 (LFU eviction)
     fn insert_l1(&self, sql: String, statement: Statement) {
         // Eviction: L1이 가득 차면 가장 적게 사용된 항목 제거
-        if self.l1.len() >= self.max_l1_size {
-            if let Some(lru_key) = self.find_lfu_key() {
-                self.l1.remove(&lru_key);
-                self.stats.evictions.fetch_add(1, Ordering::Relaxed);
-            }
+        if self.l1.len() >= self.max_l1_size
+            && let Some(lru_key) = self.find_lfu_key()
+        {
+            self.l1.remove(&lru_key);
+            self.stats.evictions.fetch_add(1, Ordering::Relaxed);
         }
 
-        self.l1.insert(sql, CachedPlan {
-            statement,
-            hit_count: 0,
-        });
+        self.l1.insert(
+            sql,
+            CachedPlan {
+                statement,
+                hit_count: 0,
+            },
+        );
     }
 
     /// LFU(Least Frequently Used) key 찾기
@@ -163,10 +169,7 @@ impl PlanCache {
             use sqlparser::dialect::GenericDialect;
             use sqlparser::parser::Parser;
             let dialect = GenericDialect {};
-            Parser::parse_sql(&dialect, sql)
-                .ok()?
-                .into_iter()
-                .next()
+            Parser::parse_sql(&dialect, sql).ok()?.into_iter().next()
         } else {
             None
         }
@@ -263,8 +266,8 @@ mod tests {
         let sql = "SELECT * FROM users";
         cache.insert(sql.to_string(), parse_one(sql));
 
-        cache.get(sql);  // hit
-        cache.get(sql);  // hit
+        cache.get(sql); // hit
+        cache.get(sql); // hit
         cache.get("SELECT 1"); // miss
 
         assert_eq!(cache.stats().hits.load(Ordering::Relaxed), 2);

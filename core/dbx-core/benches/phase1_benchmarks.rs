@@ -4,7 +4,7 @@
 // Section 2: 병렬 SQL 파싱 (단일 vs 배치 성능 비교)
 // Section 3: MVCC 버전 관리 (add_version, get_at_snapshot 성능)
 
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, black_box, criterion_group, criterion_main};
 use dbx_core::engine::{ParallelExecutionEngine, TwoLevelCache};
 use dbx_core::sql::ParallelSqlParser;
 use dbx_core::transaction::{TimestampOracle, VersionManager};
@@ -17,11 +17,11 @@ use std::sync::Arc;
 
 fn bench_two_level_cache(c: &mut Criterion) {
     let mut group = c.benchmark_group("two_level_cache");
-    
+
     // L1 캐시 벤치마크 (메모리)
     let cache_l1 = TwoLevelCache::new(10 * 1024 * 1024, PathBuf::from("target/bench_cache_l1"));
     let _ = cache_l1.clear();
-    
+
     group.bench_function("l1_put_1kb", |b| {
         let mut counter = 0;
         b.iter(|| {
@@ -31,12 +31,12 @@ fn bench_two_level_cache(c: &mut Criterion) {
             counter += 1;
         })
     });
-    
+
     // L1 캐시에 데이터 미리 저장
     for i in 0..100 {
         cache_l1.put(format!("key_{}", i), vec![0u8; 1024]).unwrap();
     }
-    
+
     group.bench_function("l1_get_1kb", |b| {
         let mut counter = 0;
         b.iter(|| {
@@ -45,11 +45,11 @@ fn bench_two_level_cache(c: &mut Criterion) {
             counter += 1;
         })
     });
-    
+
     // L2 캐시 벤치마크 (디스크)
     let cache_l2 = TwoLevelCache::new(10, PathBuf::from("target/bench_cache_l2")); // 작은 L1으로 L2 강제
     let _ = cache_l2.clear();
-    
+
     group.bench_function("l2_put_1kb", |b| {
         let mut counter = 0;
         b.iter(|| {
@@ -59,9 +59,9 @@ fn bench_two_level_cache(c: &mut Criterion) {
             counter += 1;
         })
     });
-    
+
     group.finish();
-    
+
     // 정리
     let _ = cache_l1.clear();
     let _ = cache_l2.clear();
@@ -73,16 +73,18 @@ fn bench_two_level_cache(c: &mut Criterion) {
 
 fn bench_parallel_sql_parser(c: &mut Criterion) {
     let mut group = c.benchmark_group("parallel_sql_parser");
-    
+
     let parser = ParallelSqlParser::new();
-    
+
     // 단일 SQL 파싱 (베이스라인)
     group.bench_function("single_parse", |b| {
         b.iter(|| {
-            parser.parse(black_box("SELECT * FROM users WHERE id = 1")).unwrap()
+            parser
+                .parse(black_box("SELECT * FROM users WHERE id = 1"))
+                .unwrap()
         })
     });
-    
+
     // 배치 SQL 파싱 (목표: 8-10x)
     let sqls_10: Vec<&str> = vec![
         "SELECT * FROM users WHERE id = 1",
@@ -96,24 +98,20 @@ fn bench_parallel_sql_parser(c: &mut Criterion) {
         "SELECT * FROM tags WHERE product_id = 1",
         "SELECT * FROM wishlists WHERE user_id = 1",
     ];
-    
+
     group.bench_function("batch_parse_10", |b| {
-        b.iter(|| {
-            parser.parse_batch(black_box(&sqls_10)).unwrap()
-        })
+        b.iter(|| parser.parse_batch(black_box(&sqls_10)).unwrap())
     });
-    
+
     let sqls_100: Vec<String> = (0..100)
         .map(|i| format!("SELECT * FROM table_{} WHERE id = {}", i % 10, i))
         .collect();
     let sqls_100_refs: Vec<&str> = sqls_100.iter().map(|s| s.as_str()).collect();
-    
+
     group.bench_function("batch_parse_100", |b| {
-        b.iter(|| {
-            parser.parse_batch(black_box(&sqls_100_refs)).unwrap()
-        })
+        b.iter(|| parser.parse_batch(black_box(&sqls_100_refs)).unwrap())
     });
-    
+
     group.finish();
 }
 
@@ -123,10 +121,10 @@ fn bench_parallel_sql_parser(c: &mut Criterion) {
 
 fn bench_version_manager(c: &mut Criterion) {
     let mut group = c.benchmark_group("version_manager");
-    
+
     let oracle = Arc::new(TimestampOracle::new(1));
     let manager = VersionManager::<String>::new(Arc::clone(&oracle));
-    
+
     // add_version 벤치마크
     group.bench_function("add_version", |b| {
         let mut counter = 0;
@@ -138,7 +136,7 @@ fn bench_version_manager(c: &mut Criterion) {
             counter += 1;
         })
     });
-    
+
     // 데이터 미리 추가
     for i in 0..1000 {
         let key = format!("key_{}", i % 100).into_bytes();
@@ -146,7 +144,7 @@ fn bench_version_manager(c: &mut Criterion) {
         let ts = oracle.as_ref().next();
         manager.add_version(key, value, ts);
     }
-    
+
     // get_at_snapshot 벤치마크
     let snapshot_ts = oracle.as_ref().read();
     group.bench_function("get_at_snapshot", |b| {
@@ -157,7 +155,7 @@ fn bench_version_manager(c: &mut Criterion) {
             counter += 1;
         })
     });
-    
+
     group.finish();
 }
 

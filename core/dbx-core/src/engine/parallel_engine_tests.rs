@@ -3,9 +3,9 @@
 //! These tests verify that the new parallel features work correctly with
 //! existing database functionality and don't break any existing features.
 
+use crate::Database;
 use crate::engine::{ParallelExecutionEngine, ParallelizationPolicy};
 use crate::sql::ParallelSqlParser;
-use crate::Database;
 use std::sync::Arc;
 
 #[test]
@@ -198,7 +198,12 @@ fn test_parallel_batch_insert_performance() {
 
     // Generate batch of INSERT statements
     let sqls: Vec<String> = (0..10)
-        .map(|i| format!("INSERT INTO test_table (id, value) VALUES ({}, 'value_{}')", i, i))
+        .map(|i| {
+            format!(
+                "INSERT INTO test_table (id, value) VALUES ({}, 'value_{}')",
+                i, i
+            )
+        })
         .collect();
     let sql_refs: Vec<&str> = sqls.iter().map(|s| s.as_str()).collect();
 

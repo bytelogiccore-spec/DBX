@@ -136,7 +136,9 @@ pub enum DbxError {
     LockPoisoned,
 
     /// Performance regression detected
-    #[error("performance regression detected for '{name}': baseline={baseline:.2}ms, current={current:.2}ms, ratio={ratio:.2}x")]
+    #[error(
+        "performance regression detected for '{name}': baseline={baseline:.2}ms, current={current:.2}ms, ratio={ratio:.2}x"
+    )]
     PerformanceRegression {
         name: String,
         baseline: f64,

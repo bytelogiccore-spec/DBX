@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "dbx-py"
-version = "0.0.4b0"
+version = "0.0.5b0"
 description = "Python bindings for DBX high-performance database"
 readme = "README.md"
 requires-python = ">=3.8"

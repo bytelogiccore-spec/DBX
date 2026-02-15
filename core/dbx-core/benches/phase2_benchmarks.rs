@@ -5,15 +5,15 @@
 // Section 3: WAL 병렬 쓰기 (PartitionedWalWriter)
 // Section 4: 스키마/인덱스 버전 관리
 
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, black_box, criterion_group, criterion_main};
+use dbx_core::engine::index_versioning::{IndexType, IndexVersionManager};
 use dbx_core::engine::plan::PlanCache;
-use dbx_core::sql::executor::parallel_query::{AggregateType, ParallelQueryExecutor};
 use dbx_core::engine::schema_versioning::SchemaVersionManager;
-use dbx_core::engine::index_versioning::{IndexVersionManager, IndexType};
-use dbx_core::wal::partitioned_wal::PartitionedWalWriter;
+use dbx_core::sql::executor::parallel_query::{AggregateType, ParallelQueryExecutor};
 use dbx_core::wal::WalRecord;
+use dbx_core::wal::partitioned_wal::PartitionedWalWriter;
 
-use arrow::array::{Int64Array, StringArray, RecordBatch};
+use arrow::array::{Int64Array, RecordBatch, StringArray};
 use arrow::datatypes::{DataType, Field, Schema};
 use std::sync::Arc;
 use tempfile::tempdir;
@@ -60,7 +60,11 @@ fn bench_plan_cache(c: &mut Criterion) {
     group.bench_function("l1_cache_hit", |b| {
         let mut counter = 0;
         b.iter(|| {
-            let sql = format!("SELECT * FROM t{} WHERE id = {}", counter % 20, counter % 200);
+            let sql = format!(
+                "SELECT * FROM t{} WHERE id = {}",
+                counter % 20,
+                counter % 200
+            );
             let _ = cache.get(black_box(&sql));
             counter += 1;
         })
@@ -101,19 +105,25 @@ fn bench_parallel_query(c: &mut Criterion) {
 
     group.bench_function("sum_15rows", |b| {
         b.iter(|| {
-            executor.par_aggregate(black_box(&batches_small), 0, AggregateType::Sum).unwrap()
+            executor
+                .par_aggregate(black_box(&batches_small), 0, AggregateType::Sum)
+                .unwrap()
         })
     });
 
     group.bench_function("sum_150rows", |b| {
         b.iter(|| {
-            executor.par_aggregate(black_box(&batches_large), 0, AggregateType::Sum).unwrap()
+            executor
+                .par_aggregate(black_box(&batches_large), 0, AggregateType::Sum)
+                .unwrap()
         })
     });
 
     group.bench_function("project_150rows", |b| {
         b.iter(|| {
-            executor.par_project(black_box(&batches_large), &[0]).unwrap()
+            executor
+                .par_project(black_box(&batches_large), &[0])
+                .unwrap()
         })
     });
 
@@ -151,7 +161,8 @@ fn bench_wal_write(c: &mut Criterion) {
                 key: format!("k{i}").into_bytes(),
                 value: b"val".to_vec(),
                 ts: 0,
-            }).unwrap();
+            })
+            .unwrap();
         }
         b.iter(|| {
             let _ = wal.flush_all();
@@ -188,9 +199,11 @@ fn bench_schema_index(c: &mut Criterion) {
     // 스키마 등록 + ALTER
     group.bench_function("schema_alter", |b| {
         let mgr = SchemaVersionManager::new();
-        mgr.register_table("bench", Arc::new(Schema::new(vec![
-            Field::new("id", DataType::Int64, false),
-        ]))).unwrap();
+        mgr.register_table(
+            "bench",
+            Arc::new(Schema::new(vec![Field::new("id", DataType::Int64, false)])),
+        )
+        .unwrap();
         let mut counter = 0;
         b.iter(|| {
             counter += 1;
@@ -198,21 +211,29 @@ fn bench_schema_index(c: &mut Criterion) {
                 Field::new("id", DataType::Int64, false),
                 Field::new(format!("col_{counter}"), DataType::Utf8, true),
             ]));
-            mgr.alter_table("bench", black_box(schema), "bench alter").unwrap();
+            mgr.alter_table("bench", black_box(schema), "bench alter")
+                .unwrap();
         })
     });
 
     // 스키마 get_current
     group.bench_function("schema_get_current", |b| {
         let mgr = SchemaVersionManager::new();
-        mgr.register_table("bench", Arc::new(Schema::new(vec![
-            Field::new("id", DataType::Int64, false),
-        ]))).unwrap();
+        mgr.register_table(
+            "bench",
+            Arc::new(Schema::new(vec![Field::new("id", DataType::Int64, false)])),
+        )
+        .unwrap();
         for i in 0..50 {
-            mgr.alter_table("bench", Arc::new(Schema::new(vec![
-                Field::new("id", DataType::Int64, false),
-                Field::new(format!("col_{i}"), DataType::Utf8, true),
-            ])), "alter").unwrap();
+            mgr.alter_table(
+                "bench",
+                Arc::new(Schema::new(vec![
+                    Field::new("id", DataType::Int64, false),
+                    Field::new(format!("col_{i}"), DataType::Utf8, true),
+                ])),
+                "alter",
+            )
+            .unwrap();
         }
         b.iter(|| {
             let _ = mgr.get_current(black_box("bench"));
@@ -226,7 +247,12 @@ fn bench_schema_index(c: &mut Criterion) {
         b.iter(|| {
             counter += 1;
             let name = format!("idx_{counter}");
-            let _ = mgr.create_index(black_box(&name), "bench", vec!["col".into()], IndexType::Hash);
+            let _ = mgr.create_index(
+                black_box(&name),
+                "bench",
+                vec!["col".into()],
+                IndexType::Hash,
+            );
         })
     });
 

@@ -133,9 +133,7 @@ impl PersistentKernelManager {
 
     /// Get the compiled kernel function for launching.
     /// Returns None if compile_kernel() has not been called yet.
-    pub fn get_kernel_function(
-        &self,
-    ) -> DbxResult<Option<Arc<cudarc::driver::CudaFunction>>> {
+    pub fn get_kernel_function(&self) -> DbxResult<Option<Arc<cudarc::driver::CudaFunction>>> {
         match &self.module {
             Some(module) => {
                 let func = module

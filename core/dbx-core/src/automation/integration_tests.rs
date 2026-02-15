@@ -205,10 +205,7 @@ mod integration_tests {
                 return_type: DataType::Float,
                 is_variadic: true,
             },
-            || AvgState {
-                sum: 0.0,
-                count: 0,
-            },
+            || AvgState { sum: 0.0, count: 0 },
         ));
         engine.register(avg_udf).unwrap();
 
@@ -349,7 +346,11 @@ mod integration_tests {
 
         // Aggregate 실행
         let r2 = engine
-            .execute("count", &ctx, &[Value::Int(1), Value::Int(2), Value::Int(3)])
+            .execute(
+                "count",
+                &ctx,
+                &[Value::Int(1), Value::Int(2), Value::Int(3)],
+            )
             .unwrap();
         assert_eq!(r2.as_i64().unwrap(), 3);
 

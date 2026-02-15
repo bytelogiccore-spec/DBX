@@ -5,11 +5,14 @@
 use crate::automation::callable::{Callable, ExecutionContext, Signature, Value};
 use crate::error::DbxResult;
 
+/// Type alias for table UDF function
+type TableFn = Box<dyn Fn(&ExecutionContext, &[Value]) -> DbxResult<Vec<Vec<Value>>> + Send + Sync>;
+
 /// Table UDF
 pub struct TableUDF {
     name: String,
     signature: Signature,
-    func: Box<dyn Fn(&ExecutionContext, &[Value]) -> DbxResult<Vec<Vec<Value>>> + Send + Sync>,
+    func: TableFn,
 }
 
 impl TableUDF {
@@ -31,11 +34,11 @@ impl Callable for TableUDF {
         let rows = (self.func)(ctx, args)?;
         Ok(Value::Table(rows))
     }
-    
+
     fn name(&self) -> &str {
         &self.name
     }
-    
+
     fn signature(&self) -> &Signature {
         &self.signature
     }
@@ -54,7 +57,7 @@ mod tests {
     use crate::automation::callable::DataType;
     use crate::engine::Database;
     use std::sync::Arc;
-    
+
     #[test]
     fn test_table_udf_basic() {
         let table_udf = TableUDF::new(
@@ -67,26 +70,28 @@ mod tests {
             |_ctx, args| {
                 let start = args[0].as_i64()?;
                 let end = args[1].as_i64()?;
-                
+
                 let mut rows = Vec::new();
                 for i in start..=end {
                     rows.push(vec![Value::Int(i)]);
                 }
-                
+
                 Ok(rows)
             },
         );
-        
+
         let db = Database::open_in_memory().unwrap();
         let ctx = ExecutionContext::new(Arc::new(db));
-        
-        let rows = table_udf.execute(&ctx, &[Value::Int(1), Value::Int(5)]).unwrap();
-        
+
+        let rows = table_udf
+            .execute(&ctx, &[Value::Int(1), Value::Int(5)])
+            .unwrap();
+
         assert_eq!(rows.len(), 5);
         assert_eq!(rows[0][0].as_i64().unwrap(), 1);
         assert_eq!(rows[4][0].as_i64().unwrap(), 5);
     }
-    
+
     #[test]
     fn test_table_udf_multi_column() {
         let table_udf = TableUDF::new(
@@ -104,17 +109,17 @@ mod tests {
                 ])
             },
         );
-        
+
         let db = Database::open_in_memory().unwrap();
         let ctx = ExecutionContext::new(Arc::new(db));
-        
+
         let rows = table_udf.execute(&ctx, &[]).unwrap();
-        
+
         assert_eq!(rows.len(), 3);
         assert_eq!(rows[0].len(), 2);
         assert_eq!(rows[1][1].as_str().unwrap(), "Bob");
     }
-    
+
     #[test]
     fn test_table_udf_with_filter() {
         let table_udf = TableUDF::new(
@@ -128,33 +133,35 @@ mod tests {
                 let start = args[0].as_i64()?;
                 let end = args[1].as_i64()?;
                 let step = args[2].as_i64()?;
-                
+
                 let mut rows = Vec::new();
                 let mut current = start;
                 while current <= end {
                     rows.push(vec![Value::Int(current)]);
                     current += step;
                 }
-                
+
                 Ok(rows)
             },
         );
-        
+
         let db = Database::open_in_memory().unwrap();
         let ctx = ExecutionContext::new(Arc::new(db));
-        
-        let rows = table_udf.execute(&ctx, &[Value::Int(0), Value::Int(10), Value::Int(2)]).unwrap();
-        
+
+        let rows = table_udf
+            .execute(&ctx, &[Value::Int(0), Value::Int(10), Value::Int(2)])
+            .unwrap();
+
         assert_eq!(rows.len(), 6); // 0, 2, 4, 6, 8, 10
         assert_eq!(rows[3][0].as_i64().unwrap(), 6);
     }
-    
+
     #[test]
     fn test_table_udf_with_engine() {
         use crate::automation::ExecutionEngine;
-        
+
         let engine = ExecutionEngine::new();
-        
+
         let table_udf = Arc::new(TableUDF::new(
             "range",
             Signature {
@@ -171,15 +178,15 @@ mod tests {
                 Ok(rows)
             },
         ));
-        
+
         engine.register(table_udf).unwrap();
-        
+
         let db = Database::open_in_memory().unwrap();
         let ctx = ExecutionContext::new(Arc::new(db));
-        
+
         // Callable::call을 통한 호출 → Value::Table 반환
         let result = engine.execute("range", &ctx, &[Value::Int(3)]).unwrap();
-        
+
         // 전체 테이블 결과 확인
         let table = result.as_table().unwrap();
         assert_eq!(table.len(), 3);

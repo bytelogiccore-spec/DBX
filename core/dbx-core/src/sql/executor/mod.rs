@@ -15,7 +15,7 @@ pub use operators::{
     FilterOperator, HashAggregateOperator, HashJoinOperator, LimitOperator, PhysicalOperator,
     ProjectionOperator, SortOperator, TableScanOperator,
 };
-pub use parallel_query::{ParallelQueryExecutor, AggregateType, AggregateResult};
+pub use parallel_query::{AggregateResult, AggregateType, ParallelQueryExecutor};
 
 // Helper function for concatenating RecordBatches
 pub fn concat_batches(schema: &Arc<Schema>, batches: &[RecordBatch]) -> DbxResult<RecordBatch> {

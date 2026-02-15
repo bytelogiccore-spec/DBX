@@ -80,8 +80,14 @@ impl IndexVersionManager {
             status: IndexStatus::Ready,
         };
 
-        let mut versions = self.versions.write().map_err(|_| DbxError::Serialization("Lock poisoned".into()))?;
-        let mut active = self.active.write().map_err(|_| DbxError::Serialization("Lock poisoned".into()))?;
+        let mut versions = self
+            .versions
+            .write()
+            .map_err(|_| DbxError::Serialization("Lock poisoned".into()))?;
+        let mut active = self
+            .active
+            .write()
+            .map_err(|_| DbxError::Serialization("Lock poisoned".into()))?;
 
         versions.insert(name.to_string(), vec![meta]);
         active.insert(name.to_string(), 1);
@@ -96,10 +102,17 @@ impl IndexVersionManager {
         columns: Vec<String>,
         index_type: IndexType,
     ) -> DbxResult<u64> {
-        let mut versions = self.versions.write().map_err(|_| DbxError::Serialization("Lock poisoned".into()))?;
-        let history = versions.get_mut(name).ok_or_else(|| DbxError::Serialization(format!("Index {name} not found")))?;
+        let mut versions = self
+            .versions
+            .write()
+            .map_err(|_| DbxError::Serialization("Lock poisoned".into()))?;
+        let history = versions
+            .get_mut(name)
+            .ok_or_else(|| DbxError::Serialization(format!("Index {name} not found")))?;
 
-        let last = history.last().ok_or_else(|| DbxError::Serialization("Empty history".into()))?;
+        let last = history
+            .last()
+            .ok_or_else(|| DbxError::Serialization("Empty history".into()))?;
         let new_version = last.version + 1;
 
         history.push(IndexMeta {
@@ -116,10 +129,18 @@ impl IndexVersionManager {
 
     /// REINDEX 완료 (Building → Ready, 이전 버전 비활성화)
     pub fn complete_reindex(&self, name: &str, version: u64) -> DbxResult<()> {
-        let mut versions = self.versions.write().map_err(|_| DbxError::Serialization("Lock poisoned".into()))?;
-        let mut active = self.active.write().map_err(|_| DbxError::Serialization("Lock poisoned".into()))?;
+        let mut versions = self
+            .versions
+            .write()
+            .map_err(|_| DbxError::Serialization("Lock poisoned".into()))?;
+        let mut active = self
+            .active
+            .write()
+            .map_err(|_| DbxError::Serialization("Lock poisoned".into()))?;
 
-        let history = versions.get_mut(name).ok_or_else(|| DbxError::Serialization(format!("Index {name} not found")))?;
+        let history = versions
+            .get_mut(name)
+            .ok_or_else(|| DbxError::Serialization(format!("Index {name} not found")))?;
 
         for meta in history.iter_mut() {
             if meta.version == version {
@@ -135,11 +156,21 @@ impl IndexVersionManager {
 
     /// 현재 활성 인덱스 메타데이터 조회
     pub fn get_active(&self, name: &str) -> DbxResult<IndexMeta> {
-        let versions = self.versions.read().map_err(|_| DbxError::Serialization("Lock poisoned".into()))?;
-        let active = self.active.read().map_err(|_| DbxError::Serialization("Lock poisoned".into()))?;
+        let versions = self
+            .versions
+            .read()
+            .map_err(|_| DbxError::Serialization("Lock poisoned".into()))?;
+        let active = self
+            .active
+            .read()
+            .map_err(|_| DbxError::Serialization("Lock poisoned".into()))?;
 
-        let active_ver = active.get(name).ok_or_else(|| DbxError::Serialization(format!("Index {name} not found")))?;
-        let history = versions.get(name).ok_or_else(|| DbxError::Serialization(format!("Index {name} not found")))?;
+        let active_ver = active
+            .get(name)
+            .ok_or_else(|| DbxError::Serialization(format!("Index {name} not found")))?;
+        let history = versions
+            .get(name)
+            .ok_or_else(|| DbxError::Serialization(format!("Index {name} not found")))?;
 
         history
             .iter()
@@ -150,8 +181,14 @@ impl IndexVersionManager {
 
     /// 인덱스 삭제
     pub fn drop_index(&self, name: &str) -> DbxResult<()> {
-        let mut versions = self.versions.write().map_err(|_| DbxError::Serialization("Lock poisoned".into()))?;
-        let mut active = self.active.write().map_err(|_| DbxError::Serialization("Lock poisoned".into()))?;
+        let mut versions = self
+            .versions
+            .write()
+            .map_err(|_| DbxError::Serialization("Lock poisoned".into()))?;
+        let mut active = self
+            .active
+            .write()
+            .map_err(|_| DbxError::Serialization("Lock poisoned".into()))?;
 
         versions.remove(name);
         active.remove(name);
@@ -160,15 +197,23 @@ impl IndexVersionManager {
 
     /// 테이블의 모든 인덱스 조회
     pub fn list_indexes(&self, table: &str) -> DbxResult<Vec<IndexMeta>> {
-        let versions = self.versions.read().map_err(|_| DbxError::Serialization("Lock poisoned".into()))?;
-        let active = self.active.read().map_err(|_| DbxError::Serialization("Lock poisoned".into()))?;
+        let versions = self
+            .versions
+            .read()
+            .map_err(|_| DbxError::Serialization("Lock poisoned".into()))?;
+        let active = self
+            .active
+            .read()
+            .map_err(|_| DbxError::Serialization("Lock poisoned".into()))?;
 
         let mut result = Vec::new();
         for (name, history) in versions.iter() {
-            if let Some(&active_ver) = active.get(name) {
-                if let Some(meta) = history.iter().find(|m| m.version == active_ver && m.table == table) {
-                    result.push(meta.clone());
-                }
+            if let Some(&active_ver) = active.get(name)
+                && let Some(meta) = history
+                    .iter()
+                    .find(|m| m.version == active_ver && m.table == table)
+            {
+                result.push(meta.clone());
             }
         }
         Ok(result)
@@ -188,7 +233,14 @@ mod tests {
     #[test]
     fn test_create_index() {
         let mgr = IndexVersionManager::new();
-        let ver = mgr.create_index("idx_users_email", "users", vec!["email".into()], IndexType::Hash).unwrap();
+        let ver = mgr
+            .create_index(
+                "idx_users_email",
+                "users",
+                vec!["email".into()],
+                IndexType::Hash,
+            )
+            .unwrap();
         assert_eq!(ver, 1);
 
         let meta = mgr.get_active("idx_users_email").unwrap();
@@ -199,10 +251,17 @@ mod tests {
     #[test]
     fn test_reindex_zero_downtime() {
         let mgr = IndexVersionManager::new();
-        mgr.create_index("idx1", "users", vec!["name".into()], IndexType::Hash).unwrap();
+        mgr.create_index("idx1", "users", vec!["name".into()], IndexType::Hash)
+            .unwrap();
 
         // Start reindex (v1 still active)
-        let v2 = mgr.start_reindex("idx1", vec!["name".into(), "email".into()], IndexType::BTree).unwrap();
+        let v2 = mgr
+            .start_reindex(
+                "idx1",
+                vec!["name".into(), "email".into()],
+                IndexType::BTree,
+            )
+            .unwrap();
         assert_eq!(v2, 2);
 
         // v1 is still active during build
@@ -220,7 +279,8 @@ mod tests {
     #[test]
     fn test_drop_index() {
         let mgr = IndexVersionManager::new();
-        mgr.create_index("idx1", "users", vec!["name".into()], IndexType::Hash).unwrap();
+        mgr.create_index("idx1", "users", vec!["name".into()], IndexType::Hash)
+            .unwrap();
         mgr.drop_index("idx1").unwrap();
 
         assert!(mgr.get_active("idx1").is_err());
@@ -229,9 +289,12 @@ mod tests {
     #[test]
     fn test_list_indexes() {
         let mgr = IndexVersionManager::new();
-        mgr.create_index("idx1", "users", vec!["name".into()], IndexType::Hash).unwrap();
-        mgr.create_index("idx2", "users", vec!["email".into()], IndexType::BTree).unwrap();
-        mgr.create_index("idx3", "orders", vec!["id".into()], IndexType::Hash).unwrap();
+        mgr.create_index("idx1", "users", vec!["name".into()], IndexType::Hash)
+            .unwrap();
+        mgr.create_index("idx2", "users", vec!["email".into()], IndexType::BTree)
+            .unwrap();
+        mgr.create_index("idx3", "orders", vec!["id".into()], IndexType::Hash)
+            .unwrap();
 
         let user_indexes = mgr.list_indexes("users").unwrap();
         assert_eq!(user_indexes.len(), 2);

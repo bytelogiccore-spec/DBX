@@ -3,10 +3,10 @@
 //! LogicalPlan을 최적화하여 실행 성능을 향상시킵니다.
 //! 4가지 핵심 규칙: PredicatePushdown, ProjectionPushdown, ConstantFolding, LimitPushdown
 
-mod predicate_pushdown;
-mod projection_pushdown;
 mod constant_folding;
 mod limit_pushdown;
+mod predicate_pushdown;
+mod projection_pushdown;
 
 #[cfg(test)]
 mod tests;
@@ -14,10 +14,10 @@ mod tests;
 use crate::error::DbxResult;
 use crate::sql::planner::LogicalPlan;
 
-pub use predicate_pushdown::PredicatePushdownRule;
-pub use projection_pushdown::ProjectionPushdownRule;
 pub use constant_folding::ConstantFoldingRule;
 pub use limit_pushdown::LimitPushdownRule;
+pub use predicate_pushdown::PredicatePushdownRule;
+pub use projection_pushdown::ProjectionPushdownRule;
 
 /// 최적화 규칙 트레이트
 pub trait OptimizationRule: Send + Sync {

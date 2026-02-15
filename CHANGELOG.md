@@ -4,6 +4,40 @@ This document follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) f
 
 ---
 
+## [0.0.5-beta] - 2026-02-16
+
+Full API synchronization across all language bindings. ● = existing, 🆕 = added in this release.
+
+### Binding API Matrix
+
+| API | Node.js | Python | FFI/C | C# | C++ |
+|-----|:-------:|:------:|:-----:|:--:|:---:|
+| `open` / `open_in_memory` | ● | ● | ● | ● | ● |
+| `insert` / `get` / `delete` | ● | ● | ● | ● | ● |
+| `count` | 🆕 | 🆕 | ● | 🆕 | ● |
+| `flush` | 🆕 | 🆕 | ● | 🆕 | ● |
+| `insert_batch` | ● | 🆕 | 🆕 | 🆕 | 🆕 |
+| `scan` | 🆕 | 🆕 | 🆕 | 🆕 | 🆕 |
+| `range` | 🆕 | 🆕 | 🆕 | 🆕 | 🆕 |
+| `table_names` | 🆕 | 🆕 | 🆕 | 🆕 | 🆕 |
+| `gc` | 🆕 | 🆕 | 🆕 | 🆕 | 🆕 |
+| `is_encrypted` | 🆕 | 🆕 | 🆕 | 🆕 | 🆕 |
+| `execute_sql` | ● | 🆕 | 🆕 | 🆕 | 🆕 |
+| `create_index` / `drop_index` / `has_index` | 🆕 | 🆕 | 🆕 | 🆕 | 🆕 |
+| `save_to_file` / `load_from_file` | 🆕 | 🆕 | 🆕 | 🆕 | 🆕 |
+| `insert_versioned` | 🆕 | 🆕 | 🆕 | 🆕 | 🆕 |
+| `get_snapshot` | 🆕 | 🆕 | 🆕 | 🆕 | 🆕 |
+| `current_timestamp` / `allocate_commit_ts` | 🆕 | 🆕 | 🆕 | 🆕 | 🆕 |
+| Transaction (`begin` / `commit` / `rollback`) | ● | ● | ● | ● | 🆕 |
+
+> **FFI Note**: Collection returns use opaque handle pattern (`DbxScanResult`, `DbxStringList`) with accessor + free functions.
+
+### Fixed
+
+- Fixed `clippy::manual-c-str-literals` warning in `dbx-ffi` (`b"No error\0"` → `c"No error"`)
+
+---
+
 ## [0.0.4-beta] - 2026-02-15
 
 First feature release. Full query execution pipeline optimization.

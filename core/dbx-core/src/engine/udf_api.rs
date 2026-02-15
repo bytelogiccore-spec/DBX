@@ -2,8 +2,8 @@
 //!
 //! UDF 등록 및 호출 API
 
-use crate::automation::callable::{DataType, ExecutionContext, Signature, Value};
 use crate::automation::ScalarUDF;
+use crate::automation::callable::{ExecutionContext, Signature, Value};
 use crate::engine::Database;
 use crate::error::DbxResult;
 use std::sync::Arc;
@@ -165,7 +165,9 @@ mod tests {
 
         // 호출
         let r1 = db.call_udf("double", &[Value::Int(21)]).unwrap();
-        let r2 = db.call_udf("add", &[Value::Int(10), Value::Int(32)]).unwrap();
+        let r2 = db
+            .call_udf("add", &[Value::Int(10), Value::Int(32)])
+            .unwrap();
 
         assert_eq!(r1.as_i64().unwrap(), 42);
         assert_eq!(r2.as_i64().unwrap(), 42);

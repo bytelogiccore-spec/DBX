@@ -2,7 +2,7 @@
 //
 // 1단계: 복잡한 쿼리 테스트
 
-use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
+use criterion::{BenchmarkId, Criterion, black_box, criterion_group, criterion_main};
 use dbx_core::sql::ParallelSqlParser;
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -104,37 +104,27 @@ const COMPLEX_NESTED_SUBQUERY: &str = "
 fn bench_single_query_by_complexity(c: &mut Criterion) {
     let mut group = c.benchmark_group("single_query_complexity");
     let parser = ParallelSqlParser::new();
-    
+
     group.bench_function("simple_select", |b| {
-        b.iter(|| {
-            parser.parse(black_box(SIMPLE_SELECT)).unwrap()
-        })
+        b.iter(|| parser.parse(black_box(SIMPLE_SELECT)).unwrap())
     });
-    
+
     group.bench_function("complex_join", |b| {
-        b.iter(|| {
-            parser.parse(black_box(COMPLEX_JOIN)).unwrap()
-        })
+        b.iter(|| parser.parse(black_box(COMPLEX_JOIN)).unwrap())
     });
-    
+
     group.bench_function("complex_with_cte", |b| {
-        b.iter(|| {
-            parser.parse(black_box(COMPLEX_WITH_CTE)).unwrap()
-        })
+        b.iter(|| parser.parse(black_box(COMPLEX_WITH_CTE)).unwrap())
     });
-    
+
     group.bench_function("complex_union", |b| {
-        b.iter(|| {
-            parser.parse(black_box(COMPLEX_UNION)).unwrap()
-        })
+        b.iter(|| parser.parse(black_box(COMPLEX_UNION)).unwrap())
     });
-    
+
     group.bench_function("complex_nested_subquery", |b| {
-        b.iter(|| {
-            parser.parse(black_box(COMPLEX_NESTED_SUBQUERY)).unwrap()
-        })
+        b.iter(|| parser.parse(black_box(COMPLEX_NESTED_SUBQUERY)).unwrap())
     });
-    
+
     group.finish();
 }
 
@@ -145,43 +135,47 @@ fn bench_single_query_by_complexity(c: &mut Criterion) {
 fn bench_batch_complex_queries(c: &mut Criterion) {
     let mut group = c.benchmark_group("batch_complex_queries");
     let parser = ParallelSqlParser::new();
-    
+
     // 100개 복잡한 JOIN 쿼리
     let complex_joins: Vec<String> = (0..100)
         .map(|i| COMPLEX_JOIN.replace("users", &format!("users_{}", i % 10)))
         .collect();
     let complex_joins_refs: Vec<&str> = complex_joins.iter().map(|s| s.as_str()).collect();
-    
+
     group.bench_function("batch_100_complex_joins", |b| {
-        b.iter(|| {
-            parser.parse_batch(black_box(&complex_joins_refs)).unwrap()
-        })
+        b.iter(|| parser.parse_batch(black_box(&complex_joins_refs)).unwrap())
     });
-    
+
     // 1000개 복잡한 JOIN 쿼리
     let complex_joins_1000: Vec<String> = (0..1000)
         .map(|i| COMPLEX_JOIN.replace("users", &format!("users_{}", i % 100)))
         .collect();
-    let complex_joins_1000_refs: Vec<&str> = complex_joins_1000.iter().map(|s| s.as_str()).collect();
-    
+    let complex_joins_1000_refs: Vec<&str> =
+        complex_joins_1000.iter().map(|s| s.as_str()).collect();
+
     group.bench_function("batch_1000_complex_joins", |b| {
         b.iter(|| {
-            parser.parse_batch(black_box(&complex_joins_1000_refs)).unwrap()
+            parser
+                .parse_batch(black_box(&complex_joins_1000_refs))
+                .unwrap()
         })
     });
-    
+
     // 10000개 복잡한 JOIN 쿼리
     let complex_joins_10000: Vec<String> = (0..10000)
         .map(|i| COMPLEX_JOIN.replace("users", &format!("users_{}", i % 1000)))
         .collect();
-    let complex_joins_10000_refs: Vec<&str> = complex_joins_10000.iter().map(|s| s.as_str()).collect();
-    
+    let complex_joins_10000_refs: Vec<&str> =
+        complex_joins_10000.iter().map(|s| s.as_str()).collect();
+
     group.bench_function("batch_10000_complex_joins", |b| {
         b.iter(|| {
-            parser.parse_batch(black_box(&complex_joins_10000_refs)).unwrap()
+            parser
+                .parse_batch(black_box(&complex_joins_10000_refs))
+                .unwrap()
         })
     });
-    
+
     group.finish();
 }
 
@@ -192,7 +186,7 @@ fn bench_batch_complex_queries(c: &mut Criterion) {
 fn bench_batch_mixed_complexity(c: &mut Criterion) {
     let mut group = c.benchmark_group("batch_mixed_complexity");
     let parser = ParallelSqlParser::new();
-    
+
     // 1000개 혼합 쿼리 (20% 단순, 80% 복잡)
     let mut mixed_queries = Vec::new();
     for i in 0..1000 {
@@ -205,13 +199,11 @@ fn bench_batch_mixed_complexity(c: &mut Criterion) {
         }
     }
     let mixed_refs: Vec<&str> = mixed_queries.iter().map(|s| s.as_str()).collect();
-    
+
     group.bench_function("batch_1000_mixed", |b| {
-        b.iter(|| {
-            parser.parse_batch(black_box(&mixed_refs)).unwrap()
-        })
+        b.iter(|| parser.parse_batch(black_box(&mixed_refs)).unwrap())
     });
-    
+
     group.finish();
 }
 

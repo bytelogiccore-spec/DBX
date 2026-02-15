@@ -7,14 +7,14 @@
 // 3. WAL 쓰기: 단일 파일 append vs PartitionedWalWriter
 // 4. 스키마 조회: HashMap 직접 조회 vs SchemaVersionManager (MVCC 포함)
 
-use criterion::{black_box, criterion_group, criterion_main, Criterion, BenchmarkId};
+use criterion::{BenchmarkId, Criterion, black_box, criterion_group, criterion_main};
 use dbx_core::engine::plan::PlanCache;
-use dbx_core::sql::executor::parallel_query::{AggregateType, ParallelQueryExecutor};
 use dbx_core::engine::schema_versioning::SchemaVersionManager;
-use dbx_core::wal::partitioned_wal::PartitionedWalWriter;
+use dbx_core::sql::executor::parallel_query::{AggregateType, ParallelQueryExecutor};
 use dbx_core::wal::WalRecord;
+use dbx_core::wal::partitioned_wal::PartitionedWalWriter;
 
-use arrow::array::{Int64Array, StringArray, RecordBatch, Array};
+use arrow::array::{Array, Int64Array, RecordBatch, StringArray};
 use arrow::datatypes::{DataType, Field, Schema};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -49,13 +49,12 @@ fn parse_sql(sql: &str) -> sqlparser::ast::Statement {
 fn bench_before_after_parse(c: &mut Criterion) {
     let mut group = c.benchmark_group("1_sql_parse");
 
-    let sql = "SELECT id, name, email FROM users WHERE id > 100 AND status = 'active' ORDER BY name";
+    let sql =
+        "SELECT id, name, email FROM users WHERE id > 100 AND status = 'active' ORDER BY name";
 
     // BEFORE: 매번 파싱
     group.bench_function("before_parse_every_time", |b| {
-        b.iter(|| {
-            parse_sql(black_box(sql))
-        })
+        b.iter(|| parse_sql(black_box(sql)))
     });
 
     // AFTER: PlanCache (캐시 히트)
@@ -64,9 +63,7 @@ fn bench_before_after_parse(c: &mut Criterion) {
     cache.insert(sql.to_string(), parse_sql(sql));
 
     group.bench_function("after_plan_cache_hit", |b| {
-        b.iter(|| {
-            cache.get(black_box(sql)).unwrap()
-        })
+        b.iter(|| cache.get(black_box(sql)).unwrap())
     });
 
     group.finish();
@@ -105,7 +102,9 @@ fn bench_before_after_aggregate(c: &mut Criterion) {
     let executor = ParallelQueryExecutor::new().with_threshold(2);
     group.bench_function("after_parallel_sum", |b| {
         b.iter(|| {
-            executor.par_aggregate(black_box(&batches), 0, AggregateType::Sum).unwrap()
+            executor
+                .par_aggregate(black_box(&batches), 0, AggregateType::Sum)
+                .unwrap()
         })
     });
 
@@ -176,22 +175,19 @@ fn bench_before_after_schema(c: &mut Criterion) {
     }
 
     group.bench_function("before_hashmap_get", |b| {
-        b.iter(|| {
-            map.get(black_box("users")).unwrap().clone()
-        })
+        b.iter(|| map.get(black_box("users")).unwrap().clone())
     });
 
     // AFTER: SchemaVersionManager (MVCC + 버전 히스토리 포함)
     let mgr = SchemaVersionManager::new();
     mgr.register_table("users", schema.clone()).unwrap();
     for i in 0..50 {
-        mgr.register_table(&format!("table_{i}"), schema.clone()).unwrap();
+        mgr.register_table(&format!("table_{i}"), schema.clone())
+            .unwrap();
     }
 
     group.bench_function("after_schema_mgr_get", |b| {
-        b.iter(|| {
-            mgr.get_current(black_box("users")).unwrap()
-        })
+        b.iter(|| mgr.get_current(black_box("users")).unwrap())
     });
 
     group.finish();

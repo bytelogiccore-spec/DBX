@@ -2,8 +2,8 @@
 //!
 //! 모든 실행 가능한 객체(UDF, 트리거, 스케줄 작업)의 공통 인터페이스
 
-use crate::error::{DbxError, DbxResult};
 use crate::engine::Database;
+use crate::error::{DbxError, DbxResult};
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -11,10 +11,10 @@ use std::sync::Arc;
 pub trait Callable: Send + Sync {
     /// 함수 실행
     fn call(&self, ctx: &ExecutionContext, args: &[Value]) -> DbxResult<Value>;
-    
+
     /// 함수 이름
     fn name(&self) -> &str;
-    
+
     /// 함수 시그니처
     fn signature(&self) -> &Signature;
 }
@@ -37,7 +37,7 @@ impl ExecutionContext {
             metadata: HashMap::new(),
         }
     }
-    
+
     pub fn with_tx(mut self, tx_id: u64) -> Self {
         self.tx_id = Some(tx_id);
         self
@@ -62,7 +62,7 @@ impl Signature {
                 args.len()
             )));
         }
-        
+
         if self.is_variadic && args.len() < self.params.len() {
             return Err(DbxError::InvalidArguments(format!(
                 "Expected at least {} arguments, got {}",
@@ -70,9 +70,9 @@ impl Signature {
                 args.len()
             )));
         }
-        
+
         // 타입 검증
-        for (i, (expected, actual)) in self.params.iter().zip(args.iter()).enumerate() {
+        for (expected, actual) in self.params.iter().zip(args.iter()) {
             if !actual.matches_type(expected) {
                 return Err(DbxError::TypeMismatch {
                     expected: format!("{:?}", expected),
@@ -80,7 +80,7 @@ impl Signature {
                 });
             }
         }
-        
+
         Ok(())
     }
 }
@@ -124,14 +124,14 @@ impl Value {
             Value::Table(_) => DataType::Table,
         }
     }
-    
+
     pub fn matches_type(&self, expected: &DataType) -> bool {
         match (self, expected) {
-            (Value::Null, _) => true,  // Null은 모든 타입과 호환
+            (Value::Null, _) => true, // Null은 모든 타입과 호환
             _ => &self.data_type() == expected,
         }
     }
-    
+
     // 타입 변환 헬퍼
     pub fn as_bool(&self) -> DbxResult<bool> {
         match self {
@@ -142,7 +142,7 @@ impl Value {
             }),
         }
     }
-    
+
     pub fn as_i64(&self) -> DbxResult<i64> {
         match self {
             Value::Int(i) => Ok(*i),
@@ -152,7 +152,7 @@ impl Value {
             }),
         }
     }
-    
+
     pub fn as_f64(&self) -> DbxResult<f64> {
         match self {
             Value::Float(f) => Ok(*f),
@@ -162,7 +162,7 @@ impl Value {
             }),
         }
     }
-    
+
     pub fn as_str(&self) -> DbxResult<&str> {
         match self {
             Value::String(s) => Ok(s),
@@ -172,7 +172,7 @@ impl Value {
             }),
         }
     }
-    
+
     pub fn as_bytes(&self) -> DbxResult<&[u8]> {
         match self {
             Value::Bytes(b) => Ok(b),

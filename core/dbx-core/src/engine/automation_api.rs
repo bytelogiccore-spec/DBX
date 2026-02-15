@@ -2,10 +2,8 @@
 //!
 //! 트리거 및 스케줄러 관리 API
 
-use crate::automation::{
-    Schedule, ScheduledJob, Scheduler, Trigger, TriggerAction, TriggerCondition, TriggerEvent,
-};
-use crate::automation::callable::{ExecutionContext, Value};
+use crate::automation::callable::ExecutionContext;
+use crate::automation::{ScheduledJob, Scheduler, Trigger, TriggerEvent};
 use crate::engine::Database;
 use crate::error::DbxResult;
 use std::sync::{Arc, RwLock};
@@ -21,38 +19,48 @@ impl TriggerRegistry {
             triggers: RwLock::new(Vec::new()),
         }
     }
-    
+
     pub fn register(&self, trigger: Arc<Trigger>) -> DbxResult<()> {
-        let mut triggers = self.triggers.write()
+        let mut triggers = self
+            .triggers
+            .write()
             .map_err(|_| crate::error::DbxError::LockPoisoned)?;
-        
+
         // 중복 이름 체크
         if triggers.iter().any(|t| t.name() == trigger.name()) {
-            return Err(crate::error::DbxError::DuplicateCallable(trigger.name().to_string()));
+            return Err(crate::error::DbxError::DuplicateCallable(
+                trigger.name().to_string(),
+            ));
         }
-        
+
         triggers.push(trigger);
         Ok(())
     }
-    
+
     pub fn unregister(&self, name: &str) -> DbxResult<()> {
-        let mut triggers = self.triggers.write()
+        let mut triggers = self
+            .triggers
+            .write()
             .map_err(|_| crate::error::DbxError::LockPoisoned)?;
-        
-        let pos = triggers.iter().position(|t| t.name() == name)
+
+        let pos = triggers
+            .iter()
+            .position(|t| t.name() == name)
             .ok_or_else(|| crate::error::DbxError::CallableNotFound(name.to_string()))?;
-        
+
         triggers.remove(pos);
         Ok(())
     }
-    
+
     /// 이벤트에 매칭되는 트리거를 찾아서 조건 평가 후 실행
     pub fn fire(&self, ctx: &ExecutionContext, event: &TriggerEvent) -> DbxResult<Vec<String>> {
-        let triggers = self.triggers.read()
+        let triggers = self
+            .triggers
+            .read()
             .map_err(|_| crate::error::DbxError::LockPoisoned)?;
-        
+
         let mut executed = Vec::new();
-        
+
         for trigger in triggers.iter() {
             match trigger.fire(ctx, event) {
                 Ok(true) => executed.push(trigger.name().to_string()),
@@ -63,14 +71,16 @@ impl TriggerRegistry {
                 }
             }
         }
-        
+
         Ok(executed)
     }
-    
+
     pub fn list(&self) -> DbxResult<Vec<String>> {
-        let triggers = self.triggers.read()
+        let triggers = self
+            .triggers
+            .read()
             .map_err(|_| crate::error::DbxError::LockPoisoned)?;
-        
+
         Ok(triggers.iter().map(|t| t.name().to_string()).collect())
     }
 }
@@ -111,7 +121,8 @@ impl Database {
     pub fn register_trigger(&self, trigger: Trigger) -> DbxResult<()> {
         let trigger = Arc::new(trigger);
         // automation_engine에도 등록 (Callable 인터페이스)
-        self.automation_engine.register(Arc::clone(&trigger) as Arc<dyn crate::automation::callable::Callable>)?;
+        self.automation_engine
+            .register(Arc::clone(&trigger) as Arc<dyn crate::automation::callable::Callable>)?;
         // trigger_registry에도 등록 (이벤트 매칭용)
         self.trigger_registry.register(trigger)
     }
@@ -129,9 +140,13 @@ impl Database {
         let ctx = ExecutionContext::new(Arc::new(Database::open_in_memory()?));
         self.trigger_registry.fire(&ctx, &event)
     }
-    
+
     /// 트리거 발생 (컨텍스트 지정)
-    pub fn fire_trigger_with_ctx(&self, ctx: &ExecutionContext, event: TriggerEvent) -> DbxResult<Vec<String>> {
+    pub fn fire_trigger_with_ctx(
+        &self,
+        ctx: &ExecutionContext,
+        event: TriggerEvent,
+    ) -> DbxResult<Vec<String>> {
         self.trigger_registry.fire(ctx, &event)
     }
 
@@ -146,7 +161,11 @@ impl Database {
     }
 
     /// 스케줄 작업 등록
-    pub fn register_scheduled_job(&self, scheduler: &Scheduler, job: ScheduledJob) -> DbxResult<()> {
+    pub fn register_scheduled_job(
+        &self,
+        scheduler: &Scheduler,
+        job: ScheduledJob,
+    ) -> DbxResult<()> {
         scheduler.register(job)
     }
 }

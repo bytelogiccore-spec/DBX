@@ -74,7 +74,8 @@ impl ParallelSqlParser {
 
         // Fast-path: small batches always sequential (no complexity estimation overhead)
         if len < 4 {
-            return sqls.iter()
+            return sqls
+                .iter()
                 .map(|sql| self.parse(sql))
                 .collect::<DbxResult<Vec<_>>>();
         }
@@ -83,13 +84,15 @@ impl ParallelSqlParser {
         let avg_complexity = if len <= 20 {
             sqls.iter()
                 .map(|s| Self::estimate_complexity(s))
-                .sum::<f64>() / len as f64
+                .sum::<f64>()
+                / len as f64
         } else {
             // Sample first 10 for speed
             sqls.iter()
                 .take(10)
                 .map(|s| Self::estimate_complexity(s))
-                .sum::<f64>() / 10.0
+                .sum::<f64>()
+                / 10.0
         };
 
         // Dynamic threshold
@@ -102,23 +105,30 @@ impl ParallelSqlParser {
         };
 
         if len < parallel_threshold {
-            return sqls.iter()
+            return sqls
+                .iter()
                 .map(|sql| self.parse(sql))
                 .collect::<DbxResult<Vec<_>>>();
         }
 
         // Parallel execution
-        let results: Vec<Option<DbxResult<Vec<Statement>>>> = if let Some(pool) = &self.thread_pool {
+        let results: Vec<Option<DbxResult<Vec<Statement>>>> = if let Some(pool) = &self.thread_pool
+        {
             pool.install(|| self.parallel_parse_adaptive(sqls, avg_complexity))
         } else {
             self.parallel_parse_adaptive(sqls, avg_complexity)
         };
 
-        results.into_iter()
-            .map(|opt| opt.unwrap_or_else(|| Err(DbxError::SqlParse {
-                message: "Missing parse result".to_string(),
-                sql: String::new(),
-            })))
+        results
+            .into_iter()
+            .map(|opt| {
+                opt.unwrap_or_else(|| {
+                    Err(DbxError::SqlParse {
+                        message: "Missing parse result".to_string(),
+                        sql: String::new(),
+                    })
+                })
+            })
             .collect()
     }
 
@@ -133,9 +143,7 @@ impl ParallelSqlParser {
         if avg_complexity > 5.0 {
             // High complexity: use work-stealing with fine-grained tasks
             // Each query is its own task — Rayon's work-stealing handles load balancing
-            sqls.par_iter()
-                .map(|sql| Some(self.parse(sql)))
-                .collect()
+            sqls.par_iter().map(|sql| Some(self.parse(sql))).collect()
         } else {
             // Low/medium complexity: chunk-based parallelism to reduce scheduling overhead
             let num_threads = rayon::current_num_threads();
@@ -151,10 +159,8 @@ impl ParallelSqlParser {
                 .enumerate()
                 .map(|(chunk_idx, chunk)| {
                     let start_idx = chunk_idx * chunk_size;
-                    let parsed: Vec<DbxResult<Vec<Statement>>> = chunk
-                        .iter()
-                        .map(|sql| self.parse(sql))
-                        .collect();
+                    let parsed: Vec<DbxResult<Vec<Statement>>> =
+                        chunk.iter().map(|sql| self.parse(sql)).collect();
                     (start_idx, parsed)
                 })
                 .collect();
@@ -182,7 +188,9 @@ impl ParallelSqlParser {
         score += Self::count_keyword_ci(bytes, b"JOIN") as f64 * 2.0;
         let select_count = Self::count_keyword_ci(bytes, b"SELECT");
         score += select_count.saturating_sub(1) as f64 * 3.0;
-        if Self::contains_keyword_ci(bytes, b"WITH ") { score += 4.0; }
+        if Self::contains_keyword_ci(bytes, b"WITH ") {
+            score += 4.0;
+        }
         score += Self::count_keyword_ci(bytes, b"UNION") as f64 * 2.5;
 
         // Length as proxy
@@ -193,7 +201,9 @@ impl ParallelSqlParser {
     /// Count occurrences of keyword (case-insensitive, ASCII only)
     #[inline]
     fn count_keyword_ci(haystack: &[u8], needle: &[u8]) -> usize {
-        if needle.len() > haystack.len() { return 0; }
+        if needle.len() > haystack.len() {
+            return 0;
+        }
         let mut count = 0;
         for i in 0..=(haystack.len() - needle.len()) {
             if haystack[i..i + needle.len()]

@@ -36,13 +36,17 @@ use std::sync::{Arc, RwLock};
 /// let value_at_15 = manager.get_at_snapshot(b"user:1", 15).unwrap();
 /// assert_eq!(value_at_15, Some("Alice".to_string()));
 /// ```
+/// Type alias for version storage
+type VersionStorage<T> = Arc<RwLock<BTreeMap<Vec<u8>, Vec<(u64, T)>>>>;
+
 #[derive(Clone)]
 pub struct VersionManager<T: Versionable> {
     /// 키별 버전 리스트: key -> [(commit_ts, value)]
     /// 각 키에 대해 타임스탬프 내림차순으로 정렬된 버전 리스트 유지
-    versions: Arc<RwLock<BTreeMap<Vec<u8>, Vec<(u64, T)>>>>,
+    versions: VersionStorage<T>,
 
     /// 타임스탬프 오라클 참조 (선택적)
+    #[allow(dead_code)]
     oracle: Option<Arc<TimestampOracle>>,
 }
 

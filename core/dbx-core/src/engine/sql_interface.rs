@@ -231,7 +231,11 @@ impl Database {
                     let schema_fields = {
                         let schemas = self.table_schemas.read().unwrap();
                         schemas.get(table.as_str()).map(|schema| {
-                            schema.fields().iter().map(|f| f.name().clone()).collect::<Vec<_>>()
+                            schema
+                                .fields()
+                                .iter()
+                                .map(|f| f.name().clone())
+                                .collect::<Vec<_>>()
                         })
                     };
 
@@ -240,16 +244,23 @@ impl Database {
                         let mut map = serde_json::Map::new();
                         for (i, expr) in row_values[1..].iter().enumerate() {
                             let fallback_name = format!("col_{}", i);
-                            let col_name = fields.get(i + 1)
+                            let col_name = fields
+                                .get(i + 1)
                                 .map(|s| s.as_str())
                                 .unwrap_or(&fallback_name);
                             match expr {
                                 PhysicalExpr::Literal(scalar) => {
                                     use crate::storage::columnar::ScalarValue;
                                     let json_val = match scalar {
-                                        ScalarValue::Utf8(s) => serde_json::Value::String(s.clone()),
-                                        ScalarValue::Int32(i) => serde_json::Value::Number((*i).into()),
-                                        ScalarValue::Int64(i) => serde_json::Value::Number((*i).into()),
+                                        ScalarValue::Utf8(s) => {
+                                            serde_json::Value::String(s.clone())
+                                        }
+                                        ScalarValue::Int32(i) => {
+                                            serde_json::Value::Number((*i).into())
+                                        }
+                                        ScalarValue::Int64(i) => {
+                                            serde_json::Value::Number((*i).into())
+                                        }
                                         ScalarValue::Float64(f) => serde_json::Number::from_f64(*f)
                                             .map(serde_json::Value::Number)
                                             .unwrap_or(serde_json::Value::Null),
@@ -275,9 +286,15 @@ impl Database {
                                 PhysicalExpr::Literal(scalar) => {
                                     use crate::storage::columnar::ScalarValue;
                                     let json_val = match scalar {
-                                        ScalarValue::Utf8(s) => serde_json::Value::String(s.clone()),
-                                        ScalarValue::Int32(i) => serde_json::Value::Number((*i).into()),
-                                        ScalarValue::Int64(i) => serde_json::Value::Number((*i).into()),
+                                        ScalarValue::Utf8(s) => {
+                                            serde_json::Value::String(s.clone())
+                                        }
+                                        ScalarValue::Int32(i) => {
+                                            serde_json::Value::Number((*i).into())
+                                        }
+                                        ScalarValue::Int64(i) => {
+                                            serde_json::Value::Number((*i).into())
+                                        }
                                         ScalarValue::Float64(f) => serde_json::Number::from_f64(*f)
                                             .map(serde_json::Value::Number)
                                             .unwrap_or(serde_json::Value::Null),
