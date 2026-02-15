@@ -4,6 +4,7 @@
 //! All reads within a snapshot see the same data, regardless of concurrent writes.
 
 use crate::Database;
+use crate::engine::crud::{MVCC_PREFIX_LEN, MVCC_TOMBSTONE_PREFIX, MVCC_VALUE_PREFIX};
 use crate::error::DbxResult;
 use dashmap::DashMap;
 use std::sync::Arc;
@@ -81,11 +82,16 @@ impl Snapshot {
                 && vk.commit_ts <= self.read_ts
             {
                 // Decode value
+                // ⚠️ MVCC 매직 헤더 디코딩 — [0x00, tag] 확인
                 let value = if encoded_value.is_empty() {
                     Vec::new()
-                } else if encoded_value[0] == b'v' {
-                    encoded_value[1..].to_vec()
-                } else if encoded_value[0] == b'd' {
+                } else if encoded_value.len() >= MVCC_PREFIX_LEN
+                    && encoded_value[..MVCC_PREFIX_LEN] == MVCC_VALUE_PREFIX
+                {
+                    encoded_value[MVCC_PREFIX_LEN..].to_vec()
+                } else if encoded_value.len() >= MVCC_PREFIX_LEN
+                    && encoded_value[..MVCC_PREFIX_LEN] == MVCC_TOMBSTONE_PREFIX
+                {
                     Vec::new()
                 } else {
                     encoded_value.clone() // Legacy
@@ -110,11 +116,16 @@ impl Snapshot {
                 && vk.commit_ts <= self.read_ts
             {
                 // Decode value - handle legacy (no prefix) and versioned (v/d prefix)
+                // ⚠️ MVCC 매직 헤더 디코딩 — [0x00, tag] 확인
                 let value = if encoded_value.is_empty() {
                     Vec::new() // Should not happen but handle gracefully
-                } else if encoded_value[0] == b'v' {
-                    encoded_value[1..].to_vec()
-                } else if encoded_value[0] == b'd' {
+                } else if encoded_value.len() >= MVCC_PREFIX_LEN
+                    && encoded_value[..MVCC_PREFIX_LEN] == MVCC_VALUE_PREFIX
+                {
+                    encoded_value[MVCC_PREFIX_LEN..].to_vec()
+                } else if encoded_value.len() >= MVCC_PREFIX_LEN
+                    && encoded_value[..MVCC_PREFIX_LEN] == MVCC_TOMBSTONE_PREFIX
+                {
                     Vec::new() // Tombstone
                 } else {
                     // Legacy value (no prefix)

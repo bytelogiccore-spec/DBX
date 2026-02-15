@@ -174,23 +174,22 @@ fn test_parallel_parser_with_database_sql() {
 fn test_parallel_engine_with_database_operations() {
     let db = Database::open_in_memory().unwrap();
 
-    // Note: values must not start with 'v' or 'd' bytes to avoid MVCC prefix collision
-    db.insert("parallel_data", b"key1", b"Alice").unwrap();
-    db.insert("parallel_data", b"key2", b"Bob").unwrap();
-    db.insert("parallel_data", b"key3", b"Charlie").unwrap();
+    // 'v'로 시작하는 값도 MVCC prefix와 충돌하지 않아야 한다 (매직 헤더 [0x00, tag] 사용)
+    db.insert("parallel_data", b"key1", b"value1").unwrap();
+    db.insert("parallel_data", b"key2", b"value2").unwrap();
+    db.insert("parallel_data", b"key3", b"value3").unwrap();
 
-    // Verify the data was inserted
     assert_eq!(
         db.get("parallel_data", b"key1").unwrap(),
-        Some(b"Alice".to_vec())
+        Some(b"value1".to_vec())
     );
     assert_eq!(
         db.get("parallel_data", b"key2").unwrap(),
-        Some(b"Bob".to_vec())
+        Some(b"value2".to_vec())
     );
     assert_eq!(
         db.get("parallel_data", b"key3").unwrap(),
-        Some(b"Charlie".to_vec())
+        Some(b"value3".to_vec())
     );
 
     // Verify parallel engine is still functional

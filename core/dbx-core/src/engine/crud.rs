@@ -6,6 +6,21 @@ use crate::error::{DbxError, DbxResult};
 use crate::storage::StorageBackend;
 use std::collections::HashMap;
 
+// ════════════════════════════════════════════
+// ⚠️ MVCC Value Encoding Constants
+// ════════════════════════════════════════════
+// MVCC 버전 관리를 위한 매직 헤더.
+// 반드시 2바이트 [0x00, tag]를 사용하여 일반 사용자 데이터와 충돌을 방지한다.
+// 일반 UTF-8 텍스트나 바이너리 데이터는 0x00으로 시작하지 않으므로 안전하다.
+// 이 상수를 변경하면 crud.rs, snapshot.rs 양쪽 모두 동기화해야 한다.
+
+/// MVCC 값이 존재함을 나타내는 2바이트 매직 헤더: [0x00, 0x01]
+pub(crate) const MVCC_VALUE_PREFIX: [u8; 2] = [0x00, 0x01];
+/// MVCC 삭제(tombstone)를 나타내는 2바이트 매직 헤더: [0x00, 0x02]
+pub(crate) const MVCC_TOMBSTONE_PREFIX: [u8; 2] = [0x00, 0x02];
+/// MVCC 매직 헤더 길이
+pub(crate) const MVCC_PREFIX_LEN: usize = 2;
+
 impl Database {
     // ════════════════════════════════════════════
     // CREATE Operations
@@ -136,14 +151,15 @@ impl Database {
         let encoded_key = vk.encode();
 
         // Encode value with prefix
+        // ⚠️ MVCC 매직 헤더 인코딩 — MVCC_VALUE_PREFIX / MVCC_TOMBSTONE_PREFIX 사용
         let encoded_value = match value {
             Some(v) => {
-                let mut bytes = Vec::with_capacity(v.len() + 1);
-                bytes.push(b'v'); // 'v' for Value
+                let mut bytes = Vec::with_capacity(v.len() + MVCC_PREFIX_LEN);
+                bytes.extend_from_slice(&MVCC_VALUE_PREFIX);
                 bytes.extend_from_slice(v);
                 bytes
             }
-            None => vec![b'd'], // 'd' for Deleted
+            None => MVCC_TOMBSTONE_PREFIX.to_vec(),
         };
 
         // Write to Delta Store
@@ -178,11 +194,16 @@ impl Database {
             if entry_val.is_empty() {
                 return Some(Some(entry_val.to_vec())); // Legacy empty value
             }
-            match entry_val[0] {
-                b'v' => Some(Some(entry_val[1..].to_vec())),
-                b'd' => Some(None),
-                _ => Some(Some(entry_val.to_vec())), // Legacy non-prefixed
+            // ⚠️ MVCC 매직 헤더 디코딩 — 2바이트 [0x00, tag] 확인
+            if entry_val.len() >= MVCC_PREFIX_LEN && entry_val[0] == 0x00 {
+                match entry_val[1] {
+                    0x01 => return Some(Some(entry_val[MVCC_PREFIX_LEN..].to_vec())),
+                    0x02 => return Some(None), // Tombstone
+                    _ => {}
+                }
             }
+            // Legacy non-prefixed value
+            Some(Some(entry_val.to_vec()))
         };
 
         // 1. Check Delta Store
@@ -267,12 +288,15 @@ impl Database {
         let mut result = Vec::new();
         for (k, v) in merged {
             // Decode value
+            // ⚠️ MVCC 매직 헤더 디코딩 — [0x00, tag] 확인
             let decoded_v = if v.is_empty() {
                 v
-            } else if v[0] == b'v' {
-                v[1..].to_vec()
-            } else if v[0] == b'd' {
-                continue; // Skip tombstones
+            } else if v.len() >= MVCC_PREFIX_LEN && v[0] == 0x00 {
+                match v[1] {
+                    0x01 => v[MVCC_PREFIX_LEN..].to_vec(), // Value
+                    0x02 => continue,                      // Tombstone
+                    _ => v,                                // Unknown tag → legacy
+                }
             } else {
                 v
             };
