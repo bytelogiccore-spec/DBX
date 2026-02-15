@@ -277,8 +277,8 @@ pub unsafe extern "C" fn dbx_scan(
 
     match handle.db.scan(table_str) {
         Ok(entries) => {
-            *out_result = Box::into_raw(Box::new(DbxScanResultInternal { entries }))
-                as *mut DbxScanResult;
+            *out_result =
+                Box::into_raw(Box::new(DbxScanResultInternal { entries })) as *mut DbxScanResult;
             DBX_OK
         }
         Err(_) => DBX_ERR_DATABASE,
@@ -317,8 +317,8 @@ pub unsafe extern "C" fn dbx_range(
 
     match handle.db.range(table_str, start, end) {
         Ok(entries) => {
-            *out_result = Box::into_raw(Box::new(DbxScanResultInternal { entries }))
-                as *mut DbxScanResult;
+            *out_result =
+                Box::into_raw(Box::new(DbxScanResultInternal { entries })) as *mut DbxScanResult;
             DBX_OK
         }
         Err(_) => DBX_ERR_DATABASE,
@@ -446,8 +446,8 @@ pub unsafe extern "C" fn dbx_table_names(
 
     match handle.db.table_names() {
         Ok(names) => {
-            *out_list = Box::into_raw(Box::new(DbxStringListInternal { names }))
-                as *mut DbxStringList;
+            *out_list =
+                Box::into_raw(Box::new(DbxStringListInternal { names })) as *mut DbxStringList;
             DBX_OK
         }
         Err(_) => DBX_ERR_DATABASE,
@@ -495,10 +495,7 @@ pub unsafe extern "C" fn dbx_string_list_free(list: *mut DbxStringList) {
 
 /// Run garbage collection
 #[no_mangle]
-pub unsafe extern "C" fn dbx_gc(
-    handle: *mut DbxHandle,
-    out_deleted: *mut usize,
-) -> c_int {
+pub unsafe extern "C" fn dbx_gc(handle: *mut DbxHandle, out_deleted: *mut usize) -> c_int {
     if handle.is_null() || out_deleted.is_null() {
         return DBX_ERR_NULL_PTR;
     }
@@ -521,7 +518,11 @@ pub unsafe extern "C" fn dbx_is_encrypted(handle: *mut DbxHandle) -> c_int {
         return 0;
     }
     let handle = &*(handle as *const DbxHandleInternal);
-    if handle.db.is_encrypted() { 1 } else { 0 }
+    if handle.db.is_encrypted() {
+        1
+    } else {
+        0
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -637,7 +638,11 @@ pub unsafe extern "C" fn dbx_has_index(
         Err(_) => return 0,
     };
 
-    if handle.db.has_index(table_str, column_str) { 1 } else { 0 }
+    if handle.db.has_index(table_str, column_str) {
+        1
+    } else {
+        0
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -646,10 +651,7 @@ pub unsafe extern "C" fn dbx_has_index(
 
 /// Save the in-memory database to a file
 #[no_mangle]
-pub unsafe extern "C" fn dbx_save_to_file(
-    handle: *mut DbxHandle,
-    path: *const c_char,
-) -> c_int {
+pub unsafe extern "C" fn dbx_save_to_file(handle: *mut DbxHandle, path: *const c_char) -> c_int {
     if handle.is_null() || path.is_null() {
         return DBX_ERR_NULL_PTR;
     }

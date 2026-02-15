@@ -491,10 +491,7 @@ pub unsafe extern "C" fn dbx_string_list_free(list: *mut DbxStringList) {
 
 /// Run garbage collection (MVCC version cleanup). Returns deleted version count.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn dbx_gc(
-    handle: *mut DbxHandle,
-    out_deleted: *mut usize,
-) -> c_int {
+pub unsafe extern "C" fn dbx_gc(handle: *mut DbxHandle, out_deleted: *mut usize) -> c_int {
     if handle.is_null() || out_deleted.is_null() {
         return DBX_ERR_NULL_PTR;
     }
@@ -633,7 +630,11 @@ pub unsafe extern "C" fn dbx_has_index(
         Err(_) => return 0,
     };
 
-    if handle.db.has_index(table_str, column_str) { 1 } else { 0 }
+    if handle.db.has_index(table_str, column_str) {
+        1
+    } else {
+        0
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -642,10 +643,7 @@ pub unsafe extern "C" fn dbx_has_index(
 
 /// Save the in-memory database to a file
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn dbx_save_to_file(
-    handle: *mut DbxHandle,
-    path: *const c_char,
-) -> c_int {
+pub unsafe extern "C" fn dbx_save_to_file(handle: *mut DbxHandle, path: *const c_char) -> c_int {
     if handle.is_null() || path.is_null() {
         return DBX_ERR_NULL_PTR;
     }

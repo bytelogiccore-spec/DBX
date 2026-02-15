@@ -262,12 +262,7 @@ impl Database {
 
     /// Read a specific version of a key (Snapshot Read)
     #[napi]
-    pub fn get_snapshot(
-        &self,
-        table: String,
-        key: Buffer,
-        read_ts: u32,
-    ) -> Result<Option<Buffer>> {
+    pub fn get_snapshot(&self, table: String, key: Buffer, read_ts: u32) -> Result<Option<Buffer>> {
         match self.db.get_snapshot(&table, &key, read_ts as u64) {
             Ok(Some(Some(value))) => Ok(Some(value.into())),
             Ok(Some(None)) | Ok(None) => Ok(None),

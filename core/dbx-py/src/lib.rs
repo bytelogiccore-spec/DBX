@@ -244,7 +244,9 @@ impl Database {
         match self.db.get_snapshot(table, key, read_ts) {
             Ok(Some(Some(value))) => Ok(Some(PyBytes::new_bound(py, &value))),
             Ok(Some(None)) | Ok(None) => Ok(None),
-            Err(e) => Err(PyRuntimeError::new_err(format!("Snapshot read failed: {e}"))),
+            Err(e) => Err(PyRuntimeError::new_err(format!(
+                "Snapshot read failed: {e}"
+            ))),
         }
     }
 
