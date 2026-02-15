@@ -174,7 +174,9 @@ impl Database {
 mod tests {
     use super::*;
     use crate::automation::callable::{DataType, Signature, Value};
-    use crate::automation::{ScalarUDF, ScheduleType, TriggerEventType};
+    use crate::automation::{
+        ScalarUDF, Schedule, ScheduleType, TriggerAction, TriggerCondition, TriggerEventType,
+    };
     use std::sync::Mutex;
     use std::time::Duration;
 

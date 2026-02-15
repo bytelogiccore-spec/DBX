@@ -174,7 +174,7 @@ impl Default for SchemaVersionManager {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use arrow::datatypes::DataType;
+    use arrow::datatypes::{DataType, Field};
 
     fn make_schema(fields: &[(&str, DataType)]) -> Arc<Schema> {
         Arc::new(Schema::new(
