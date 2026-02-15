@@ -80,6 +80,7 @@
 //! - [`wal`] — Write-Ahead Log
 
 pub mod api;
+pub mod automation;
 pub mod engine;
 pub mod error;
 pub mod index;

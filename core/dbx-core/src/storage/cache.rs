@@ -96,10 +96,17 @@ impl RowCache {
     }
 
     /// Invalidates entire table
-    pub fn invalidate_table(&self, _table: &str) {
+    pub fn invalidate_table(&self, table: &str) {
         let mut cache = self.inner.lock().unwrap();
-        cache.clear();
-        // TODO: 특정 테이블만 제거하도록 개선
+        // Collect keys belonging to this table, then remove them
+        let keys_to_remove: Vec<CacheKey> = cache
+            .iter()
+            .filter(|(k, _)| k.table == table)
+            .map(|(k, _)| k.clone())
+            .collect();
+        for key in keys_to_remove {
+            cache.pop(&key);
+        }
     }
 
     /// Returns cache hit ratio

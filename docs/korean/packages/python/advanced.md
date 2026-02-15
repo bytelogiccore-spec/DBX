@@ -84,6 +84,73 @@ for t in threads:
     t.join()
 ```
 
+## 기능 플래그
+
+```python
+# 런타임에 기능 활성화/비활성화
+db.enable_feature("parallel_query")
+db.enable_feature("query_plan_cache")
+db.disable_feature("parallel_query")
+
+# 상태 확인
+if db.is_feature_enabled("parallel_query"):
+    print("병렬 쿼리 활성화됨")
+```
+
+## 쿼리 플랜 캐시
+
+```python
+# 플랜 캐시 활성화 후 동일 SQL 반복 실행 시 자동으로 캐시됨
+db.enable_feature("query_plan_cache")
+
+# 동일 쿼리 반복 시 파싱을 건너뜀 (7.3x 빠름)
+for _ in range(100):
+    results = db.execute_sql("SELECT * FROM users WHERE age > 20")
+```
+
+## 스키마 버저닝
+
+```python
+# 테이블 스키마 변경 이력이 자동으로 관리됨
+db.execute_sql("CREATE TABLE users (id INT, name TEXT)")      # v1
+db.execute_sql("ALTER TABLE users ADD COLUMN email TEXT")      # v2
+
+# 스키마 버전 조회
+version = db.schema_version("users")  # → 2
+```
+
+## UDF (사용자 정의 함수)
+
+```python
+# 스칼라 UDF 등록
+def double_value(x):
+    return x * 2
+
+db.register_scalar_udf("double", double_value)
+
+# SQL에서 사용
+results = db.execute_sql("SELECT double(price) FROM products")
+```
+
+## 트리거
+
+```python
+# 데이터 변경 시 자동 실행
+def on_user_insert(event):
+    print(f"새 사용자: {event.new_values}")
+
+db.register_trigger("users", "after_insert", on_user_insert)
+```
+
+## 스케줄러
+
+```python
+# 주기적 작업 등록
+db.schedule_job("cleanup", "0 0 * * *", lambda: db.execute_sql(
+    "DELETE FROM sessions WHERE expired = 1"
+))
+```
+
 ## 다음 단계
 
 - [실전 예제](examples) - 더 많은 예제

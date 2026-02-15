@@ -87,6 +87,35 @@ pub enum LogicalPlan {
         table: String,
         operation: AlterTableOperation,
     },
+    /// CREATE FUNCTION
+    CreateFunction {
+        name: String,
+        params: Vec<(String, String)>, // (param_name, type_str)
+        return_type: String,
+        language: String, // "rust", "sql"
+        body: String,
+    },
+    /// CREATE TRIGGER
+    CreateTrigger {
+        name: String,
+        timing: TriggerTiming,
+        event: TriggerEventKind,
+        table: String,
+        for_each: ForEachKind,
+        function: String,
+    },
+    /// CREATE JOB
+    CreateJob {
+        name: String,
+        schedule: String, // Cron 또는 INTERVAL
+        function: String,
+    },
+    /// DROP FUNCTION
+    DropFunction { name: String, if_exists: bool },
+    /// DROP TRIGGER
+    DropTrigger { name: String, if_exists: bool },
+    /// DROP JOB
+    DropJob { name: String, if_exists: bool },
 }
 
 /// ALTER TABLE operations
@@ -101,6 +130,28 @@ pub enum AlterTableOperation {
     DropColumn { column_name: String },
     /// RENAME COLUMN (future)
     RenameColumn { old_name: String, new_name: String },
+}
+
+/// 트리거 타이밍
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TriggerTiming {
+    Before,
+    After,
+}
+
+/// 트리거 이벤트 종류
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TriggerEventKind {
+    Insert,
+    Update,
+    Delete,
+}
+
+/// FOR EACH 종류
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ForEachKind {
+    Row,
+    Statement,
 }
 
 /// 표현식 — 컬럼, 리터럴, 연산자, 함수
@@ -306,6 +357,35 @@ pub enum PhysicalPlan {
         table: String,
         operation: crate::sql::planner::types::AlterTableOperation,
     },
+    /// Create Function
+    CreateFunction {
+        name: String,
+        params: Vec<(String, String)>,
+        return_type: String,
+        language: String,
+        body: String,
+    },
+    /// Create Trigger
+    CreateTrigger {
+        name: String,
+        timing: TriggerTiming,
+        event: TriggerEventKind,
+        table: String,
+        for_each: ForEachKind,
+        function: String,
+    },
+    /// Create Job
+    CreateJob {
+        name: String,
+        schedule: String,
+        function: String,
+    },
+    /// Drop Function
+    DropFunction { name: String, if_exists: bool },
+    /// Drop Trigger
+    DropTrigger { name: String, if_exists: bool },
+    /// Drop Job
+    DropJob { name: String, if_exists: bool },
 }
 
 impl PhysicalPlan {
@@ -327,6 +407,12 @@ impl PhysicalPlan {
             PhysicalPlan::CreateIndex { .. } => false, // CREATE INDEX is not analytical
             PhysicalPlan::DropIndex { .. } => false, // DROP INDEX is not analytical
             PhysicalPlan::AlterTable { .. } => false, // ALTER TABLE is not analytical
+            PhysicalPlan::CreateFunction { .. } => false,
+            PhysicalPlan::CreateTrigger { .. } => false,
+            PhysicalPlan::CreateJob { .. } => false,
+            PhysicalPlan::DropFunction { .. } => false,
+            PhysicalPlan::DropTrigger { .. } => false,
+            PhysicalPlan::DropJob { .. } => false,
         }
     }
 
@@ -351,6 +437,12 @@ impl PhysicalPlan {
             PhysicalPlan::CreateIndex { table, .. } => vec![table.clone()],
             PhysicalPlan::DropIndex { table, .. } => vec![table.clone()],
             PhysicalPlan::AlterTable { table, .. } => vec![table.clone()],
+            PhysicalPlan::CreateFunction { .. } => vec![],
+            PhysicalPlan::CreateTrigger { table, .. } => vec![table.clone()],
+            PhysicalPlan::CreateJob { .. } => vec![],
+            PhysicalPlan::DropFunction { .. } => vec![],
+            PhysicalPlan::DropTrigger { .. } => vec![],
+            PhysicalPlan::DropJob { .. } => vec![],
         }
     }
 }

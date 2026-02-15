@@ -160,25 +160,24 @@ mod tests {
         }
     }
 
-    // TODO: sqlparser 0.52 order_by API 확인 필요
-    // #[test]
-    // fn test_parse_select_with_order_by() {
-    //     let parser = SqlParser::new();
-    //     let statements = parser
-    //         .parse("SELECT * FROM users ORDER BY name DESC")
-    //         .unwrap();
-    //     assert_eq!(statements.len(), 1);
-    //
-    //     match &statements[0] {
-    //         Statement::Query(query) => {
-    //             assert!(query.order_by.is_some());
-    //             if let Some(order_by) = &query.order_by {
-    //                 assert!(!order_by.is_empty());
-    //             }
-    //         }
-    //         _ => panic!("Expected Query"),
-    //     }
-    // }
+    #[test]
+    fn test_parse_select_with_order_by() {
+        let parser = SqlParser::new();
+        let statements = parser
+            .parse("SELECT * FROM users ORDER BY name DESC")
+            .unwrap();
+        assert_eq!(statements.len(), 1);
+
+        match &statements[0] {
+            Statement::Query(query) => {
+                assert!(query.order_by.is_some());
+                if let Some(order_by) = &query.order_by {
+                    assert!(!order_by.exprs.is_empty());
+                }
+            }
+            _ => panic!("Expected Query"),
+        }
+    }
 
     #[test]
     fn test_parse_select_with_limit() {

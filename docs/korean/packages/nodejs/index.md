@@ -60,7 +60,7 @@ db.close();
 
 ## 버전 정보
 
-- **현재 버전**: 0.0.3-beta
+- **현재 버전**: {{ site.dbx_version }}
 - **Node.js 요구사항**: 16+
 - **플랫폼**: Windows x64 (Linux/macOS 계획됨)
 

@@ -118,10 +118,42 @@ pub enum DbxError {
     /// GPU operation error
     #[error("GPU error: {0}")]
     Gpu(String),
+
+    /// Callable not found
+    #[error("callable '{0}' not found")]
+    CallableNotFound(String),
+
+    /// Duplicate callable registration
+    #[error("callable '{0}' already registered")]
+    DuplicateCallable(String),
+
+    /// Invalid arguments
+    #[error("invalid arguments: {0}")]
+    InvalidArguments(String),
+
+    /// Lock poisoned
+    #[error("lock poisoned")]
+    LockPoisoned,
+
+    /// Performance regression detected
+    #[error("performance regression detected for '{name}': baseline={baseline:.2}ms, current={current:.2}ms, ratio={ratio:.2}x")]
+    PerformanceRegression {
+        name: String,
+        baseline: f64,
+        current: f64,
+        ratio: f64,
+    },
 }
 
 /// Result type alias for all DBX operations.
 pub type DbxResult<T> = Result<T, DbxError>;
+
+// From 구현들
+impl From<serde_json::Error> for DbxError {
+    fn from(err: serde_json::Error) -> Self {
+        DbxError::Serialization(err.to_string())
+    }
+}
 
 #[cfg(test)]
 mod tests {

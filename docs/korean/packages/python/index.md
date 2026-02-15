@@ -56,7 +56,7 @@ with Database.open_in_memory() as db:
 
 ## 버전 정보
 
-- **현재 버전**: 0.0.3-beta
+- **현재 버전**: {{ site.dbx_version }}
 - **Python 요구사항**: 3.8+
 - **플랫폼**: Windows x64 (Linux/macOS 계획됨)
 

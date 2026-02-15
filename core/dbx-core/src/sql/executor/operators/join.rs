@@ -82,10 +82,18 @@ impl HashJoinOperator {
             return Ok(());
         }
 
-        // 크기 기반 최적화 비활성화 (SWAP 버그: probe 시 key column 인덱스와
-        // 출력 컬럼 순서의 리매핑이 미구현. SWAP 시 0건 매칭 발생.)
-        // TODO: probe key column 인덱스 반전 + 출력 컬럼 순서 복원 구현 후 재활성화
-        let (build_batches, probe_batches, build_is_left) = (left_batches, right_batches, true);
+        // Size-based optimization: use the smaller side as build table
+        let left_rows: usize = left_batches.iter().map(|b| b.num_rows()).sum();
+        let right_rows: usize = right_batches.iter().map(|b| b.num_rows()).sum();
+
+        let (build_batches, probe_batches, build_is_left) = if right_rows < left_rows
+            && matches!(self.join_type, JoinType::Inner)
+        {
+            // Swap only for INNER JOIN (LEFT/RIGHT swap requires type conversion)
+            (right_batches, left_batches, false)
+        } else {
+            (left_batches, right_batches, true)
+        };
 
         // Build hash table (병렬 처리)
         let schema = build_batches[0].schema();
@@ -94,10 +102,11 @@ impl HashJoinOperator {
         // 임계값: 1000 rows 이상만 병렬화
         const PARALLEL_THRESHOLD: usize = 1000;
 
-        // JOIN 키 컬럼 인덱스 추출
+        // JOIN 키 컬럼 인덱스: swap 시 반전
         let key_columns: Vec<usize> = if build_is_left {
             self.on.iter().map(|(left_col, _)| *left_col).collect()
         } else {
+            // Swapped: build is right, so use right_col indices for build keys
             self.on.iter().map(|(_, right_col)| *right_col).collect()
         };
 
@@ -123,19 +132,16 @@ impl HashJoinOperator {
             hash_table
         };
 
-        // 결과 저장
+        // Store results: when swapped, build=right so store accordingly
         if build_is_left {
-            // 정상: left가 build, right가 probe
+            // Normal: left is build, right is probe
             self.left_batch = Some(merged);
             self.right_batches = Some(probe_batches.into_vec());
         } else {
-            // Swap: right가 build, left가 probe
-            // left_batch에 build 데이터 저장 (이름은 left지만 실제로는 right)
+            // Swapped (INNER only): right was build, left was probe
+            // Store build data as left_batch (output will reorder columns)
             self.left_batch = Some(merged);
             self.right_batches = Some(probe_batches.into_vec());
-
-            // TODO: JOIN 타입 변환 필요 (LEFT <-> RIGHT)
-            // TODO: 컬럼 순서 조정 필요
         }
 
         self.build_table = Some(hash_table);

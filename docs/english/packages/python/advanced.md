@@ -71,6 +71,64 @@ for t in threads:
     t.join()
 ```
 
+## Feature Flags
+
+```python
+# Enable/disable features at runtime
+db.enable_feature("parallel_query")
+db.enable_feature("query_plan_cache")
+db.disable_feature("parallel_query")
+
+if db.is_feature_enabled("parallel_query"):
+    print("Parallel query enabled")
+```
+
+## Query Plan Cache
+
+```python
+db.enable_feature("query_plan_cache")
+
+# Repeated queries skip parsing (7.3x faster)
+for _ in range(100):
+    results = db.execute_sql("SELECT * FROM users WHERE age > 20")
+```
+
+## Schema Versioning
+
+```python
+db.execute_sql("CREATE TABLE users (id INT, name TEXT)")      # v1
+db.execute_sql("ALTER TABLE users ADD COLUMN email TEXT")      # v2
+
+version = db.schema_version("users")  # → 2
+```
+
+## UDF (User-Defined Functions)
+
+```python
+def double_value(x):
+    return x * 2
+
+db.register_scalar_udf("double", double_value)
+results = db.execute_sql("SELECT double(price) FROM products")
+```
+
+## Triggers
+
+```python
+def on_user_insert(event):
+    print(f"New user: {event.new_values}")
+
+db.register_trigger("users", "after_insert", on_user_insert)
+```
+
+## Scheduler
+
+```python
+db.schedule_job("cleanup", "0 0 * * *", lambda: db.execute_sql(
+    "DELETE FROM sessions WHERE expired = 1"
+))
+```
+
 ## Next Steps
 
 - [Examples](examples) - More examples

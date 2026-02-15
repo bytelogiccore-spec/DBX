@@ -1,6 +1,6 @@
 [package]
 name = "dbx-csharp"
-version = "0.0.2-beta"
+version = "0.0.4-beta"
 edition = "2021"
 authors = ["DBX Team"]
 description = "CsBindgen native C# bindings for DBX database"
@@ -9,7 +9,7 @@ description = "CsBindgen native C# bindings for DBX database"
 crate-type = ["cdylib"]
 
 [dependencies]
-dbx-core = { path = "../dbx-core", version = "0.0.3-beta" }
+dbx-core = { path = "../dbx-core", version = "0.0.4-beta" }
 
 [build-dependencies]
 csbindgen = "1.9"

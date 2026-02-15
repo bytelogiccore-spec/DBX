@@ -29,16 +29,15 @@ pub struct GpuStreamContext {
 
 #[cfg(feature = "gpu")]
 impl GpuStreamContext {
-    /// Create a new stream context
     pub fn new(
         stream_id: usize,
         priority: StreamPriority,
         device: Arc<CudaContext>,
     ) -> DbxResult<Self> {
-        // Note: cudarc's CudaContext doesn't support creating new streams directly
-        // We use the default stream for now
-        // TODO: Implement proper stream creation when cudarc supports it
-        let stream = device.default_stream();
+        // cudarc 0.19.2: use fork_default_stream for separate stream creation
+        // Note: cudarc doesn't expose priority-based stream creation directly
+        let stream = device.fork_default_stream()
+            .map_err(|e| DbxError::Gpu(format!("Failed to create stream: {:?}", e)))?;
 
         Ok(Self {
             stream_id,

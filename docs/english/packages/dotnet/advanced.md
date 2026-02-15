@@ -50,6 +50,65 @@ tx.Commit();
 db.Flush();
 ```
 
+## Feature Flags
+
+```csharp
+db.EnableFeature("parallel_query");
+db.EnableFeature("query_plan_cache");
+db.DisableFeature("parallel_query");
+
+if (db.IsFeatureEnabled("parallel_query"))
+{
+    Console.WriteLine("Parallel query enabled");
+}
+```
+
+## Query Plan Cache
+
+```csharp
+db.EnableFeature("query_plan_cache");
+
+// Repeated queries skip parsing (7.3x faster)
+for (int i = 0; i < 100; i++)
+{
+    var results = db.ExecuteSql("SELECT * FROM users WHERE age > 20");
+}
+```
+
+## Schema Versioning
+
+```csharp
+db.ExecuteSql("CREATE TABLE users (id INT, name TEXT)");       // v1
+db.ExecuteSql("ALTER TABLE users ADD COLUMN email TEXT");       // v2
+
+var version = db.SchemaVersion("users");  // → 2
+```
+
+## UDF (User-Defined Functions)
+
+```csharp
+db.RegisterScalarUdf("double", (double x) => x * 2);
+var results = db.ExecuteSql("SELECT double(price) FROM products");
+```
+
+## Triggers
+
+```csharp
+db.RegisterTrigger("users", "after_insert", (event) =>
+{
+    Console.WriteLine($"New user: {event.NewValues}");
+});
+```
+
+## Scheduler
+
+```csharp
+db.ScheduleJob("cleanup", "0 0 * * *", () =>
+{
+    db.ExecuteSql("DELETE FROM sessions WHERE expired = 1");
+});
+```
+
 ## Next Steps
 
 - [Examples](examples) - More examples

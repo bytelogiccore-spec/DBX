@@ -107,6 +107,69 @@ for (int threadId = 0; threadId < 4; threadId++)
 await Task.WhenAll(tasks);
 ```
 
+## 기능 플래그
+
+```csharp
+// 런타임에 기능 활성화/비활성화
+db.EnableFeature("parallel_query");
+db.EnableFeature("query_plan_cache");
+db.DisableFeature("parallel_query");
+
+if (db.IsFeatureEnabled("parallel_query"))
+{
+    Console.WriteLine("병렬 쿼리 활성화됨");
+}
+```
+
+## 쿼리 플랜 캐시
+
+```csharp
+db.EnableFeature("query_plan_cache");
+
+// 동일 쿼리 반복 시 파싱을 건너뜀 (7.3x 빠름)
+for (int i = 0; i < 100; i++)
+{
+    var results = db.ExecuteSql("SELECT * FROM users WHERE age > 20");
+}
+```
+
+## 스키마 버저닝
+
+```csharp
+db.ExecuteSql("CREATE TABLE users (id INT, name TEXT)");       // v1
+db.ExecuteSql("ALTER TABLE users ADD COLUMN email TEXT");       // v2
+
+var version = db.SchemaVersion("users");  // → 2
+```
+
+## UDF (사용자 정의 함수)
+
+```csharp
+// 스칼라 UDF 등록
+db.RegisterScalarUdf("double", (double x) => x * 2);
+
+// SQL에서 사용
+var results = db.ExecuteSql("SELECT double(price) FROM products");
+```
+
+## 트리거
+
+```csharp
+db.RegisterTrigger("users", "after_insert", (event) =>
+{
+    Console.WriteLine($"새 사용자: {event.NewValues}");
+});
+```
+
+## 스케줄러
+
+```csharp
+db.ScheduleJob("cleanup", "0 0 * * *", () =>
+{
+    db.ExecuteSql("DELETE FROM sessions WHERE expired = 1");
+});
+```
+
 ## 다음 단계
 
 - [실전 예제](examples) - 더 많은 예제

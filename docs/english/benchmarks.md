@@ -44,7 +44,7 @@ DBX is a high-performance embedded database engine written in pure Rust. This be
 - **Memory INSERT**: DBX 25.37 ms vs SQLite 29.50 ms (**1.16x faster**)
 - **File GET**: DBX 17.28 ms vs SQLite 497.64 ms (**28.8x faster**)
 
-**Version**: DBX v0.0.1-beta  
+**Version**: DBX v{{ site.dbx_version }}  
 **Test Date**: February 14, 2026  
 **Report Type**: Official Performance Comparison Analysis
 
@@ -75,7 +75,7 @@ DBX is a high-performance embedded database engine written in pure Rust. This be
 
 | Database | Version | Language | Features |
 |----------|---------|----------|----------|
-| **DBX** | 0.0.1-beta | Pure Rust | 5-Tier Hybrid Storage, MVCC |
+| **DBX** | {{ site.dbx_version }} | Pure Rust | 5-Tier Hybrid Storage, MVCC |
 | **SQLite** | 0.32 (rusqlite) | C (bundled) | Industry-standard embedded DB |
 | **Sled** | 0.34 | Pure Rust | Lock-free B+ tree |
 | **Redb** | 2.1 | Pure Rust | LMDB-inspired, file-only |

@@ -262,10 +262,17 @@ impl StorageBackend for ColumnarDelta {
         Ok(None)
     }
 
-    fn delete(&self, _table: &str, _key: &[u8]) -> DbxResult<bool> {
-        // TODO: Implement tombstone support
-        // For now, deletion is not supported in ColumnarDelta
-        Ok(false)
+    fn delete(&self, table: &str, key: &[u8]) -> DbxResult<bool> {
+        // Tombstone support: insert a batch with an empty value as a deletion marker
+        // The key exists check is done first
+        if self.get(table, key)?.is_none() {
+            return Ok(false);
+        }
+
+        // Insert tombstone: key with empty value signals deletion
+        let tombstone_batch = kv_to_batch(vec![(key.to_vec(), Vec::new())])?;
+        self.insert_versioned_batch(table, tombstone_batch, 0)?;
+        Ok(true)
     }
 
     fn scan<R: RangeBounds<Vec<u8>> + Clone>(

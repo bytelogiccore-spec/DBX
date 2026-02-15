@@ -309,6 +309,55 @@ impl PhysicalPlanner {
                 table: table.clone(),
                 operation: operation.clone(),
             }),
+            LogicalPlan::CreateFunction {
+                name,
+                params,
+                return_type,
+                language,
+                body,
+            } => Ok(PhysicalPlan::CreateFunction {
+                name: name.clone(),
+                params: params.clone(),
+                return_type: return_type.clone(),
+                language: language.clone(),
+                body: body.clone(),
+            }),
+            LogicalPlan::CreateTrigger {
+                name,
+                timing,
+                event,
+                table,
+                for_each,
+                function,
+            } => Ok(PhysicalPlan::CreateTrigger {
+                name: name.clone(),
+                timing: *timing,
+                event: *event,
+                table: table.clone(),
+                for_each: *for_each,
+                function: function.clone(),
+            }),
+            LogicalPlan::CreateJob {
+                name,
+                schedule,
+                function,
+            } => Ok(PhysicalPlan::CreateJob {
+                name: name.clone(),
+                schedule: schedule.clone(),
+                function: function.clone(),
+            }),
+            LogicalPlan::DropFunction { name, if_exists } => Ok(PhysicalPlan::DropFunction {
+                name: name.clone(),
+                if_exists: *if_exists,
+            }),
+            LogicalPlan::DropTrigger { name, if_exists } => Ok(PhysicalPlan::DropTrigger {
+                name: name.clone(),
+                if_exists: *if_exists,
+            }),
+            LogicalPlan::DropJob { name, if_exists } => Ok(PhysicalPlan::DropJob {
+                name: name.clone(),
+                if_exists: *if_exists,
+            }),
         }
     }
 
@@ -404,6 +453,12 @@ impl PhysicalPlanner {
             PhysicalPlan::CreateIndex { .. } => vec![],
             PhysicalPlan::DropIndex { .. } => vec![],
             PhysicalPlan::AlterTable { .. } => vec![],
+            PhysicalPlan::CreateFunction { .. } => vec![],
+            PhysicalPlan::CreateTrigger { .. } => vec![],
+            PhysicalPlan::CreateJob { .. } => vec![],
+            PhysicalPlan::DropFunction { .. } => vec![],
+            PhysicalPlan::DropTrigger { .. } => vec![],
+            PhysicalPlan::DropJob { .. } => vec![],
         }
     }
 

@@ -61,6 +61,256 @@ While DBX already provides high-performance CRUD, SQL, transactions, and GPU acc
 
 ---
 
+## ⚡ Phase 0: HTAP Optimization (Q1 2026)
+
+**Goal**: Enhance DBX's HTAP (Hybrid Transactional/Analytical Processing) maturity
+
+While DBX currently supports both OLTP and OLAP workloads through its 5-Tier architecture, it lacks real-time analytics and adaptive workload optimization. This phase transforms DBX into a true HTAP system.
+
+### 0.1 Real-time Synchronization (4 weeks)
+
+**Problem**:
+- Delta Store → Columnar Cache synchronization is threshold-based, causing delays
+- Latest data not immediately reflected in analytical queries
+- Fails to meet HTAP's core requirement of "real-time analytics"
+
+**Implementation**:
+```rust
+pub struct RealtimeSyncConfig {
+    /// Synchronization mode
+    mode: SyncMode,
+    /// Batch size (in rows)
+    batch_size: usize,
+    /// Maximum latency (milliseconds)
+    max_latency_ms: u64,
+}
+
+pub enum SyncMode {
+    /// Immediate sync (after every write)
+    Immediate,
+    /// Async batch sync (default)
+    AsyncBatch,
+    /// Threshold-based (legacy)
+    Threshold(usize),
+}
+
+impl DeltaStore {
+    /// Real-time propagation to Columnar Cache on Delta changes
+    pub async fn sync_to_cache(&self) -> DbxResult<()> {
+        let changes = self.drain_pending_changes();
+        self.columnar_cache.append_batch_async(changes).await?;
+        Ok(())
+    }
+}
+```
+
+**Features**:
+- **Async real-time sync**: Immediate Columnar Cache updates on Delta Store changes
+- **Batch optimization**: Small changes batched to minimize overhead
+- **Latency guarantee**: Sync completes within 100ms
+- **Backpressure control**: Automatic throttling under Cache load
+
+**Example Usage**:
+```rust
+// Enable real-time synchronization
+db.enable_realtime_sync(RealtimeSyncConfig {
+    mode: SyncMode::AsyncBatch,
+    batch_size: 1000,
+    max_latency_ms: 100,
+})?;
+
+// Now analytical queries see latest data immediately after INSERT
+db.insert("users", user_data)?;
+// Sync completes within 100ms
+let result = db.execute_sql("SELECT COUNT(*) FROM users WHERE status = 'active'")?;
+```
+
+**Performance Targets**:
+- Sync latency: < 100ms (99th percentile)
+- Write overhead: < 5%
+- Query freshness: Real-time (vs. seconds/minutes previously)
+
+**Success Criteria**:
+- TPC-H benchmark support for real-time analytical queries
+- Maintain 95%+ write throughput
+- Provide sync latency monitoring dashboard
+
+---
+
+### 0.2 Adaptive Workload Tuning (5 weeks)
+
+**Problem**:
+- Flush/Compaction thresholds are statically configured
+- Same strategy applied to OLTP-heavy and OLAP-heavy workloads
+- Resource waste and performance degradation
+
+**Implementation**:
+```rust
+pub struct WorkloadAnalyzer {
+    /// OLTP vs OLAP ratio (0.0 = pure OLAP, 1.0 = pure OLTP)
+    oltp_ratio: f64,
+    /// Hot key tracking
+    hot_keys: LruCache<Vec<u8>, u64>,
+    /// Query pattern history
+    query_patterns: VecDeque<QueryPattern>,
+    /// Analysis window (seconds)
+    window_size: u64,
+}
+
+pub struct AdaptiveConfig {
+    /// Delta Store size (dynamically adjusted)
+    delta_threshold: usize,
+    /// Columnar Cache size (dynamically adjusted)
+    cache_size: usize,
+    /// Compaction frequency (dynamically adjusted)
+    compaction_interval: Duration,
+    /// GPU usage (dynamically determined)
+    enable_gpu: bool,
+}
+
+impl WorkloadAnalyzer {
+    /// Analyze workload and auto-tune
+    pub fn analyze_and_tune(&mut self, stats: &WorkloadStats) -> AdaptiveConfig {
+        self.update_oltp_ratio(stats);
+        
+        if self.is_oltp_heavy() {
+            // OLTP optimization: Expand Delta Store, shrink Cache
+            AdaptiveConfig {
+                delta_threshold: 100_000,  // 2x default
+                cache_size: 50_000,        // 0.5x default
+                compaction_interval: Duration::from_secs(300),
+                enable_gpu: false,
+            }
+        } else if self.is_olap_heavy() {
+            // OLAP optimization: Expand Cache, enable GPU
+            AdaptiveConfig {
+                delta_threshold: 10_000,   // Fast flush
+                cache_size: 500_000,       // 5x default
+                compaction_interval: Duration::from_secs(60),
+                enable_gpu: true,
+            }
+        } else {
+            // Balanced mode (default)
+            AdaptiveConfig::default()
+        }
+    }
+    
+    fn is_oltp_heavy(&self) -> bool {
+        self.oltp_ratio > 0.7
+    }
+    
+    fn is_olap_heavy(&self) -> bool {
+        self.oltp_ratio < 0.3
+    }
+}
+
+pub enum QueryPattern {
+    PointQuery,      // SELECT WHERE id = ?
+    RangeScan,       // SELECT WHERE date BETWEEN ? AND ?
+    Aggregation,     // SELECT SUM(amount) GROUP BY ...
+    Join,            // SELECT ... FROM a JOIN b ...
+}
+```
+
+**Features**:
+- **Workload detection**: Real-time OLTP/OLAP ratio tracking
+- **Auto-tuning**: Dynamic Tier sizing based on workload
+- **Hot data tracking**: Keep frequently accessed keys in Delta Store
+- **Predictive optimization**: Proactive adjustments based on historical patterns
+
+**Example Usage**:
+```rust
+// Enable adaptive optimization
+db.enable_adaptive_tuning(AdaptiveTuningConfig {
+    analysis_window: Duration::from_secs(300),  // 5-minute window
+    tuning_interval: Duration::from_secs(60),   // Re-tune every minute
+    auto_gpu: true,  // Auto-enable GPU based on workload
+})?;
+
+// System automatically analyzes and optimizes
+// OLTP-heavy → Expand Delta Store
+// OLAP-heavy → Expand Columnar Cache, enable GPU
+```
+
+**Optimization Strategy**:
+
+| Workload | OLTP Ratio | Delta Size | Cache Size | GPU | Compaction Interval |
+|---------|----------|-----------|-----------|-----|----------------|
+| **Pure OLTP** | > 90% | 200K | 10K | ❌ | 10 min |
+| **OLTP-heavy** | 70-90% | 100K | 50K | ❌ | 5 min |
+| **Balanced** | 30-70% | 50K | 100K | ⚠️ | 2 min |
+| **OLAP-heavy** | 10-30% | 10K | 500K | ✅ | 1 min |
+| **Pure OLAP** | < 10% | 5K | 1M | ✅ | 30 sec |
+
+**Performance Targets**:
+- OLTP workload: 20% write throughput improvement
+- OLAP workload: 30% query response time reduction
+- Mixed workload: 15% overall throughput improvement
+
+**Success Criteria**:
+- Auto-readjustment on workload shift (< 1 minute)
+- Optimized resource utilization (< 10% memory waste)
+- Average 20% performance gain vs. static configuration in benchmarks
+
+---
+
+### 0.3 HTAP Benchmark Suite (3 weeks)
+
+**Goal**: Validate HTAP performance and prevent regressions
+
+**Implementation**:
+```rust
+pub struct HtapBenchmark {
+    /// Concurrent OLTP transactions
+    oltp_threads: usize,
+    /// Concurrent OLAP queries
+    olap_threads: usize,
+    /// Benchmark duration
+    duration: Duration,
+}
+```
+
+**Benchmark Scenarios**:
+1. **CH-benCHmark**: TPC-C (OLTP) + TPC-H (OLAP) mixed
+2. **Real-time analytics**: Measure aggregation query latency after INSERT
+3. **Workload transition**: Measure adaptation time on OLTP → OLAP shift
+4. **Isolation test**: Impact of OLAP queries on OLTP throughput
+
+**Performance Criteria**:
+- OLTP throughput: > 50,000 TPS (with concurrent OLAP)
+- OLAP query latency: < 500ms (TPC-H Q1)
+- Real-time analytics latency: < 100ms (99th percentile)
+- Isolation overhead: < 10%
+
+---
+
+### 0.4 Monitoring and Observability (2 weeks)
+
+**Implementation**:
+```rust
+pub struct HtapMetrics {
+    /// Real-time sync latency
+    sync_latency: Histogram,
+    /// OLTP/OLAP ratio
+    workload_ratio: Gauge,
+    /// Tier hit rates
+    tier_hit_rates: HashMap<String, f64>,
+    /// Adaptive tuning events
+    tuning_events: Vec<TuningEvent>,
+}
+
+// Export metrics
+db.export_metrics("/metrics")?;  // Prometheus format
+```
+
+**Dashboard**:
+- Real-time workload distribution (OLTP vs OLAP)
+- Tier-level data distribution and hit rates
+- Sync latency histogram
+- Adaptive tuning history
+
+---
+
 ## 🚀 Phase 1: Trigger System (Q2 2026)
 
 **Goal**: Establish an automated reaction system for data changes.

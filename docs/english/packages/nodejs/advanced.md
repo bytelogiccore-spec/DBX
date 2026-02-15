@@ -76,6 +76,61 @@ for (let i = 0; i < 4; i++) {
 await Promise.all(workers.map(w => new Promise(resolve => w.on('exit', resolve))));
 ```
 
+## Feature Flags
+
+```typescript
+db.enableFeature('parallel_query');
+db.enableFeature('query_plan_cache');
+db.disableFeature('parallel_query');
+
+if (db.isFeatureEnabled('parallel_query')) {
+  console.log('Parallel query enabled');
+}
+```
+
+## Query Plan Cache
+
+```typescript
+db.enableFeature('query_plan_cache');
+
+// Repeated queries skip parsing (7.3x faster)
+for (let i = 0; i < 100; i++) {
+  const results = db.executeSql('SELECT * FROM users WHERE age > 20');
+}
+```
+
+## Schema Versioning
+
+```typescript
+db.executeSql('CREATE TABLE users (id INT, name TEXT)');       // v1
+db.executeSql('ALTER TABLE users ADD COLUMN email TEXT');       // v2
+
+const version = db.schemaVersion('users');  // → 2
+```
+
+## UDF (User-Defined Functions)
+
+```typescript
+db.registerScalarUdf('double', (x: number) => x * 2);
+const results = db.executeSql('SELECT double(price) FROM products');
+```
+
+## Triggers
+
+```typescript
+db.registerTrigger('users', 'after_insert', (event) => {
+  console.log(`New user: ${JSON.stringify(event.newValues)}`);
+});
+```
+
+## Scheduler
+
+```typescript
+db.scheduleJob('cleanup', '0 0 * * *', () => {
+  db.executeSql('DELETE FROM sessions WHERE expired = 1');
+});
+```
+
 ## Next Steps
 
 - [Examples](examples) - More examples

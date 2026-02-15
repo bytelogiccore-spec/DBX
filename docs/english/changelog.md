@@ -14,6 +14,59 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.0.4-beta] - 2026-02-15
+
+First feature release. Full query execution pipeline optimization.
+
+### New Features
+
+- **Query Plan Cache** — Two-tier (memory + disk) cache that skips parsing and optimization for repeated SQL queries
+- **Parallel Query Execution** — Rayon thread pool-based parallel filtering, aggregation, and projection for large datasets
+- **WAL Partitioning** — Per-table WAL partitions to eliminate write bottlenecks
+- **Schema Versioning** — Zero-downtime DDL support with schema change history and per-version rollback
+- **Index Versioning** — Index rebuild history tracking with performance metrics
+- **Feature Flags** — Runtime toggle system for individual features (supports environment variables and file persistence)
+- **UDF Framework** — User-defined functions (scalar, aggregate, table), triggers, and schedulers
+- **Benchmark Framework** — Criterion-based performance measurement with before/after comparison tools
+- **PTX Persistent Kernel** — NVRTC-based runtime CUDA kernel compilation for persistent GPU processing (optional, behind `gpu` feature)
+- **Hash/Range Sharding** — GPU shard strategies: hash-based (ahash) and range-based row distribution
+- **CUDA Stream Management** — Separate stream creation via `fork_default_stream()`
+- **Schema-based INSERT Serialization** — Column-named JSON object serialization when table schema is available
+- **JOIN Optimization** — Size-based build/probe table swap for INNER JOIN (smaller table as build)
+- **Tombstone Deletion** — Versioned tombstone support in columnar delta storage
+- **Table-specific Cache Invalidation** — Selective eviction by table name instead of full cache clear
+
+### Performance Improvements
+
+| Metric | Before | After | Improvement |
+|--------|:------:|:-----:|:-----------:|
+| Repeated SQL parsing (10x) | 146 µs | 20 µs | 7.3x |
+| WAL append (100 entries) | 1,016 µs | 71 µs | 14.2x |
+| Schema lookup (single-thread) | 86 ns | 46 ns | 47% |
+| Schema lookup (8 threads) | 7.4M ops/s | 18.1M ops/s | 2.44x |
+| Small aggregation (150 rows) | 32.5 µs | 991 ns | 33x |
+
+### Refactored
+
+- **SQL Optimizer** — Split 874-line monolithic `optimizer.rs` into modular directory structure (6 files: trait, 4 rules, tests)
+- **CREATE FUNCTION** — Actual parameter parsing from parenthesized arguments
+- **ORDER BY** — Activated test for `sqlparser` 0.52 `OrderBy.exprs` API
+
+### Internal Changes
+
+- Migrated `SchemaVersionManager` storage from `RwLock<HashMap>` to `DashMap` for improved concurrent read performance
+- Changed `ParallelQueryExecutor` parallelization criteria from batch count to **total row count** (defaults to sequential execution below 1,000 rows)
+- Applied dynamic threading and automatic batch size tuning to the SQL parser
+- Documented `cudarc` 0.19.2 limitations for Unified Memory, P2P detection, and persistent kernels
+
+### Dependencies
+
+- Added `dashmap` 6.x (lock-free concurrent hashmap)
+- Added `rayon` 1.x (parallel processing)
+- Added `criterion` 0.5 (benchmarking)
+
+---
+
 ## [0.0.3-beta] - 2026-02-15
 
 ### Added

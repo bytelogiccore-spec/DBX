@@ -59,7 +59,7 @@ db.close()
 
 ## Version Info
 
-- **Current Version**: 0.0.3-beta
+- **Current Version**: {{ site.dbx_version }}
 - **Python Requirements**: 3.8+
 - **Platform**: Windows x64 (Linux/macOS planned)
 

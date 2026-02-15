@@ -47,7 +47,7 @@ DBX는 순수 Rust로 작성된 고성능 임베디드 데이터베이스 엔진
 - **메모리 INSERT**: DBX 25.37 ms vs SQLite 29.50 ms (**1.16배 빠름**)
 - **파일 GET**: DBX 17.28 ms vs SQLite 497.64 ms (**28.8배 빠름**)
 
-**버전**: DBX v0.0.1-beta  
+**버전**: DBX v{{ site.dbx_version }}  
 **테스트 날짜**: 2026년 2월 14일  
 **보고서 유형**: 공식 성능 비교 분석
 
@@ -79,7 +79,7 @@ DBX는 순수 Rust로 작성된 고성능 임베디드 데이터베이스 엔진
 
 | 데이터베이스 | 버전 | 언어 | 특징 |
 |----------|---------|----------|----------|
-| **DBX** | 0.0.1-beta | Pure Rust | 5-Tier Hybrid Storage, MVCC |
+| **DBX** | {{ site.dbx_version }} | Pure Rust | 5-Tier Hybrid Storage, MVCC |
 | **SQLite** | 0.32 (rusqlite) | C (bundled) | 업계 표준 임베디드 DB |
 | **Sled** | 0.34 | Pure Rust | Lock-free B+ tree |
 | **Redb** | 2.1 | Pure Rust | LMDB 영감, 파일 전용 |

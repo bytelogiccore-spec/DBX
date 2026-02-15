@@ -144,6 +144,77 @@ tx.commit();
 db.flush();
 ```
 
+## 기능 플래그 (C++)
+
+```cpp
+// 런타임에 기능 활성화/비활성화
+db.enableFeature("parallel_query");
+db.enableFeature("query_plan_cache");
+db.disableFeature("parallel_query");
+
+if (db.isFeatureEnabled("parallel_query")) {
+    std::cout << "병렬 쿼리 활성화됨" << std::endl;
+}
+```
+
+## 기능 플래그 (C)
+
+```c
+dbx_enable_feature(db, "parallel_query");
+dbx_enable_feature(db, "query_plan_cache");
+dbx_disable_feature(db, "parallel_query");
+
+if (dbx_is_feature_enabled(db, "parallel_query")) {
+    printf("병렬 쿼리 활성화됨\n");
+}
+```
+
+## 쿼리 플랜 캐시
+
+```cpp
+db.enableFeature("query_plan_cache");
+
+// 동일 쿼리 반복 시 파싱을 건너뜀 (7.3x 빠름)
+for (int i = 0; i < 100; i++) {
+    auto results = db.executeSql("SELECT * FROM users WHERE age > 20");
+}
+```
+
+## 스키마 버저닝
+
+```cpp
+db.executeSql("CREATE TABLE users (id INT, name TEXT)");       // v1
+db.executeSql("ALTER TABLE users ADD COLUMN email TEXT");       // v2
+
+auto version = db.schemaVersion("users");  // → 2
+```
+
+## UDF (C++)
+
+```cpp
+// 스칼라 UDF 등록
+db.registerScalarUdf("double", [](double x) { return x * 2; });
+
+// SQL에서 사용
+auto results = db.executeSql("SELECT double(price) FROM products");
+```
+
+## 트리거 (C++)
+
+```cpp
+db.registerTrigger("users", "after_insert", [](const auto& event) {
+    std::cout << "새 사용자 추가됨" << std::endl;
+});
+```
+
+## 스케줄러 (C++)
+
+```cpp
+db.scheduleJob("cleanup", "0 0 * * *", [&db]() {
+    db.executeSql("DELETE FROM sessions WHERE expired = 1");
+});
+```
+
 ## 다음 단계
 
 - [실전 예제](examples) - 더 많은 예제

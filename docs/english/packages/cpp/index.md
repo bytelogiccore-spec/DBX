@@ -104,7 +104,7 @@ int main() {
 
 ## Version Info
 
-- **Current Version**: 0.0.3-beta
+- **Current Version**: {{ site.dbx_version }}
 - **C Standard**: C89+
 - **C++ Standard**: C++11+ (C++ wrapper)
 - **Platform**: Windows x64 (Linux/macOS planned)

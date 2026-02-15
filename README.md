@@ -1,6 +1,6 @@
 # DBX — High-Performance Embedded Database
 
-[![Version](https://img.shields.io/badge/version-0.0.2--beta-blue.svg)](https://github.com/ByteLogicCore/DBX)
+[![Version](https://img.shields.io/badge/version-0.1.0-blue.svg)](https://github.com/ByteLogicCore/DBX)
 [![License](https://img.shields.io/badge/license-MIT%20OR%20Commercial-green.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-2024-orange.svg)](https://www.rust-lang.org)
 [![Documentation](https://img.shields.io/badge/docs-GitHub%20Pages-blue)](https://bytelogiccore-spec.github.io/DBX/)
@@ -119,15 +119,19 @@ DBX provides official bindings for multiple languages:
 - ✅ **GPU Acceleration** — CUDA-based aggregation and filtering
 - ✅ **Encryption** — AES-256-GCM-SIV, ChaCha20-Poly1305
 - ✅ **Compression** — ZSTD, Brotli
-- ✅ **WAL 2.0** — Write-Ahead Logging with async fsync
-- ✅ **100+ Tests** — Comprehensive integration test suite
+- ✅ **WAL 2.0** — Partitioned WAL with async fsync
+- ✅ **Query Plan Cache** — Two-tier (memory + disk) plan caching
+- ✅ **Parallel Query** — Rayon-based parallel filter, aggregate, projection
+- ✅ **Schema Versioning** — Zero-downtime DDL with rollback support
+- ✅ **UDF Framework** — Scalar, Aggregate, and Table user-defined functions
+- ✅ **Triggers & Scheduler** — Event-driven triggers and cron-based job scheduling
+- ✅ **Feature Flags** — Runtime feature toggle with env/file persistence
 
 ### Roadmap 🚧
-- **Phase 1: Trigger System** — BEFORE/AFTER triggers, conditional logic
-- **Phase 2: User-Defined Functions** — Scalar, Aggregate, and Table UDFs
-- **Phase 3: Partitioning** — Range, Hash, and List partitioning with pruning
-- **Phase 4: Job Scheduler** — Automated maintenance and periodic tasks
-- **Phase 5: Advanced Features** — Materialized Views, Replication, Sharding
+- **Materialized Views** — Pre-computed query results with automatic refresh
+- **Replication** — Primary-replica data synchronization
+- **Sharding** — Horizontal partitioning across multiple nodes
+- **Streaming Ingestion** — Real-time data pipeline support
 
 ---
 

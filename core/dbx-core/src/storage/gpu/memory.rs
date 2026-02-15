@@ -27,9 +27,9 @@ pub struct UnifiedBuffer<T: Clone> {
 impl<T: Clone + cudarc::driver::DeviceRepr> UnifiedBuffer<T> {
     /// Create a new unified buffer
     pub fn new(device: Arc<CudaContext>, size: usize) -> DbxResult<Self> {
-        // Note: cudarc doesn't directly expose cudaMallocManaged
-        // We use regular host memory for now
-        // TODO: Implement proper Unified Memory when cudarc supports it
+        // cudarc 0.19.2 does not expose cudaMallocManaged.
+        // Host memory is used as a portable fallback with explicit htod transfers.
+        // When cudarc adds Unified Memory support, replace with managed allocation.
         let data = vec![unsafe { std::mem::zeroed() }; size];
 
         Ok(Self {
@@ -53,9 +53,9 @@ impl<T: Clone + cudarc::driver::DeviceRepr> UnifiedBuffer<T> {
 
     /// Prefetch data to GPU asynchronously
     pub fn prefetch_to_gpu(&mut self) -> DbxResult<()> {
-        // Note: cudarc doesn't expose cudaMemPrefetchAsync directly
-        // We simulate this by uploading to GPU
-        // TODO: Implement proper prefetching when cudarc supports it
+        // cudarc 0.19.2 does not expose cudaMemPrefetchAsync.
+        // Simulated via explicit htod upload on first prefetch call.
+        // Replace with native prefetch when cudarc adds UVM support.
 
         if !self.prefetched {
             // Upload data to GPU (simulating prefetch)

@@ -58,7 +58,7 @@ using (var db = Database.OpenInMemory())
 
 ## 버전 정보
 
-- **현재 버전**: 0.0.3-beta
+- **현재 버전**: {{ site.dbx_version }}
 - **.NET 요구사항**: .NET Standard 2.0+ (.NET Framework 4.6.1+, .NET Core 2.0+, .NET 5+)
 - **플랫폼**: Windows x64 (Linux/macOS 계획됨)
 

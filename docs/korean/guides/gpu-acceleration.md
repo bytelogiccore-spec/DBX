@@ -43,7 +43,7 @@ DBX는 분석 쿼리를 위해 선택적으로 **CUDA 기반 GPU 가속**을 지
 
 ```toml
 [dependencies]
-dbx-core = { version = "0.0.1-beta", features = ["gpu"] }
+dbx-core = { version = "0.1.0", features = ["gpu"] }
 ```
 
 ### 2. 빌드
@@ -65,16 +65,16 @@ use dbx_core::Database;
 
 fn main() -> dbx_core::DbxResult<()> {
     let db = Database::open_in_memory()?;
-    
+
     // 테이블 데이터를 GPU 캐시로 동기화
     db.sync_gpu_cache("orders")?;
-    
+
     if let Some(gpu) = db.gpu_manager() {
         // GPU 가속 합계 계산
         let total = gpu.sum("orders", "amount")?;
         println!("합계: {}", total);
     }
-    
+
     Ok(())
 }
 ```
@@ -98,6 +98,57 @@ db.set_gpu_hash_strategy(HashStrategy::Cuckoo)?;
 
 ---
 
+## 샤딩 전략 (Sharding Strategies)
+
+멀티 GPU 환경에서 데이터를 분산하기 위한 세 가지 전략을 제공합니다:
+
+| 전략 | 동작 방식 | 권장 사례 |
+|------|-----------|----------|
+| **RoundRobin** | 순차적으로 디바이스에 행 분배 | 균등 분배 필요 시 |
+| **Hash** | 첫 번째 컬럼 해시값 기반 분배 (ahash) | GROUP BY, JOIN 쿼리 |
+| **Range** | 연속된 행 범위를 디바이스에 할당 | 정렬된 데이터, 범위 스캔 |
+
+```rust
+use dbx_core::storage::gpu::ShardingStrategy;
+
+let manager = ShardManager::new(device_count, ShardingStrategy::Hash);
+let shards = manager.shard_batch(&batch)?;
+```
+
+---
+
+## PTX Persistent Kernel
+
+NVRTC를 사용하여 CUDA C 커널을 런타임에 PTX로 컴파일합니다. 커널은 GPU에서 상주하며 work queue를 지속적으로 처리합니다.
+
+```rust
+use dbx_core::storage::gpu::persistent::PersistentKernelManager;
+
+let manager = PersistentKernelManager::new(device.clone());
+manager.compile_kernel()?;
+
+if let Some(func) = manager.get_kernel_function() {
+    // 커널 실행
+}
+```
+
+> **참고**: `gpu` feature 활성화 시에만 사용 가능합니다. `cudarc` 0.19.2 기준으로 Unified Memory 및 P2P 접근은 지원되지 않으며, 호스트 메모리 + 명시적 전송을 사용합니다.
+
+---
+
+## CUDA 스트림 관리
+
+`fork_default_stream()`을 통해 병렬 GPU 작업을 위한 별도 스트림을 생성합니다:
+
+```rust
+use dbx_core::engine::stream::GpuStreamContext;
+
+let ctx = GpuStreamContext::new(device.clone())?;
+// 별도 스트림에서 비동기 GPU 작업 실행
+```
+
+---
+
 ## SQL 통합
 
 GPU 기능이 활성화되면 호환되는 SQL 작업은 자동으로 GPU를 사용합니다:
@@ -105,9 +156,9 @@ GPU 기능이 활성화되면 호환되는 SQL 작업은 자동으로 GPU를 사
 ```rust
 // 다음 SQL 작업들은 자동으로 GPU 가속을 사용합니다.
 let results = db.execute_sql("
-    SELECT city, SUM(amount) 
-    FROM orders 
-    WHERE amount > 1000 
+    SELECT city, SUM(amount)
+    FROM orders
+    WHERE amount > 1000
     GROUP BY city
 ")?;
 ```

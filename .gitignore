@@ -70,3 +70,4 @@ dotnet_err.txt
 .specify/
 .design/
 GEMINI.md
+scripts/node_modules/

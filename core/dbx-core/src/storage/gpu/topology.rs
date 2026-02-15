@@ -67,9 +67,8 @@ impl DeviceTopology {
                     continue;
                 }
 
-                // Check P2P access capability
-                // Note: cudarc's can_access_peer may not exist, skip for now
-                // TODO: Implement proper P2P detection when cudarc supports it
+                // cudarc 0.19.2 does not expose cudaDeviceCanAccessPeer.
+                // Default to PCIe (no P2P) until cudarc adds peer access API.
                 p2p_matrix[i][j] = false;
                 link_types[i][j] = LinkType::PCIe;
             }
@@ -129,13 +128,11 @@ impl DeviceTopology {
             )));
         }
 
-        // Note: cudarc's enable_peer_access may not exist
-        // TODO: Implement when cudarc supports P2P
-        return Err(DbxError::NotImplemented(
-            "P2P access enablement not yet implemented".to_string(),
-        ));
-
-        Ok(())
+        // cudarc 0.19.2 does not expose cuCtxEnablePeerAccess.
+        // P2P will be enabled when cudarc adds peer access support.
+        Err(DbxError::NotImplemented(
+            "P2P access requires cudarc peer access API (not yet available)".to_string(),
+        ))
     }
 
     /// Check if NVLink is available between any devices

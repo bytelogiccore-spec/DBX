@@ -105,7 +105,7 @@ int main() {
 
 ## 버전 정보
 
-- **현재 버전**: 0.0.3-beta
+- **현재 버전**: {{ site.dbx_version }}
 - **C 표준**: C89 이상
 - **C++ 표준**: C++11 이상 (C++ 래퍼)
 - **플랫폼**: Windows x64 (Linux/macOS 계획됨)

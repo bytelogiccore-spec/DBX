@@ -28,7 +28,7 @@ description: "DBX 데이터베이스 빠른 시작 가이드"
 
 ```toml
 [dependencies]
-dbx-core = "0.0.1-beta"
+dbx-core = "{{ site.dbx_version }}"
 ```
 
 ### .NET (C#, VB.NET, F#)
@@ -177,7 +177,7 @@ println!("교체된 레코드 수: {}", count);
 
 ```toml
 [dependencies]
-dbx-core = { version = "0.0.1-beta", features = ["gpu"] }
+dbx-core = { version = "{{ site.dbx_version }}", features = ["gpu"] }
 ```
 
 GPU 가속 사용:

@@ -227,35 +227,75 @@ impl Database {
                         }
                     };
 
-                    // Extract remaining values as JSON-serializable format
-                    let mut value_vec = Vec::new();
-                    for expr in &row_values[1..] {
-                        match expr {
-                            PhysicalExpr::Literal(scalar) => {
-                                use crate::storage::columnar::ScalarValue;
-                                let json_val = match scalar {
-                                    ScalarValue::Utf8(s) => serde_json::Value::String(s.clone()),
-                                    ScalarValue::Int32(i) => serde_json::Value::Number((*i).into()),
-                                    ScalarValue::Int64(i) => serde_json::Value::Number((*i).into()),
-                                    ScalarValue::Float64(f) => serde_json::Number::from_f64(*f)
-                                        .map(serde_json::Value::Number)
-                                        .unwrap_or(serde_json::Value::Null),
-                                    ScalarValue::Boolean(b) => serde_json::Value::Bool(*b),
-                                    ScalarValue::Null => serde_json::Value::Null,
-                                };
-                                value_vec.push(json_val);
-                            }
-                            _ => {
-                                return Err(DbxError::NotImplemented(
-                                    "Non-literal value in INSERT".to_string(),
-                                ));
+                    // Schema-based serialization: use column names if schema is registered
+                    let schema_fields = {
+                        let schemas = self.table_schemas.read().unwrap();
+                        schemas.get(table.as_str()).map(|schema| {
+                            schema.fields().iter().map(|f| f.name().clone()).collect::<Vec<_>>()
+                        })
+                    };
+
+                    let value_json = if let Some(fields) = &schema_fields {
+                        // Schema-based: create JSON object with column names as keys
+                        let mut map = serde_json::Map::new();
+                        for (i, expr) in row_values[1..].iter().enumerate() {
+                            let fallback_name = format!("col_{}", i);
+                            let col_name = fields.get(i + 1)
+                                .map(|s| s.as_str())
+                                .unwrap_or(&fallback_name);
+                            match expr {
+                                PhysicalExpr::Literal(scalar) => {
+                                    use crate::storage::columnar::ScalarValue;
+                                    let json_val = match scalar {
+                                        ScalarValue::Utf8(s) => serde_json::Value::String(s.clone()),
+                                        ScalarValue::Int32(i) => serde_json::Value::Number((*i).into()),
+                                        ScalarValue::Int64(i) => serde_json::Value::Number((*i).into()),
+                                        ScalarValue::Float64(f) => serde_json::Number::from_f64(*f)
+                                            .map(serde_json::Value::Number)
+                                            .unwrap_or(serde_json::Value::Null),
+                                        ScalarValue::Boolean(b) => serde_json::Value::Bool(*b),
+                                        ScalarValue::Null => serde_json::Value::Null,
+                                    };
+                                    map.insert(col_name.to_string(), json_val);
+                                }
+                                _ => {
+                                    return Err(DbxError::NotImplemented(
+                                        "Non-literal value in INSERT".to_string(),
+                                    ));
+                                }
                             }
                         }
-                    }
-
-                    // Serialize values as JSON
-                    let value_json = serde_json::to_vec(&value_vec)
-                        .map_err(|e| DbxError::Serialization(e.to_string()))?;
+                        serde_json::to_vec(&serde_json::Value::Object(map))
+                            .map_err(|e| DbxError::Serialization(e.to_string()))?
+                    } else {
+                        // Fallback: serialize as JSON array (no schema available)
+                        let mut value_vec = Vec::new();
+                        for expr in &row_values[1..] {
+                            match expr {
+                                PhysicalExpr::Literal(scalar) => {
+                                    use crate::storage::columnar::ScalarValue;
+                                    let json_val = match scalar {
+                                        ScalarValue::Utf8(s) => serde_json::Value::String(s.clone()),
+                                        ScalarValue::Int32(i) => serde_json::Value::Number((*i).into()),
+                                        ScalarValue::Int64(i) => serde_json::Value::Number((*i).into()),
+                                        ScalarValue::Float64(f) => serde_json::Number::from_f64(*f)
+                                            .map(serde_json::Value::Number)
+                                            .unwrap_or(serde_json::Value::Null),
+                                        ScalarValue::Boolean(b) => serde_json::Value::Bool(*b),
+                                        ScalarValue::Null => serde_json::Value::Null,
+                                    };
+                                    value_vec.push(json_val);
+                                }
+                                _ => {
+                                    return Err(DbxError::NotImplemented(
+                                        "Non-literal value in INSERT".to_string(),
+                                    ));
+                                }
+                            }
+                        }
+                        serde_json::to_vec(&value_vec)
+                            .map_err(|e| DbxError::Serialization(e.to_string()))?
+                    };
 
                     // Insert into Delta Store
                     self.insert(table, &key, &value_json)?;
@@ -1008,6 +1048,24 @@ impl Database {
             PhysicalPlan::AlterTable { .. } => {
                 // ALTER TABLE should be handled in execute_physical_plan, not here
                 unreachable!("ALTER TABLE should not reach build_operator")
+            }
+            PhysicalPlan::CreateFunction { .. } => {
+                unreachable!("CREATE FUNCTION should not reach build_operator")
+            }
+            PhysicalPlan::CreateTrigger { .. } => {
+                unreachable!("CREATE TRIGGER should not reach build_operator")
+            }
+            PhysicalPlan::CreateJob { .. } => {
+                unreachable!("CREATE JOB should not reach build_operator")
+            }
+            PhysicalPlan::DropFunction { .. } => {
+                unreachable!("DROP FUNCTION should not reach build_operator")
+            }
+            PhysicalPlan::DropTrigger { .. } => {
+                unreachable!("DROP TRIGGER should not reach build_operator")
+            }
+            PhysicalPlan::DropJob { .. } => {
+                unreachable!("DROP JOB should not reach build_operator")
             }
         }
     }

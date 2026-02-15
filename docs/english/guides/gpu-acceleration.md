@@ -82,7 +82,7 @@ nvidia-smi
 
 ```toml
 [dependencies]
-dbx-core = { version = "0.0.1-beta", features = ["gpu"] }
+dbx-core = { version = "{{ site.dbx_version }}", features = ["gpu"] }
 ```
 
 ### 4. Build with GPU Support
@@ -323,6 +323,57 @@ db.set_gpu_hash_strategy(HashStrategy::RobinHood)?;
 | Mixed workloads | Robin Hood | Balanced |
 | Memory-constrained | Linear | Lowest memory usage |
 | High collision rate | Cuckoo | Best collision handling |
+
+---
+
+## Sharding Strategies
+
+For multi-GPU environments, DBX provides three sharding strategies to distribute data across devices:
+
+| Strategy | Behavior | Recommended For |
+|----------|----------|-----------------|
+| **RoundRobin** | Distributes rows sequentially | Balanced workloads |
+| **Hash** | Hash-based distribution on first column (ahash) | GROUP BY, JOIN queries |
+| **Range** | Assigns contiguous row ranges | Sorted data, range scans |
+
+```rust
+use dbx_core::storage::gpu::ShardingStrategy;
+
+let manager = ShardManager::new(device_count, ShardingStrategy::Hash);
+let shards = manager.shard_batch(&batch)?;
+```
+
+---
+
+## PTX Persistent Kernel
+
+Uses NVRTC to compile CUDA C kernels to PTX at runtime. The kernel persists on GPU, continuously processing work queue items until shutdown.
+
+```rust
+use dbx_core::storage::gpu::persistent::PersistentKernelManager;
+
+let manager = PersistentKernelManager::new(device.clone());
+manager.compile_kernel()?;
+
+if let Some(func) = manager.get_kernel_function() {
+    // Execute kernel
+}
+```
+
+> **Note**: Only available with the `gpu` feature enabled. As of `cudarc` 0.19.2, Unified Memory and P2P access are not supported; host memory with explicit transfers is used instead.
+
+---
+
+## CUDA Stream Management
+
+Create separate streams for parallel GPU operations via `fork_default_stream()`:
+
+```rust
+use dbx_core::engine::stream::GpuStreamContext;
+
+let ctx = GpuStreamContext::new(device.clone())?;
+// Execute async GPU work on separate stream
+```
 
 ---
 

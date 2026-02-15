@@ -783,7 +783,7 @@ dependencies = [
 
 [[package]]
 name = "dbx-core"
-version = "0.0.3-beta"
+version = "0.0.4-beta"
 dependencies = [
  "aes-gcm-siv",
  "ahash",
@@ -797,6 +797,7 @@ dependencies = [
  "dashmap",
  "hkdf",
  "lru",
+ "num_cpus",
  "parking_lot 0.12.5",
  "parquet",
  "proptest",
@@ -814,11 +815,12 @@ dependencies = [
  "thiserror",
  "tracing",
  "tracing-subscriber",
+ "zstd",
 ]
 
 [[package]]
 name = "dbx-csharp"
-version = "0.0.2-beta"
+version = "0.0.4-beta"
 dependencies = [
  "csbindgen",
  "dbx-core",
@@ -826,7 +828,7 @@ dependencies = [
 
 [[package]]
 name = "dbx-ffi"
-version = "0.0.3-beta"
+version = "0.0.4-beta"
 dependencies = [
  "dbx-core",
  "libc",
@@ -834,7 +836,7 @@ dependencies = [
 
 [[package]]
 name = "dbx-node"
-version = "0.0.2-beta"
+version = "0.0.4-beta"
 dependencies = [
  "dbx-core",
  "napi",
@@ -844,7 +846,7 @@ dependencies = [
 
 [[package]]
 name = "dbx-py"
-version = "0.0.2-beta"
+version = "0.0.4-beta"
 dependencies = [
  "dbx-core",
  "pyo3",
@@ -1626,6 +1628,16 @@ checksum = "071dfc062690e90b734c0b2273ce72ad0ffa95f0c74596bc250dcfd960262841"
 dependencies = [
  "autocfg",
  "libm",
+]
+
+[[package]]
+name = "num_cpus"
+version = "1.17.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "91df4bbde75afed763b708b7eee1e8e7651e02d97f6d5dd763e89367e957b23b"
+dependencies = [
+ "hermit-abi",
+ "libc",
 ]
 
 [[package]]

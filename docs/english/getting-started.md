@@ -28,7 +28,7 @@ Add DBX to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-dbx-core = "0.0.1-beta"
+dbx-core = "{{ site.dbx_version }}"
 ```
 
 ### .NET (C#, VB.NET, F#)
@@ -177,7 +177,7 @@ Enable GPU features in `Cargo.toml`:
 
 ```toml
 [dependencies]
-dbx-core = { version = "0.0.1-beta", features = ["gpu"] }
+dbx-core = { version = "{{ site.dbx_version }}", features = ["gpu"] }
 ```
 
 Use GPU acceleration:

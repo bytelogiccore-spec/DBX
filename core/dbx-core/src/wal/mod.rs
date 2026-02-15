@@ -43,6 +43,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 pub mod buffer;
 pub mod checkpoint;
 pub mod encrypted_wal;
+pub mod partitioned_wal;
 
 /// WAL record types.
 ///

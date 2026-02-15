@@ -76,6 +76,65 @@ for (let i = 0; i < 4; i++) {
 await Promise.all(workers.map(w => new Promise(resolve => w.on('exit', resolve))));
 ```
 
+## 기능 플래그
+
+```typescript
+// 런타임에 기능 활성화/비활성화
+db.enableFeature('parallel_query');
+db.enableFeature('query_plan_cache');
+db.disableFeature('parallel_query');
+
+if (db.isFeatureEnabled('parallel_query')) {
+  console.log('병렬 쿼리 활성화됨');
+}
+```
+
+## 쿼리 플랜 캐시
+
+```typescript
+db.enableFeature('query_plan_cache');
+
+// 동일 쿼리 반복 시 파싱을 건너뜀 (7.3x 빠름)
+for (let i = 0; i < 100; i++) {
+  const results = db.executeSql('SELECT * FROM users WHERE age > 20');
+}
+```
+
+## 스키마 버저닝
+
+```typescript
+db.executeSql('CREATE TABLE users (id INT, name TEXT)');       // v1
+db.executeSql('ALTER TABLE users ADD COLUMN email TEXT');       // v2
+
+const version = db.schemaVersion('users');  // → 2
+```
+
+## UDF (사용자 정의 함수)
+
+```typescript
+// 스칼라 UDF 등록
+db.registerScalarUdf('double', (x: number) => x * 2);
+
+// SQL에서 사용
+const results = db.executeSql('SELECT double(price) FROM products');
+```
+
+## 트리거
+
+```typescript
+db.registerTrigger('users', 'after_insert', (event) => {
+  console.log(`새 사용자: ${JSON.stringify(event.newValues)}`);
+});
+```
+
+## 스케줄러
+
+```typescript
+db.scheduleJob('cleanup', '0 0 * * *', () => {
+  db.executeSql('DELETE FROM sessions WHERE expired = 1');
+});
+```
+
 ## 다음 단계
 
 - [실전 예제](examples) - 더 많은 예제

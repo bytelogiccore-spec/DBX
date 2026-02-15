@@ -116,6 +116,9 @@ impl Database {
             job_sender: Some(tx),
             durability: DurabilityLevel::Lazy,
             index_registry: RwLock::new(loaded_indexes),
+            automation_engine: Arc::new(crate::automation::ExecutionEngine::new()),
+            trigger_registry: crate::engine::automation_api::TriggerRegistry::new(),
+            parallel_engine: Arc::new(crate::engine::parallel_engine::ParallelExecutionEngine::new_auto().expect("Failed to create parallel engine")),
         };
 
         // Perform crash recovery
@@ -240,6 +243,9 @@ impl Database {
             job_sender: Some(tx),
             durability: DurabilityLevel::Lazy,
             index_registry: RwLock::new(HashMap::new()),
+            automation_engine: Arc::new(crate::automation::ExecutionEngine::new()),
+            trigger_registry: crate::engine::automation_api::TriggerRegistry::new(),
+            parallel_engine: Arc::new(crate::engine::parallel_engine::ParallelExecutionEngine::new_auto().expect("Failed to create parallel engine")),
         };
 
         // Perform crash recovery from encrypted WAL
@@ -342,6 +348,9 @@ impl Database {
             job_sender: Some(tx),
             durability: DurabilityLevel::Lazy,
             index_registry: RwLock::new(HashMap::new()),
+            automation_engine: Arc::new(crate::automation::ExecutionEngine::new()),
+            trigger_registry: crate::engine::automation_api::TriggerRegistry::new(),
+            parallel_engine: Arc::new(crate::engine::parallel_engine::ParallelExecutionEngine::new_auto().expect("Failed to create parallel engine")),
         })
     }
 
@@ -413,6 +422,9 @@ impl Database {
             job_sender: Some(tx),
             durability: DurabilityLevel::Lazy,
             index_registry: RwLock::new(HashMap::new()),
+            automation_engine: Arc::new(crate::automation::ExecutionEngine::new()),
+            trigger_registry: crate::engine::automation_api::TriggerRegistry::new(),
+            parallel_engine: Arc::new(crate::engine::parallel_engine::ParallelExecutionEngine::new_auto().expect("Failed to create parallel engine")),
         })
     }
 

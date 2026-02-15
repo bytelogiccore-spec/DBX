@@ -94,4 +94,13 @@ pub struct Database {
 
     /// Index registry: index_name → (table, column) mapping for DROP INDEX
     pub(crate) index_registry: RwLock<HashMap<String, (String, String)>>,
+
+    /// Automation & Extensibility Engine (UDF, Triggers, Scheduler)
+    pub(crate) automation_engine: Arc<crate::automation::ExecutionEngine>,
+
+    /// Trigger Registry (이벤트 매칭용)
+    pub(crate) trigger_registry: crate::engine::automation_api::TriggerRegistry,
+
+    /// Parallel Execution Engine for multi-threaded query execution
+    pub(crate) parallel_engine: Arc<crate::engine::parallel_engine::ParallelExecutionEngine>,
 }

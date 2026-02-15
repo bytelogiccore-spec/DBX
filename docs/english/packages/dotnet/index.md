@@ -58,7 +58,7 @@ using (var db = Database.OpenInMemory())
 
 ## Version Info
 
-- **Current Version**: 0.0.3-beta
+- **Current Version**: {{ site.dbx_version }}
 - **.NET Requirements**: .NET Standard 2.0+ (.NET Framework 4.6.1+, .NET Core 2.0+, .NET 5+)
 - **Platform**: Windows x64 (Linux/macOS planned)
 
