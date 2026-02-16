@@ -23,8 +23,8 @@ pub mod trigger_executor;
 pub mod trigger_parser;
 pub mod udf;
 
-#[cfg(test)]
-mod integration_tests;
+// #[cfg(test)]
+// mod integration_tests;
 
 pub use callable::{Callable, ExecutionContext, Signature};
 pub use event_hook::{

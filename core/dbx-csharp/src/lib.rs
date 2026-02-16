@@ -964,10 +964,8 @@ pub unsafe extern "C" fn dbx_scan_zero_copy(
                 data.extend_from_slice(&value);
             }
 
-            *out_result = Box::into_raw(Box::new(DbxZeroCopyScanResultInternal {
-                data,
-                count,
-            })) as *mut DbxZeroCopyScanResult;
+            *out_result = Box::into_raw(Box::new(DbxZeroCopyScanResultInternal { data, count }))
+                as *mut DbxZeroCopyScanResult;
             DBX_OK
         }
         Err(_) => DBX_ERR_DATABASE,
@@ -993,9 +991,7 @@ pub unsafe extern "C" fn dbx_zero_copy_result_data(
 
 /// Get count from zero-copy scan result
 #[no_mangle]
-pub unsafe extern "C" fn dbx_zero_copy_result_count(
-    result: *const DbxZeroCopyScanResult,
-) -> usize {
+pub unsafe extern "C" fn dbx_zero_copy_result_count(result: *const DbxZeroCopyScanResult) -> usize {
     if result.is_null() {
         return 0;
     }
@@ -1008,8 +1004,6 @@ pub unsafe extern "C" fn dbx_zero_copy_result_count(
 #[no_mangle]
 pub unsafe extern "C" fn dbx_zero_copy_result_free(result: *mut DbxZeroCopyScanResult) {
     if !result.is_null() {
-        drop(Box::from_raw(
-            result as *mut DbxZeroCopyScanResultInternal,
-        ));
+        drop(Box::from_raw(result as *mut DbxZeroCopyScanResultInternal));
     }
 }

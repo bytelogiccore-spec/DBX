@@ -98,46 +98,6 @@ Deletes a key within the transaction.
 let tx = db.begin()?;
 tx.delete("users", b"user:1")?;
 tx.commit()?;
-```
-
----
-
-## Finalizing Transactions
-
-### `commit(self) -> DbxResult<Transaction<'_, Committed>>`
-
-Commits the transaction, making all changes permanent.
-
-**Returns:**
-- `DbxResult<Transaction<'_, Committed>>` - Committed transaction
-
-**Example:**
-```rust
-let tx = db.begin()?;
-tx.insert("users", b"user:1", b"Alice")?;
-tx.commit()?;
-```
-
----
-
-### `abort(self) -> DbxResult<Transaction<'_, Aborted>>`
-
-Aborts the transaction, discarding all changes.
-
-**Returns:**
-- `DbxResult<Transaction<'_, Aborted>>` - Aborted transaction
-
-**Example:**
-```rust
-let tx = db.begin()?;
-tx.insert("users", b"user:1", b"Alice")?;
-tx.abort()?; // Changes discarded
-```
-
----
-
-## MVCC Snapshot Isolation
-
 ### How It Works
 
 1. **Snapshot Creation**: When `begin()` is called, a snapshot of the database is created

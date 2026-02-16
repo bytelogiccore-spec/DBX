@@ -44,6 +44,47 @@ let tx = db.begin()?;
 트랜잭션 시작 시점의 스냅샷을 기준으로 데이터를 조회합니다.
 
 ### `delete(table: &str, key: &[u8]) -> DbxResult<bool>`
+---
+
+# 트랜잭션 API
+{: .no_toc }
+
+DBX의 MVCC 트랜잭션 관리를 위한 API 레퍼런스입니다.
+{: .fs-6 .fw-300 }
+
+---
+
+## 개요
+
+DBX는 **MVCC (Multi-Version Concurrency Control)**를 기반으로 한 **스냅샷 격리(Snapshot Isolation)** 트랜잭션을 제공합니다. 컴파일 타임 안정성을 위해 **Typestate 패턴**을 사용합니다.
+
+### 트랜잭션 상태
+- **Active**: 작업 수행 가능 상태
+- **Committed**: 변경 사항이 영구 반영된 상태 (최종)
+- **Aborted**: 변경 사항이 폐기된 상태 (최종)
+
+---
+
+## 트랜잭션 생성
+
+### `Database::begin() -> DbxResult<Transaction<'_, Active>>`
+새로운 MVCC 트랜잭션을 시작합니다.
+
+```rust
+let tx = db.begin()?;
+```
+
+---
+
+## 트랜잭션 작업
+
+### `insert(table: &str, key: &[u8], value: &[u8]) -> DbxResult<()>`
+트랜잭션 내부에서 키-값 쌍을 삽입합니다.
+
+### `get(table: &str, key: &[u8]) -> DbxResult<Option<Vec<u8>>>`
+트랜잭션 시작 시점의 스냅샷을 기준으로 데이터를 조회합니다.
+
+### `delete(table: &str, key: &[u8]) -> DbxResult<bool>`
 트랜잭션 내부에서 데이터를 삭제합니다.
 
 ---
@@ -52,6 +93,24 @@ let tx = db.begin()?;
 
 ### `commit(self) -> DbxResult<Transaction<'_, Committed>>`
 트랜잭션을 커밋하여 변경 사항을 영구적으로 저장합니다.
+
+#### MVCC Dual-Write 전략
+
+DBX는 **MVCC versioned key**와 **일반 key**를 모두 저장하는 dual-write 전략을 사용합니다:
+
+1. **insert_versioned()**: MVCC 타임스탬프가 포함된 versioned key로 저장
+   - 향후 snapshot isolation, time-travel query 지원
+   - 버전 히스토리 추적 가능
+
+2. **insert()**: 일반 key로도 저장
+   - `get()` 메서드와의 backward compatibility 보장
+   - Fast-path 조회 성능 유지
+   - 기존 코드와의 호환성 확보
+
+이 전략은 약간의 저장 공간 오버헤드가 있지만, 다음 이점을 제공합니다:
+- 기존 CRUD API와 완벽한 호환성
+- MVCC 기능을 점진적으로 활성화 가능
+- 성능 저하 없이 transaction isolation 지원
 
 ### `abort(self) -> DbxResult<Transaction<'_, Aborted>>`
 트랜잭션을 중단하고 모든 변경 사항을 폐기합니다.

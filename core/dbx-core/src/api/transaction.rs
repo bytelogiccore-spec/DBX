@@ -165,6 +165,24 @@ impl<'a> Transaction<'a, Active> {
     // ════════════════════════════════════════════
 
     /// 트랜잭션 커밋 — 모든 버퍼링된 쓰기를 메인 스토리지에 원자적으로 반영
+    ///
+    /// # MVCC Dual-Write 전략
+    ///
+    /// 이 구현은 MVCC versioned key와 일반 key를 모두 저장하는 dual-write 전략을 사용합니다:
+    ///
+    /// 1. **insert_versioned()**: MVCC 타임스탬프가 포함된 versioned key로 저장
+    ///    - 향후 snapshot isolation, time-travel query 지원
+    ///    - 버전 히스토리 추적 가능
+    ///
+    /// 2. **insert()**: 일반 key로도 저장
+    ///    - get() 메서드와의 backward compatibility 보장
+    ///    - Fast-path 조회 성능 유지
+    ///    - 기존 코드와의 호환성 확보
+    ///
+    /// 이 전략은 약간의 저장 공간 오버헤드가 있지만, 다음 이점을 제공합니다:
+    /// - 기존 CRUD API와 완벽한 호환성
+    /// - MVCC 기능을 점진적으로 활성화 가능
+    /// - 성능 저하 없이 transaction isolation 지원
     pub fn commit(self) -> DbxResult<Transaction<'a, Committed>> {
         // Allocate a unique commit timestamp for this transaction
         let commit_ts = self.db.allocate_commit_ts();
@@ -176,16 +194,22 @@ impl<'a> Transaction<'a, Active> {
                     // Use insert_versioned to include MVCC timestamp
                     self.db
                         .insert_versioned(table, key, Some(value), commit_ts)?;
+                    // Also insert with regular key for get() compatibility
+                    self.db.insert(table, key, value)?;
                 }
                 TxOp::Delete(table, key) => {
                     // Use insert_versioned with None to create tombstone
                     self.db.insert_versioned(table, key, None, commit_ts)?;
+                    // Also delete with regular key
+                    self.db.delete(table, key)?;
                 }
                 TxOp::Batch(table, rows) => {
                     // Batch insert with versioning
                     for (key, value) in rows {
                         self.db
                             .insert_versioned(table, key, Some(value), commit_ts)?;
+                        // Also insert with regular key
+                        self.db.insert(table, key, value)?;
                     }
                 }
             }

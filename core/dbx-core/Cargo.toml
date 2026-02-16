@@ -125,3 +125,7 @@ harness = false
 [[bench]]
 name = "official_db_comparison"
 harness = false
+
+[[bench]]
+name = "dbx_baseline"
+harness = false

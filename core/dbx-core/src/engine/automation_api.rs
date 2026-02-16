@@ -177,7 +177,7 @@ mod tests {
     use crate::automation::event_hook::{
         EventHook, EventHookAction, EventHookCondition, EventHookEvent, EventHookEventType,
     };
-    use crate::automation::{Schedule, ScheduleType};
+    use crate::automation::scheduler::{Schedule, ScheduleType, ScheduledJob};
     use std::sync::Mutex;
     use std::time::Duration;
 

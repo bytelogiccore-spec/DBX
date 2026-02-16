@@ -252,11 +252,39 @@ impl Database {
     pub fn get(&self, table: &str, key: &[u8]) -> DbxResult<Option<Vec<u8>>> {
         // Fast-path: Delta → WOS 직접 조회 (MVCC 오버헤드 없음)
         // MVCC feature가 활성화되어도 Fast-path를 우선 사용
+        // 일반 insert()로 저장된 데이터는 여기서 조회됨
         if let Some(value) = self.delta.get(table, key)? {
             return Ok(Some(value));
         }
         if let Some(value) = self.wos.get(table, key)? {
             return Ok(Some(value));
+        }
+
+        // ════════════════════════════════════════════
+        // MVCC Fallback: Transaction Commit 후 데이터 조회
+        // ════════════════════════════════════════════
+        // Transaction::commit()은 insert_versioned()와 insert()를 모두 호출하므로
+        // 일반적으로 위의 Fast-path에서 데이터를 찾을 수 있습니다.
+        // 
+        // 하지만 다음 경우에 이 Fallback이 필요합니다:
+        // 1. insert_versioned()만 호출된 경우 (일반 key 없음)
+        // 2. 향후 MVCC 전용 모드 지원 시
+        // 3. Snapshot isolation 구현 시
+        //
+        // 현재는 최신 타임스탬프로 조회하지만, 향후 snapshot_ts를 인자로 받아
+        // 특정 시점의 데이터를 조회할 수 있도록 확장 가능합니다.
+        let current_ts = self.tx_manager.allocate_commit_ts();
+        let vk = crate::transaction::version::VersionedKey::new(key.to_vec(), current_ts);
+        let encoded_key = vk.encode();
+        
+        // Delta에서 versioned key 조회
+        if let Some(value) = self.delta.get(table, &encoded_key)? {
+            return Ok(Self::decode_mvcc_value(value));
+        }
+        
+        // WOS에서 versioned key 조회
+        if let Some(value) = self.wos.get(table, &encoded_key)? {
+            return Ok(Self::decode_mvcc_value(value));
         }
 
         Ok(None)
