@@ -796,7 +796,7 @@ dependencies = [
 
 [[package]]
 name = "dbx-core"
-version = "0.0.5-beta"
+version = "0.0.6-beta"
 dependencies = [
  "aes-gcm-siv",
  "ahash",
@@ -835,7 +835,7 @@ dependencies = [
 
 [[package]]
 name = "dbx-csharp"
-version = "0.0.5-beta"
+version = "0.0.6-beta"
 dependencies = [
  "csbindgen",
  "dbx-core",
@@ -843,7 +843,7 @@ dependencies = [
 
 [[package]]
 name = "dbx-ffi"
-version = "0.0.5-beta"
+version = "0.0.6-beta"
 dependencies = [
  "dbx-core",
  "libc",
@@ -851,7 +851,7 @@ dependencies = [
 
 [[package]]
 name = "dbx-node"
-version = "0.0.5-beta"
+version = "0.0.6-beta"
 dependencies = [
  "dbx-core",
  "napi",
@@ -861,7 +861,7 @@ dependencies = [
 
 [[package]]
 name = "dbx-py"
-version = "0.0.5-beta"
+version = "0.0.6-beta"
 dependencies = [
  "dbx-core",
  "pyo3",

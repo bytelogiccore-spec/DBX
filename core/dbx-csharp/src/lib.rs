@@ -9,6 +9,7 @@ use std::ffi::CStr;
 use std::os::raw::{c_char, c_int};
 use std::ptr;
 use std::slice;
+use std::sync::Arc;
 
 /// Opaque handle to a DBX database instance
 pub enum DbxHandle {}
@@ -24,7 +25,7 @@ pub enum DbxStringList {}
 
 // Internal structures (not exposed to C#)
 struct DbxHandleInternal {
-    db: CoreDatabase,
+    db: Arc<CoreDatabase>,
 }
 
 struct DbxTransactionInternal {
@@ -39,6 +40,15 @@ struct DbxScanResultInternal {
 struct DbxStringListInternal {
     names: Vec<String>,
 }
+
+/// Zero-copy scan result - owns serialized flat buffer
+struct DbxZeroCopyScanResultInternal {
+    data: Vec<u8>,
+    count: usize,
+}
+
+/// Opaque handle to zero-copy scan results
+pub enum DbxZeroCopyScanResult {}
 
 /// Transaction operation
 enum TxOperation {
@@ -69,7 +79,7 @@ pub const DBX_ERR_INVALID_OP: c_int = -5;
 #[no_mangle]
 pub extern "C" fn dbx_open_in_memory() -> *mut DbxHandle {
     match CoreDatabase::open_in_memory() {
-        Ok(db) => Box::into_raw(Box::new(DbxHandleInternal { db })) as *mut DbxHandle,
+        Ok(db) => Box::into_raw(Box::new(DbxHandleInternal { db: Arc::new(db) })) as *mut DbxHandle,
         Err(_) => ptr::null_mut(),
     }
 }
@@ -105,7 +115,7 @@ pub unsafe extern "C" fn dbx_load_from_file(path: *const c_char) -> *mut DbxHand
     };
 
     match CoreDatabase::load_from_file(path_str) {
-        Ok(db) => Box::into_raw(Box::new(DbxHandleInternal { db })) as *mut DbxHandle,
+        Ok(db) => Box::into_raw(Box::new(DbxHandleInternal { db: Arc::new(db) })) as *mut DbxHandle,
         Err(_) => ptr::null_mut(),
     }
 }
@@ -913,5 +923,93 @@ pub unsafe extern "C" fn dbx_transaction_commit(tx: *mut DbxTransaction) -> c_in
 pub unsafe extern "C" fn dbx_transaction_rollback(tx: *mut DbxTransaction) {
     if !tx.is_null() {
         drop(Box::from_raw(tx as *mut DbxTransactionInternal));
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Zero-Copy SCAN Operations
+// ═══════════════════════════════════════════════════════════════
+
+/// Zero-copy scan - returns flat buffer with serialized key-value pairs
+#[no_mangle]
+pub unsafe extern "C" fn dbx_scan_zero_copy(
+    handle: *mut DbxHandle,
+    table: *const c_char,
+    out_result: *mut *mut DbxZeroCopyScanResult,
+) -> c_int {
+    if handle.is_null() || table.is_null() || out_result.is_null() {
+        return DBX_ERR_NULL_PTR;
+    }
+
+    let handle = &*(handle as *const DbxHandleInternal);
+
+    let table_str = match CStr::from_ptr(table).to_str() {
+        Ok(s) => s,
+        Err(_) => return DBX_ERR_INVALID_UTF8,
+    };
+
+    match handle.db.scan(table_str) {
+        Ok(entries) => {
+            // Serialize into flat buffer
+            let mut data = Vec::new();
+            let count = entries.len();
+
+            for (key, value) in entries {
+                // Write key length + key
+                data.extend_from_slice(&(key.len() as u32).to_le_bytes());
+                data.extend_from_slice(&key);
+
+                // Write value length + value
+                data.extend_from_slice(&(value.len() as u32).to_le_bytes());
+                data.extend_from_slice(&value);
+            }
+
+            *out_result = Box::into_raw(Box::new(DbxZeroCopyScanResultInternal {
+                data,
+                count,
+            })) as *mut DbxZeroCopyScanResult;
+            DBX_OK
+        }
+        Err(_) => DBX_ERR_DATABASE,
+    }
+}
+
+/// Get raw data pointer from zero-copy scan result (zero-copy access)
+#[no_mangle]
+pub unsafe extern "C" fn dbx_zero_copy_result_data(
+    result: *const DbxZeroCopyScanResult,
+    out_data: *mut *const u8,
+    out_len: *mut usize,
+) -> c_int {
+    if result.is_null() || out_data.is_null() || out_len.is_null() {
+        return DBX_ERR_NULL_PTR;
+    }
+
+    let result = &*(result as *const DbxZeroCopyScanResultInternal);
+    *out_data = result.data.as_ptr();
+    *out_len = result.data.len();
+    DBX_OK
+}
+
+/// Get count from zero-copy scan result
+#[no_mangle]
+pub unsafe extern "C" fn dbx_zero_copy_result_count(
+    result: *const DbxZeroCopyScanResult,
+) -> usize {
+    if result.is_null() {
+        return 0;
+    }
+
+    let result = &*(result as *const DbxZeroCopyScanResultInternal);
+    result.count
+}
+
+/// Free zero-copy scan result
+#[no_mangle]
+pub unsafe extern "C" fn dbx_zero_copy_result_free(result: *mut DbxZeroCopyScanResult) {
+    if !result.is_null() {
+        drop(Box::from_raw(
+            result as *mut DbxZeroCopyScanResultInternal,
+        ));
     }
 }

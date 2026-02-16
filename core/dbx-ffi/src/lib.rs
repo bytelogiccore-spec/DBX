@@ -11,11 +11,12 @@ use std::ffi::CStr;
 use std::os::raw::{c_char, c_int};
 use std::ptr;
 use std::slice;
+use std::sync::Arc;
 
 /// Opaque handle to a DBX database instance
 #[repr(C)]
 pub struct DbxHandle {
-    db: Database,
+    db: Arc<Database>,
 }
 
 /// Opaque handle to a DBX transaction
@@ -33,6 +34,12 @@ pub struct DbxScanResult {
 /// Opaque handle to table names
 pub struct DbxStringList {
     names: Vec<String>,
+}
+
+/// Zero-copy scan result - owns serialized flat buffer
+pub struct DbxZeroCopyScanResult {
+    data: Vec<u8>,
+    count: usize,
 }
 
 /// Transaction operation
@@ -82,7 +89,7 @@ pub unsafe extern "C" fn dbx_open(path: *const c_char) -> *mut DbxHandle {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn dbx_open_in_memory() -> *mut DbxHandle {
     match Database::open_in_memory() {
-        Ok(db) => Box::into_raw(Box::new(DbxHandle { db })),
+        Ok(db) => Box::into_raw(Box::new(DbxHandle { db: Arc::new(db) })),
         Err(_) => ptr::null_mut(),
     }
 }
@@ -100,7 +107,7 @@ pub unsafe extern "C" fn dbx_load_from_file(path: *const c_char) -> *mut DbxHand
     };
 
     match Database::load_from_file(path_str) {
-        Ok(db) => Box::into_raw(Box::new(DbxHandle { db })),
+        Ok(db) => Box::into_raw(Box::new(DbxHandle { db: Arc::new(db) })),
         Err(_) => ptr::null_mut(),
     }
 }
@@ -378,6 +385,86 @@ pub unsafe extern "C" fn dbx_scan_result_value(
 /// Free a scan result
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn dbx_scan_result_free(result: *mut DbxScanResult) {
+    if !result.is_null() {
+        drop(Box::from_raw(result));
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Zero-Copy SCAN Operations
+// ═══════════════════════════════════════════════════════════════
+
+/// Zero-copy scan - returns serialized flat buffer
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn dbx_scan_zero_copy(
+    handle: *mut DbxHandle,
+    table: *const c_char,
+    out_result: *mut *mut DbxZeroCopyScanResult,
+) -> c_int {
+    if handle.is_null() || table.is_null() || out_result.is_null() {
+        return DBX_ERR_NULL_PTR;
+    }
+
+    let handle = &*handle;
+
+    let table_str = match CStr::from_ptr(table).to_str() {
+        Ok(s) => s,
+        Err(_) => return DBX_ERR_INVALID_UTF8,
+    };
+
+    match handle.db.scan(table_str) {
+        Ok(entries) => {
+            // Serialize to flat buffer format
+            let count = entries.len();
+            let mut data = Vec::new();
+
+            for (key, value) in entries {
+                // Write key length (4 bytes)
+                data.extend_from_slice(&(key.len() as u32).to_le_bytes());
+                // Write key
+                data.extend_from_slice(&key);
+                // Write value length (4 bytes)
+                data.extend_from_slice(&(value.len() as u32).to_le_bytes());
+                // Write value
+                data.extend_from_slice(&value);
+            }
+
+            *out_result = Box::into_raw(Box::new(DbxZeroCopyScanResult { data, count }));
+            DBX_OK
+        }
+        Err(_) => DBX_ERR_DATABASE,
+    }
+}
+
+/// Get raw data pointer from zero-copy scan result
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn dbx_zero_copy_result_data(
+    result: *const DbxZeroCopyScanResult,
+    out_data: *mut *const u8,
+    out_len: *mut usize,
+) -> c_int {
+    if result.is_null() || out_data.is_null() || out_len.is_null() {
+        return DBX_ERR_NULL_PTR;
+    }
+
+    let result = &*result;
+    *out_data = result.data.as_ptr();
+    *out_len = result.data.len();
+    DBX_OK
+}
+
+/// Get the number of entries in a zero-copy scan result
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn dbx_zero_copy_result_count(result: *const DbxZeroCopyScanResult) -> usize {
+    if result.is_null() {
+        return 0;
+    }
+    (*result).count
+}
+
+/// Free a zero-copy scan result
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn dbx_zero_copy_result_free(result: *mut DbxZeroCopyScanResult) {
     if !result.is_null() {
         drop(Box::from_raw(result));
     }

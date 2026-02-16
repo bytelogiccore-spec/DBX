@@ -297,6 +297,26 @@ namespace DBX.Dotnet
             return entries;
         }
 
+        /// <summary>
+        /// Zero-copy scan - returns a result that owns the serialized data
+        /// </summary>
+        public ZeroCopyScanResult ScanZeroCopy(string table)
+        {
+            ThrowIfDisposed();
+            
+            var tableBytes = Encoding.UTF8.GetBytes(table + "\0");
+            DbxZeroCopyScanResult* scanResult = null;
+            
+            fixed (byte* tablePtr = tableBytes)
+            {
+                var rc = NativeMethods.dbx_scan_zero_copy(_handle, tablePtr, &scanResult);
+                if (rc != 0)
+                    throw new Exception($"Zero-copy scan failed with error code: {rc}");
+            }
+
+            return new ZeroCopyScanResult(scanResult);
+        }
+
         // ═══════════════════════════════════════════════════
         // Utility Operations
         // ═══════════════════════════════════════════════════
@@ -690,6 +710,178 @@ namespace DBX.Dotnet
             if (!_disposed)
             {
                 // Transaction is auto-freed on commit
+                _disposed = true;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Zero-copy scan result - owns serialized flat buffer data
+    /// </summary>
+    public unsafe class ZeroCopyScanResult : IDisposable
+    {
+        private DbxZeroCopyScanResult* _handle;
+        private bool _disposed;
+
+        internal ZeroCopyScanResult(DbxZeroCopyScanResult* handle)
+        {
+            _handle = handle;
+        }
+
+        /// <summary>
+        /// Get the number of key-value pairs
+        /// </summary>
+        public int Count
+        {
+            get
+            {
+                ThrowIfDisposed();
+                return (int)NativeMethods.dbx_zero_copy_result_count(_handle);
+            }
+        }
+
+        /// <summary>
+        /// Get raw data as Span (zero-copy access, .NET 6+ only)
+        /// </summary>
+#if NET6_0_OR_GREATER
+        public unsafe Span<byte> AsSpan()
+        {
+            ThrowIfDisposed();
+            
+            byte* dataPtr = null;
+            nuint dataLen = 0;
+            
+            var rc = NativeMethods.dbx_zero_copy_result_data(_handle, &dataPtr, &dataLen);
+            if (rc != 0)
+                throw new Exception($"Failed to get zero-copy data: {rc}");
+            
+            return new Span<byte>(dataPtr, (int)dataLen);
+        }
+#endif
+
+        /// <summary>
+        /// Get raw data as byte array (requires copy for safety in .NET Standard 2.0)
+        /// </summary>
+        public byte[] GetRawData()
+        {
+            ThrowIfDisposed();
+            
+            byte* dataPtr = null;
+            nuint dataLen = 0;
+            
+            var rc = NativeMethods.dbx_zero_copy_result_data(_handle, &dataPtr, &dataLen);
+            if (rc != 0)
+                throw new Exception($"Failed to get zero-copy data: {rc}");
+            
+            var result = new byte[dataLen];
+            Marshal.Copy((IntPtr)dataPtr, result, 0, (int)dataLen);
+            return result;
+        }
+
+        /// <summary>
+        /// Parse the flat buffer into key-value pairs (requires copy)
+        /// </summary>
+        public List<KeyValuePair<byte[], byte[]>> ToPairs()
+        {
+            ThrowIfDisposed();
+            
+#if NET6_0_OR_GREATER
+            var data = AsSpan();
+#else
+            var data = GetRawData();
+#endif
+            var count = Count;
+            var pairs = new List<KeyValuePair<byte[], byte[]>>(count);
+            
+            int offset = 0;
+#if NET6_0_OR_GREATER
+            for (int i = 0; i < count; i++)
+            {
+                // Read key length
+                if (offset + 4 > data.Length)
+                    throw new InvalidOperationException("Invalid data format");
+                
+                var keyLen = BitConverter.ToUInt32(data.Slice(offset, 4));
+                offset += 4;
+                
+                // Read key
+                if (offset + (int)keyLen > data.Length)
+                    throw new InvalidOperationException("Invalid data format");
+                
+                var key = data.Slice(offset, (int)keyLen).ToArray();
+                offset += (int)keyLen;
+                
+                // Read value length
+                if (offset + 4 > data.Length)
+                    throw new InvalidOperationException("Invalid data format");
+                
+                var valueLen = BitConverter.ToUInt32(data.Slice(offset, 4));
+                offset += 4;
+                
+                // Read value
+                if (offset + (int)valueLen > data.Length)
+                    throw new InvalidOperationException("Invalid data format");
+                
+                var value = data.Slice(offset, (int)valueLen).ToArray();
+                offset += (int)valueLen;
+                
+                pairs.Add(new KeyValuePair<byte[], byte[]>(key, value));
+            }
+#else
+            for (int i = 0; i < count; i++)
+            {
+                // Read key length
+                if (offset + 4 > data.Length)
+                    throw new InvalidOperationException("Invalid data format");
+                
+                var keyLen = BitConverter.ToUInt32(data, offset);
+                offset += 4;
+                
+                // Read key
+                if (offset + (int)keyLen > data.Length)
+                    throw new InvalidOperationException("Invalid data format");
+                
+                var key = new byte[keyLen];
+                Array.Copy(data, offset, key, 0, (int)keyLen);
+                offset += (int)keyLen;
+                
+                // Read value length
+                if (offset + 4 > data.Length)
+                    throw new InvalidOperationException("Invalid data format");
+                
+                var valueLen = BitConverter.ToUInt32(data, offset);
+                offset += 4;
+                
+                // Read value
+                if (offset + (int)valueLen > data.Length)
+                    throw new InvalidOperationException("Invalid data format");
+                
+                var value = new byte[valueLen];
+                Array.Copy(data, offset, value, 0, (int)valueLen);
+                offset += (int)valueLen;
+                
+                pairs.Add(new KeyValuePair<byte[], byte[]>(key, value));
+            }
+#endif
+            
+            return pairs;
+        }
+
+        private void ThrowIfDisposed()
+        {
+            if (_disposed)
+                throw new ObjectDisposedException(nameof(ZeroCopyScanResult));
+        }
+
+        public void Dispose()
+        {
+            if (!_disposed)
+            {
+                if (_handle != null)
+                {
+                    NativeMethods.dbx_zero_copy_result_free(_handle);
+                    _handle = null;
+                }
                 _disposed = true;
             }
         }

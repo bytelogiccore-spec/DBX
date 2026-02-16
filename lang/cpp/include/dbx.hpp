@@ -245,6 +245,115 @@ public:
     }
 
     // ═══════════════════════════════════════════════════
+    // Zero-Copy SCAN Operations
+    // ═══════════════════════════════════════════════════
+
+    /**
+     * Zero-copy scan result - owns serialized flat buffer data
+     */
+    class ZeroCopyScanResult {
+    public:
+        ZeroCopyScanResult(const ZeroCopyScanResult&) = delete;
+        ZeroCopyScanResult& operator=(const ZeroCopyScanResult&) = delete;
+
+        ZeroCopyScanResult(ZeroCopyScanResult&& other) noexcept 
+            : handle_(other.handle_) {
+            other.handle_ = nullptr;
+        }
+
+        ~ZeroCopyScanResult() {
+            if (handle_ != nullptr) {
+                dbx_zero_copy_result_free(handle_);
+            }
+        }
+
+        /**
+         * Get the number of key-value pairs
+         */
+        size_t count() const {
+            return dbx_zero_copy_result_count(handle_);
+        }
+
+        /**
+         * Get raw data pointer (zero-copy access)
+         * WARNING: Pointer is only valid while this object is alive
+         */
+        std::pair<const uint8_t*, size_t> getRawData() const {
+            const uint8_t* data = nullptr;
+            size_t len = 0;
+            int rc = dbx_zero_copy_result_data(handle_, &data, &len);
+            if (rc != DBX_OK) {
+                throw DatabaseError("Failed to get zero-copy data");
+            }
+            return {data, len};
+        }
+
+        /**
+         * Parse the flat buffer into key-value pairs (requires copy)
+         */
+        std::vector<std::pair<std::vector<uint8_t>, std::vector<uint8_t>>> toPairs() const {
+            auto [data, dataLen] = getRawData();
+            size_t cnt = count();
+            std::vector<std::pair<std::vector<uint8_t>, std::vector<uint8_t>>> pairs;
+            pairs.reserve(cnt);
+
+            size_t offset = 0;
+            for (size_t i = 0; i < cnt; ++i) {
+                // Read key length
+                if (offset + 4 > dataLen) {
+                    throw DatabaseError("Invalid data format: key length out of bounds");
+                }
+                uint32_t keyLen;
+                std::memcpy(&keyLen, data + offset, 4);
+                offset += 4;
+
+                // Read key
+                if (offset + keyLen > dataLen) {
+                    throw DatabaseError("Invalid data format: key data out of bounds");
+                }
+                std::vector<uint8_t> key(data + offset, data + offset + keyLen);
+                offset += keyLen;
+
+                // Read value length
+                if (offset + 4 > dataLen) {
+                    throw DatabaseError("Invalid data format: value length out of bounds");
+                }
+                uint32_t valueLen;
+                std::memcpy(&valueLen, data + offset, 4);
+                offset += 4;
+
+                // Read value
+                if (offset + valueLen > dataLen) {
+                    throw DatabaseError("Invalid data format: value data out of bounds");
+                }
+                std::vector<uint8_t> value(data + offset, data + offset + valueLen);
+                offset += valueLen;
+
+                pairs.emplace_back(std::move(key), std::move(value));
+            }
+
+            return pairs;
+        }
+
+    private:
+        friend class Database;
+        explicit ZeroCopyScanResult(DbxZeroCopyScanResult* handle) : handle_(handle) {}
+        DbxZeroCopyScanResult* handle_;
+    };
+
+    /**
+     * Zero-copy scan - returns a result that owns the serialized data
+     */
+    ZeroCopyScanResult scanZeroCopy(const std::string& table) {
+        DbxZeroCopyScanResult* result = nullptr;
+        int rc = dbx_scan_zero_copy(handle_, table.c_str(), &result);
+        if (rc != DBX_OK) {
+            throw DatabaseError("Zero-copy scan failed");
+        }
+        return ZeroCopyScanResult(result);
+    }
+
+    // ═══════════════════════════════════════════════════
     // Utility Operations
     // ═══════════════════════════════════════════════════
     

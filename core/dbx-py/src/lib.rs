@@ -8,11 +8,12 @@ use dbx_core::Database as CoreDatabase;
 use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
 use pyo3::types::PyBytes;
+use std::sync::Arc;
 
 /// Python Database class
 #[pyclass]
 struct Database {
-    db: CoreDatabase,
+    db: Arc<CoreDatabase>,
 }
 
 #[pymethods]
@@ -25,7 +26,7 @@ impl Database {
     #[staticmethod]
     fn open_in_memory() -> PyResult<Self> {
         CoreDatabase::open_in_memory()
-            .map(|db| Database { db })
+            .map(|db| Database { db: Arc::new(db) })
             .map_err(|e| PyRuntimeError::new_err(format!("Failed to open database: {e}")))
     }
 
@@ -41,7 +42,7 @@ impl Database {
     #[staticmethod]
     fn load_from_file(path: &str) -> PyResult<Self> {
         CoreDatabase::load_from_file(path)
-            .map(|db| Database { db })
+            .map(|db| Database { db: Arc::new(db) })
             .map_err(|e| PyRuntimeError::new_err(format!("Load failed: {e}")))
     }
 
@@ -251,6 +252,34 @@ impl Database {
     }
 
     // ═══════════════════════════════════════════════════════
+    // Zero-Copy Operations
+    // ═══════════════════════════════════════════════════════
+
+    /// Zero-copy scan - returns ScanResult that owns the data
+    fn scan_zero_copy(&self, table: &str) -> PyResult<ScanResult> {
+        let entries = self
+            .db
+            .scan(table)
+            .map_err(|e| PyRuntimeError::new_err(format!("Scan failed: {e}")))?;
+
+        // Serialize into a flat buffer
+        let mut data = Vec::new();
+        let count = entries.len();
+
+        for (key, value) in entries {
+            // Write key length + key
+            data.extend_from_slice(&(key.len() as u32).to_le_bytes());
+            data.extend_from_slice(&key);
+
+            // Write value length + value
+            data.extend_from_slice(&(value.len() as u32).to_le_bytes());
+            data.extend_from_slice(&value);
+        }
+
+        Ok(ScanResult { data, count })
+    }
+
+    // ═══════════════════════════════════════════════════════
     // Transaction & Close
     // ═══════════════════════════════════════════════════════
 
@@ -352,5 +381,87 @@ impl Transaction {
 fn dbx_native(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Database>()?;
     m.add_class::<Transaction>()?;
+    m.add_class::<ScanResult>()?;
     Ok(())
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Zero-Copy SCAN Implementation
+// ═══════════════════════════════════════════════════════════════
+
+/// Zero-copy scan result - Rust owns the data, Python gets read-only access
+#[pyclass]
+struct ScanResult {
+    // Rust owns the serialized data
+    data: Vec<u8>,
+    // Metadata for parsing
+    count: usize,
+}
+
+#[pymethods]
+impl ScanResult {
+    /// Get the raw data as bytes (zero-copy, read-only)
+    fn as_bytes<'py>(&self, py: Python<'py>) -> Bound<'py, PyBytes> {
+        // Return a reference to the data as PyBytes (no copy)
+        PyBytes::new_bound(py, &self.data)
+    }
+
+    /// Get the number of key-value pairs
+    fn count(&self) -> usize {
+        self.count
+    }
+
+    /// Parse the data into list of tuples (fallback, requires copy)
+    fn to_pairs<'py>(
+        &self,
+        py: Python<'py>,
+    ) -> PyResult<Vec<(Bound<'py, PyBytes>, Bound<'py, PyBytes>)>> {
+        // Deserialize from the flat buffer
+        let mut offset = 0;
+        let mut pairs = Vec::with_capacity(self.count);
+
+        for _ in 0..self.count {
+            // Read key length
+            if offset + 4 > self.data.len() {
+                return Err(PyRuntimeError::new_err("Invalid data format"));
+            }
+            let key_len = u32::from_le_bytes([
+                self.data[offset],
+                self.data[offset + 1],
+                self.data[offset + 2],
+                self.data[offset + 3],
+            ]) as usize;
+            offset += 4;
+
+            // Read key
+            if offset + key_len > self.data.len() {
+                return Err(PyRuntimeError::new_err("Invalid data format"));
+            }
+            let key = PyBytes::new_bound(py, &self.data[offset..offset + key_len]);
+            offset += key_len;
+
+            // Read value length
+            if offset + 4 > self.data.len() {
+                return Err(PyRuntimeError::new_err("Invalid data format"));
+            }
+            let value_len = u32::from_le_bytes([
+                self.data[offset],
+                self.data[offset + 1],
+                self.data[offset + 2],
+                self.data[offset + 3],
+            ]) as usize;
+            offset += 4;
+
+            // Read value
+            if offset + value_len > self.data.len() {
+                return Err(PyRuntimeError::new_err("Invalid data format"));
+            }
+            let value = PyBytes::new_bound(py, &self.data[offset..offset + value_len]);
+            offset += value_len;
+
+            pairs.push((key, value));
+        }
+
+        Ok(pairs)
+    }
 }

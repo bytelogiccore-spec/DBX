@@ -26,7 +26,7 @@ impl Database {
     pub fn open(path: String) -> Result<Self> {
         let db = CoreDatabase::open(std::path::Path::new(&path))
             .map_err(|e| Error::from_reason(format!("Failed to open database: {e}")))?;
-        Ok(Database { db: Arc::new(db) })
+        Ok(Database { db })
     }
 
     // ═══════════════════════════════════════════════════════
@@ -373,5 +373,130 @@ impl Transaction {
         }
 
         Ok(())
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// Zero-Copy Result Types
+// ═══════════════════════════════════════════════════════════════
+
+/// Zero-copy scan result - Rust owns the data, JavaScript gets read-only access
+#[napi]
+pub struct ScanResult {
+    // Rust owns the serialized data
+    data: Vec<u8>,
+    // Metadata for parsing
+    count: usize,
+}
+
+#[napi]
+impl ScanResult {
+    /// Get the raw data as a Buffer (zero-copy, read-only)
+    #[napi]
+    pub fn as_buffer(&self) -> Buffer {
+        // Return a reference to the data as Buffer (no copy)
+        Buffer::from(&self.data[..])
+    }
+
+    /// Get the number of key-value pairs
+    #[napi]
+    pub fn count(&self) -> u32 {
+        self.count as u32
+    }
+
+    /// Parse the data into key-value pairs (fallback, requires copy)
+    #[napi]
+    pub fn to_pairs(&self) -> Result<Vec<Vec<Buffer>>> {
+        // Deserialize from the flat buffer
+        let mut offset = 0;
+        let mut pairs = Vec::with_capacity(self.count);
+
+        for _ in 0..self.count {
+            // Read key length
+            if offset + 4 > self.data.len() {
+                return Err(Error::from_reason("Invalid data format"));
+            }
+            let key_len = u32::from_le_bytes([
+                self.data[offset],
+                self.data[offset + 1],
+                self.data[offset + 2],
+                self.data[offset + 3],
+            ]) as usize;
+            offset += 4;
+
+            // Read key
+            if offset + key_len > self.data.len() {
+                return Err(Error::from_reason("Invalid data format"));
+            }
+            let key = Buffer::from(&self.data[offset..offset + key_len]);
+            offset += key_len;
+
+            // Read value length
+            if offset + 4 > self.data.len() {
+                return Err(Error::from_reason("Invalid data format"));
+            }
+            let value_len = u32::from_le_bytes([
+                self.data[offset],
+                self.data[offset + 1],
+                self.data[offset + 2],
+                self.data[offset + 3],
+            ]) as usize;
+            offset += 4;
+
+            // Read value
+            if offset + value_len > self.data.len() {
+                return Err(Error::from_reason("Invalid data format"));
+            }
+            let value = Buffer::from(&self.data[offset..offset + value_len]);
+            offset += value_len;
+
+            pairs.push(vec![key, value]);
+        }
+
+        Ok(pairs)
+    }
+}
+
+#[napi]
+impl Database {
+    /// Zero-copy scan - returns ScanResult that owns the data
+    #[napi]
+    pub fn scan_zero_copy(&self, table: String) -> Result<ScanResult> {
+        let entries = self
+            .db
+            .scan(&table)
+            .map_err(|e| Error::from_reason(format!("Scan failed: {e}")))?;
+
+        // Serialize into a flat buffer
+        let mut data = Vec::new();
+        let count = entries.len();
+
+        for (key, value) in entries {
+            // Write key length + key
+            data.extend_from_slice(&(key.len() as u32).to_le_bytes());
+            data.extend_from_slice(&key);
+
+            // Write value length + value
+            data.extend_from_slice(&(value.len() as u32).to_le_bytes());
+            data.extend_from_slice(&value);
+        }
+
+        Ok(ScanResult { data, count })
+    }
+
+    /// Batch get - get multiple keys at once (reduces FFI overhead)
+    #[napi]
+    pub fn get_batch(&self, table: String, keys: Vec<Buffer>) -> Result<Vec<Option<Buffer>>> {
+        let mut results = Vec::with_capacity(keys.len());
+
+        for key in keys {
+            match self.db.get(&table, &key) {
+                Ok(Some(value)) => results.push(Some(value.into())),
+                Ok(None) => results.push(None),
+                Err(e) => return Err(Error::from_reason(format!("Get failed: {e}"))),
+            }
+        }
+
+        Ok(results)
     }
 }

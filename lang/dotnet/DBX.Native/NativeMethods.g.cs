@@ -240,6 +240,30 @@ namespace DBX.Native
         [DllImport(__DllName, EntryPoint = "dbx_transaction_rollback", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
         public static extern void dbx_transaction_rollback(DbxTransaction* tx);
 
+        /// <summary>
+        ///  Zero-copy scan - returns flat buffer with serialized key-value pairs
+        /// </summary>
+        [DllImport(__DllName, EntryPoint = "dbx_scan_zero_copy", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+        public static extern int dbx_scan_zero_copy(DbxHandle* handle, byte* table, DbxZeroCopyScanResult** out_result);
+
+        /// <summary>
+        ///  Get raw data pointer from zero-copy scan result (zero-copy access)
+        /// </summary>
+        [DllImport(__DllName, EntryPoint = "dbx_zero_copy_result_data", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+        public static extern int dbx_zero_copy_result_data(DbxZeroCopyScanResult* result, byte** out_data, nuint* out_len);
+
+        /// <summary>
+        ///  Get count from zero-copy scan result
+        /// </summary>
+        [DllImport(__DllName, EntryPoint = "dbx_zero_copy_result_count", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+        public static extern nuint dbx_zero_copy_result_count(DbxZeroCopyScanResult* result);
+
+        /// <summary>
+        ///  Free zero-copy scan result
+        /// </summary>
+        [DllImport(__DllName, EntryPoint = "dbx_zero_copy_result_free", CallingConvention = CallingConvention.Cdecl, ExactSpelling = true)]
+        public static extern void dbx_zero_copy_result_free(DbxZeroCopyScanResult* result);
+
 
     }
 
@@ -269,6 +293,13 @@ namespace DBX.Native
     ///  Opaque handle to string list
     /// </summary>
     public enum DbxStringList
+    {
+    }
+
+    /// <summary>
+    ///  Opaque handle to zero-copy scan results
+    /// </summary>
+    public enum DbxZeroCopyScanResult
     {
     }
 
