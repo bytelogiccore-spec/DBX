@@ -497,3 +497,40 @@ impl Database {
         }
     }
 }
+
+// ════════════════════════════════════════════
+// DatabaseCore Trait Implementation
+// ════════════════════════════════════════════
+
+impl crate::traits::DatabaseCore for Database {
+    fn insert(&self, table: &str, key: &[u8], value: &[u8]) -> DbxResult<()> {
+        // Reuse existing implementation
+        Database::insert(self, table, key, value)
+    }
+
+    fn get(&self, table: &str, key: &[u8]) -> DbxResult<Option<Vec<u8>>> {
+        // Reuse existing implementation
+        Database::get(self, table, key)
+    }
+
+    fn delete(&self, table: &str, key: &[u8]) -> DbxResult<()> {
+        // Reuse existing implementation
+        Database::delete(self, table, key).map(|_| ())
+    }
+
+    fn scan(&self, table: &str) -> DbxResult<Vec<(Vec<u8>, Vec<u8>)>> {
+        // Reuse existing implementation
+        Database::scan(self, table)
+    }
+
+    fn flush(&self) -> DbxResult<()> {
+        // Reuse existing implementation
+        Database::flush(self)
+    }
+
+    fn insert_batch(&self, table: &str, entries: Vec<(Vec<u8>, Vec<u8>)>) -> DbxResult<()> {
+        // Reuse existing implementation
+        Database::insert_batch(self, table, entries)
+    }
+}
+

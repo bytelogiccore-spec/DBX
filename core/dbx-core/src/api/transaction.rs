@@ -368,3 +368,15 @@ mod tests {
         assert!(rolled_back.is_rolled_back());
     }
 }
+
+// ════════════════════════════════════════════
+// DatabaseTransaction Trait Implementation
+// ════════════════════════════════════════════
+
+impl crate::traits::DatabaseTransaction for Database {
+    fn begin(&self) -> DbxResult<Transaction<'_, Active>> {
+        // Reuse existing implementation
+        Database::begin(self)
+    }
+}
+

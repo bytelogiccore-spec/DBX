@@ -86,6 +86,7 @@ pub mod error;
 pub mod index;
 pub mod sql;
 pub mod storage;
+pub mod traits;
 pub mod transaction;
 pub mod wal;
 

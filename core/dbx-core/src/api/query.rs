@@ -622,3 +622,13 @@ mod tests {
         assert!(matches!(Some(10i32).into_scalar(), ScalarValue::Int32(10)));
     }
 }
+
+// ════════════════════════════════════════════
+// DatabaseQuery Trait Implementation
+// ════════════════════════════════════════════
+
+impl crate::traits::DatabaseQuery for Database {
+    // Query Builder methods are already implemented in impl Database block above
+    // No additional implementation needed - Trait is satisfied by existing methods
+}
+

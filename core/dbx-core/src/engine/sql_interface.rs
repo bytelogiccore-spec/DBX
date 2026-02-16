@@ -1098,3 +1098,26 @@ impl Database {
         Ok(results)
     }
 }
+
+// ════════════════════════════════════════════
+// DatabaseSql Trait Implementation
+// ════════════════════════════════════════════
+
+impl crate::traits::DatabaseSql for Database {
+    fn execute_sql(&self, sql: &str) -> DbxResult<Vec<arrow::record_batch::RecordBatch>> {
+        // Reuse existing implementation
+        Database::execute_sql(self, sql)
+    }
+
+    fn register_table(&self, name: &str, batches: Vec<arrow::record_batch::RecordBatch>) {
+        // Reuse existing implementation
+        Database::register_table(self, name, batches)
+    }
+
+    fn append_batch(&self, table: &str, batch: arrow::record_batch::RecordBatch) -> DbxResult<()> {
+        // Reuse existing implementation
+        Database::append_batch(self, table, batch);
+        Ok(())
+    }
+}
+
