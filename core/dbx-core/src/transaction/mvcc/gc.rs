@@ -29,7 +29,7 @@
 use crate::Database;
 use crate::error::DbxResult;
 use crate::storage::StorageBackend;
-use crate::transaction::version::VersionedKey;
+use crate::transaction::mvcc::version::VersionedKey;
 use std::collections::HashMap;
 
 /// Garbage collector for cleaning up old MVCC versions.

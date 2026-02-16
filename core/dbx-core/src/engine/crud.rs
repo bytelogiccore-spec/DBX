@@ -147,7 +147,7 @@ impl Database {
         value: Option<&[u8]>,
         commit_ts: u64,
     ) -> DbxResult<()> {
-        let vk = crate::transaction::version::VersionedKey::new(key.to_vec(), commit_ts);
+        let vk = crate::transaction::mvcc::version::VersionedKey::new(key.to_vec(), commit_ts);
         let encoded_key = vk.encode();
 
         // Encode value with prefix
@@ -179,12 +179,12 @@ impl Database {
         key: &[u8],
         read_ts: u64,
     ) -> DbxResult<Option<Option<Vec<u8>>>> {
-        let start_vk = crate::transaction::version::VersionedKey::new(key.to_vec(), read_ts);
+        let start_vk = crate::transaction::mvcc::version::VersionedKey::new(key.to_vec(), read_ts);
         let start_bytes = start_vk.encode();
 
         // Helper: returns Some(Some(v)), Some(None) (tombstone), or None (mismatch)
         let check_entry = |entry_key: &[u8], entry_val: &[u8]| -> Option<Option<Vec<u8>>> {
-            let decoded = crate::transaction::version::VersionedKey::decode(entry_key).ok()?;
+            let decoded = crate::transaction::mvcc::version::VersionedKey::decode(entry_key).ok()?;
             if decoded.user_key != key {
                 return None;
             }
@@ -274,7 +274,7 @@ impl Database {
         // 현재는 최신 타임스탬프로 조회하지만, 향후 snapshot_ts를 인자로 받아
         // 특정 시점의 데이터를 조회할 수 있도록 확장 가능합니다.
         let current_ts = self.tx_manager.allocate_commit_ts();
-        let vk = crate::transaction::version::VersionedKey::new(key.to_vec(), current_ts);
+        let vk = crate::transaction::mvcc::version::VersionedKey::new(key.to_vec(), current_ts);
         let encoded_key = vk.encode();
         
         // Delta에서 versioned key 조회
@@ -311,7 +311,7 @@ impl Database {
             return k;
         }
 
-        crate::transaction::version::VersionedKey::decode(&k)
+        crate::transaction::mvcc::version::VersionedKey::decode(&k)
             .map(|vk| vk.user_key)
             .unwrap_or(k)
     }

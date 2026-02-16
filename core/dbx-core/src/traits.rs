@@ -63,7 +63,7 @@ pub trait DatabaseQuery {
 /// 트랜잭션 관리 기능을 제공하는 Trait
 pub trait DatabaseTransaction {
     /// 트랜잭션 시작
-    fn begin(&self) -> DbxResult<crate::api::transaction::Transaction<'_, crate::api::transaction::Active>>;
+    fn begin(&self) -> DbxResult<crate::transaction::api::Transaction<'_, crate::transaction::api::Active>>;
 }
 
 // ════════════════════════════════════════════

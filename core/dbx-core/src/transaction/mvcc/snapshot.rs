@@ -78,7 +78,7 @@ impl Snapshot {
 
         // Process WOS entries first (lower priority)
         for (encoded_key, encoded_value) in wos_entries {
-            if let Ok(vk) = crate::transaction::version::VersionedKey::decode(&encoded_key)
+            if let Ok(vk) = crate::transaction::mvcc::version::VersionedKey::decode(&encoded_key)
                 && vk.commit_ts <= self.read_ts
             {
                 // Decode value
@@ -112,7 +112,7 @@ impl Snapshot {
 
         // Process Delta entries (higher priority - overrides WOS)
         for (encoded_key, encoded_value) in delta_entries {
-            if let Ok(vk) = crate::transaction::version::VersionedKey::decode(&encoded_key)
+            if let Ok(vk) = crate::transaction::mvcc::version::VersionedKey::decode(&encoded_key)
                 && vk.commit_ts <= self.read_ts
             {
                 // Decode value - handle legacy (no prefix) and versioned (v/d prefix)

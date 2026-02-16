@@ -3,8 +3,8 @@
 //! `Versionable` 트레이트를 구현한 임의의 타입에 대해 버전 관리를 제공합니다.
 
 use crate::error::{DbxError, DbxResult};
-use crate::transaction::manager::TimestampOracle;
-use crate::transaction::versionable::Versionable;
+use crate::transaction::mvcc::manager::TimestampOracle;
+use crate::transaction::mvcc::versionable::Versionable;
 use std::collections::BTreeMap;
 use std::sync::{Arc, RwLock};
 

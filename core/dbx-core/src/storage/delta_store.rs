@@ -6,7 +6,7 @@
 
 use crate::error::DbxResult;
 use crate::storage::StorageBackend;
-use crate::transaction::version::VersionedKey;
+use crate::transaction::mvcc::version::VersionedKey;
 use crossbeam_skiplist::SkipMap;
 use dashmap::DashMap;
 use std::ops::{Bound, RangeBounds};

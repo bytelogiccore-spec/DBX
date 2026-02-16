@@ -261,7 +261,7 @@ impl ColumnarCache {
         for (k, v) in rows {
             // Decode versioned keys for columnar cache
             let user_key = if k.len() > 8 {
-                if let Ok(vk) = crate::transaction::version::VersionedKey::decode(&k) {
+                if let Ok(vk) = crate::transaction::mvcc::version::VersionedKey::decode(&k) {
                     vk.user_key
                 } else {
                     k

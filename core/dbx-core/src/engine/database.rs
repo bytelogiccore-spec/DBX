@@ -5,7 +5,7 @@ use crate::engine::{DeltaVariant, DurabilityLevel, WosVariant};
 use crate::sql::optimizer::QueryOptimizer;
 use crate::sql::parser::SqlParser;
 use crate::storage::encryption::EncryptionConfig;
-use crate::transaction::manager::TransactionManager;
+use crate::transaction::mvcc::manager::TransactionManager;
 use arrow::array::RecordBatch;
 use arrow::datatypes::Schema;
 use dashmap::DashMap;

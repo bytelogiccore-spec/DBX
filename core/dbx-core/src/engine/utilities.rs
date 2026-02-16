@@ -163,7 +163,7 @@ impl Database {
     /// # }
     /// ```
     pub fn gc(&self) -> DbxResult<usize> {
-        use crate::transaction::gc::GarbageCollector;
+        use crate::transaction::mvcc::gc::GarbageCollector;
 
         let gc = GarbageCollector::new();
 
@@ -178,7 +178,7 @@ impl Database {
 
     /// Estimate the number of versions that would be deleted by GC.
     pub fn gc_estimate(&self) -> DbxResult<usize> {
-        use crate::transaction::gc::GarbageCollector;
+        use crate::transaction::mvcc::gc::GarbageCollector;
 
         let gc = GarbageCollector::new();
         let watermark = self

@@ -5,28 +5,61 @@ warning: profiles for the non root package will be ignored, specify profiles at 
 package:   D:\ByteLogicCore\DBX\core\dbx-csharp\Cargo.toml
 workspace: D:\ByteLogicCore\DBX\Cargo.toml
    Compiling dbx-core v0.0.6-beta (D:\ByteLogicCore\DBX\core\dbx-core)
-error[E0599]: no method named `is_empty` found for enum `std::option::Option<T>` in the current scope
-  --> core\dbx-core\src\sql\planner\logical\select.rs:29:28
+error[E0432]: unresolved import `crate::transaction::manager`
+  --> core\dbx-core\src\engine\constructors.rs:14:25
    |
-29 |         if !query.order_by.is_empty() {
-   |                            ^^^^^^^^ method not found in `std::option::Option<sqlparser::ast::OrderBy>`
+14 | use crate::transaction::manager::TransactionManager; // Fix path
+   |                         ^^^^^^^ could not find `manager` in `transaction`
 
-error[E0308]: mismatched types
-   --> core\dbx-core\src\sql\planner\logical\select.rs:33:51
-    |
- 33 |                 .map(|ob| self.plan_order_by_expr(ob))
-    |                                ------------------ ^^ expected `&OrderByExpr`, found `&OrderBy`
-    |                                |
-    |                                arguments to this method are incorrect
-    |
-    = note: expected reference `&OrderByExpr`
-               found reference `&sqlparser::ast::OrderBy`
-note: method defined here
-   --> core\dbx-core\src\sql\planner\logical\select.rs:115:19
-    |
-115 |     pub(super) fn plan_order_by_expr(&self, ob: &SqlOrderByExpr) -> DbxResult<SortExpr> {
-    |                   ^^^^^^^^^^^^^^^^^^        -------------------
+error[E0432]: unresolved import `crate::transaction::manager`
+ --> core\dbx-core\src\engine\database.rs:8:25
+  |
+8 | use crate::transaction::manager::TransactionManager;
+  |                         ^^^^^^^ could not find `manager` in `transaction`
 
-Some errors have detailed explanations: E0308, E0599.
-For more information about an error, try `rustc --explain E0308`.
-error: could not compile `dbx-core` (lib) due to 2 previous errors
+error[E0432]: unresolved import `crate::transaction::manager`
+ --> core\dbx-core\src\transaction\mvcc\version_manager.rs:6:25
+  |
+6 | use crate::transaction::manager::TimestampOracle;
+  |                         ^^^^^^^ could not find `manager` in `transaction`
+
+error[E0433]: failed to resolve: could not find `transaction` in `api`
+  --> core\dbx-core\src\traits.rs:66:46
+   |
+66 |     fn begin(&self) -> DbxResult<crate::api::transaction::Transaction<'_, crate::api::transaction::Active>>;
+   |                                              ^^^^^^^^^^^ could not find `transaction` in `api`
+   |
+help: consider importing this module
+   |
+ 6 + use crate::transaction;
+   |
+help: if you import `transaction`, refer to it directly
+   |
+66 -     fn begin(&self) -> DbxResult<crate::api::transaction::Transaction<'_, crate::api::transaction::Active>>;
+66 +     fn begin(&self) -> DbxResult<transaction::Transaction<'_, crate::api::transaction::Active>>;
+   |
+
+error[E0433]: failed to resolve: could not find `transaction` in `api`
+  --> core\dbx-core\src\traits.rs:66:87
+   |
+66 |     fn begin(&self) -> DbxResult<crate::api::transaction::Transaction<'_, crate::api::transaction::Active>>;
+   |                                                                                       ^^^^^^^^^^^ could not find `transaction` in `api`
+   |
+help: a struct with a similar name exists
+   |
+66 -     fn begin(&self) -> DbxResult<crate::api::transaction::Transaction<'_, crate::api::transaction::Active>>;
+66 +     fn begin(&self) -> DbxResult<crate::api::transaction::Transaction<'_, crate::api::Transaction::Active>>;
+   |
+help: consider importing this module
+   |
+ 6 + use crate::transaction;
+   |
+help: if you import `transaction`, refer to it directly
+   |
+66 -     fn begin(&self) -> DbxResult<crate::api::transaction::Transaction<'_, crate::api::transaction::Active>>;
+66 +     fn begin(&self) -> DbxResult<crate::api::transaction::Transaction<'_, transaction::Active>>;
+   |
+
+Some errors have detailed explanations: E0432, E0433.
+For more information about an error, try `rustc --explain E0432`.
+error: could not compile `dbx-core` (lib) due to 5 previous errors

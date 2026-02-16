@@ -11,7 +11,7 @@ use crate::storage::delta_store::DeltaStore;
 use crate::storage::encrypted_wos::EncryptedWosBackend;
 use crate::storage::encryption::EncryptionConfig;
 use crate::storage::wos::WosBackend;
-use crate::transaction::manager::TransactionManager; // Fix path
+use crate::transaction::mvcc::manager::TransactionManager; // Fix path
 use dashmap::DashMap;
 use std::collections::HashMap;
 use std::path::Path;
