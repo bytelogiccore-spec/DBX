@@ -47,7 +47,7 @@ pub struct Database {
     #[allow(dead_code)]
     pub(crate) schemas: Arc<RwLock<HashMap<String, Arc<Schema>>>>,
 
-    /// SQL table registry: table_name → Vec<RecordBatch>
+    /// SQL table registry: table_name → `Vec<RecordBatch>`
     pub(crate) tables: RwLock<HashMap<String, Vec<RecordBatch>>>,
 
     /// SQL table schemas: table_name → Schema

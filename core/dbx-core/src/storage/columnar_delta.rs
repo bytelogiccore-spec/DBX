@@ -20,7 +20,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 /// Stores versioned RecordBatches for each table, enabling:
 /// - Snapshot Isolation via VersionedBatch
 /// - Efficient columnar scans via Arrow
-/// - Memory sharing via Arc<RecordBatch>
+/// - Memory sharing via `Arc<RecordBatch>`
 pub struct ColumnarDelta {
     /// Table name → list of versioned batches
     tables: DashMap<String, Vec<VersionedBatch>>,

@@ -1,6 +1,6 @@
 //! Encrypted WAL (Write-Ahead Log) wrapper.
 //!
-//! Wraps [`WriteAheadLog`] to encrypt all log records before writing
+//! Wraps [`crate::wal::WriteAheadLog`] to encrypt all log records before writing
 //! and decrypt during replay. Provides at-rest encryption for the WAL.
 //!
 //! # Architecture

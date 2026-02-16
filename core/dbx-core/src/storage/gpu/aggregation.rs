@@ -353,7 +353,7 @@ impl GpuManager {
         }
     }
 
-    /// Filter GT on GPU. Returns a bitmask (Vec<u8> where 1 means true).
+    /// Filter GT on GPU. Returns a bitmask (`Vec<u8>` where 1 means true).
     pub fn filter_gt(&self, table: &str, column: &str, threshold: i32) -> DbxResult<Vec<u8>> {
         #[cfg(not(feature = "gpu"))]
         {
