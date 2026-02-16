@@ -1,10 +1,13 @@
 // SQL 모듈 진입점
+pub mod builder;
 pub mod executor;
+pub mod interface;
 pub mod optimizer;
 pub mod parallel_parser;
 pub mod parser;
 pub mod planner;
 
+pub use builder::{Execute, Query, QueryOne, QueryOptional, QueryScalar, ScalarValue};
 pub use executor::{
     FilterOperator, HashAggregateOperator, HashJoinOperator, LimitOperator, PhysicalOperator,
     ProjectionOperator, SortOperator, TableScanOperator, evaluate_expr,

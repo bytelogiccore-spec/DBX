@@ -18,7 +18,6 @@ pub mod rollback;
 pub mod schema_versioning;
 pub mod serialization;
 pub mod snapshot;
-pub mod sql_interface;
 pub mod stream;
 pub mod types;
 pub mod udf_api;

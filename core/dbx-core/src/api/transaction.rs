@@ -4,7 +4,7 @@
 //! 트랜잭션 내 쓰기는 로컬 버퍼에 축적되며,
 //! `commit()` 시 메인 Delta Store에 원자적으로 반영됩니다.
 
-use crate::api::query::{Execute, Query, QueryOne, QueryOptional, QueryScalar};
+use crate::sql::builder::{Execute, Query, QueryOne, QueryOptional, QueryScalar};
 use crate::engine::Database;
 use crate::error::DbxResult;
 use std::collections::HashMap;
