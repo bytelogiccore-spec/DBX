@@ -69,5 +69,6 @@ dotnet_err.txt
 .gemini/
 .specify/
 .design/
+.plan/
 GEMINI.md
 scripts/node_modules/
