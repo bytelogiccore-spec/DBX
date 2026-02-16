@@ -9,7 +9,7 @@
 //! | Algorithm | Speed (AES-NI) | Speed (SW) | Nonce Safety | Use Case |
 //! |-----------|---------------|------------|--------------|----------|
 //! | AES-256-GCM-SIV | ★★★★★ | ★★★ | Misuse-resistant | Default — modern x86/ARM |
-//! | ChaCha20-Poly1305 | ★★★ | ★★★★★ | Standard | WASM / no AES-NI |
+//! | ChaCha20-Poly1305 | ★★★ | ★★★★★ | Standard | Embedded / no AES-NI |
 //!
 //! # Architecture
 //!
@@ -100,7 +100,7 @@ pub enum EncryptionAlgorithm {
     ///
     /// - Excellent software performance (no hardware dependency)
     /// - Constant-time implementation (side-channel resistant)
-    /// - Best for: WASM, embedded, platforms without AES-NI
+    /// - Best for: Embedded, platforms without AES-NI
     ChaCha20Poly1305,
 }
 

@@ -190,4 +190,4 @@ Initial release.
 - MVCC transactions (Snapshot Isolation)
 - Write-Ahead Logging (WAL)
 - B-Tree indexing
-- Language bindings: Python, Node.js, C#, C/C++, WASM
+- Language bindings: Python, Node.js, C#, C/C++

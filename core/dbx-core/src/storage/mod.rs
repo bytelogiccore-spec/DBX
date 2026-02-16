@@ -17,7 +17,6 @@ pub mod gpu;
 pub mod index;
 pub mod kv_adapter;
 pub mod memory_wos;
-pub mod opfs;
 pub mod parquet_io;
 pub mod versioned_batch;
 pub mod wos;
