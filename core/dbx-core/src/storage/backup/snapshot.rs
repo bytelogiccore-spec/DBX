@@ -1,7 +1,8 @@
 //! Database snapshot save/load implementation
 
 use crate::engine::metadata::SchemaMetadata;
-use crate::engine::snapshot::{DatabaseSnapshot, TableData};
+use crate::engine::snapshot::TableData;
+pub use crate::engine::snapshot::DatabaseSnapshot;
 use crate::engine::{Database, WosVariant};
 use crate::error::{DbxError, DbxResult};
 use arrow::datatypes::Schema;

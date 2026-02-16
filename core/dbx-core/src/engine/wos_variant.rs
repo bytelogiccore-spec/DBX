@@ -2,7 +2,7 @@
 
 use crate::error::DbxResult;
 use crate::storage::StorageBackend;
-use crate::storage::encrypted_wos::EncryptedWosBackend;
+use crate::storage::encryption::wos::EncryptedWosBackend;
 use crate::storage::memory_wos::InMemoryWosBackend;
 use crate::storage::wos::WosBackend;
 use std::sync::Arc;

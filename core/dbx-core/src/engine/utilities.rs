@@ -3,7 +3,7 @@
 use crate::engine::{Database, WosVariant};
 use crate::error::{DbxError, DbxResult};
 use crate::storage::StorageBackend;
-use crate::storage::encrypted_wos::EncryptedWosBackend;
+use crate::storage::encryption::wos::EncryptedWosBackend;
 use crate::storage::encryption::EncryptionConfig;
 use std::sync::Arc;
 

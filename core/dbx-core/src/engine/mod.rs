@@ -6,7 +6,6 @@ pub mod compaction;
 pub mod constructors;
 pub mod crud;
 pub mod database;
-pub mod database_snapshot;
 pub mod delta_variant;
 pub mod feature_flags;
 pub mod index;

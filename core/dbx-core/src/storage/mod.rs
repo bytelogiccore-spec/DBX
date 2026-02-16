@@ -4,14 +4,13 @@
 //! The SQL layer depends only on this trait (Dependency Inversion Principle).
 
 pub mod arrow_ipc;
+pub mod backup;
 pub mod cache;
 pub mod columnar;
 pub mod columnar_cache;
 pub mod columnar_delta;
 pub mod compression;
 pub mod delta_store;
-pub mod encrypted_parquet;
-pub mod encrypted_wos;
 pub mod encryption;
 pub mod gpu;
 pub mod index;

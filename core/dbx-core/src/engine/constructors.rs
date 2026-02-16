@@ -8,7 +8,7 @@ use crate::sql::optimizer::QueryOptimizer;
 use crate::sql::parser::SqlParser;
 use crate::storage::StorageBackend; // Add this for trait methods
 use crate::storage::delta_store::DeltaStore;
-use crate::storage::encrypted_wos::EncryptedWosBackend;
+use crate::storage::encryption::wos::EncryptedWosBackend;
 use crate::storage::encryption::EncryptionConfig;
 use crate::storage::wos::WosBackend;
 use crate::transaction::mvcc::manager::TransactionManager; // Fix path

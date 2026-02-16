@@ -113,7 +113,7 @@ impl EncryptedParquetWriter {
         current_encryption: &EncryptionConfig,
         new_encryption: &EncryptionConfig,
     ) -> DbxResult<()> {
-        use super::encrypted_parquet::EncryptedParquetReader;
+        use super::EncryptedParquetReader;
 
         // 1. Read and decrypt
         let batches = EncryptedParquetReader::read(path, current_encryption)?;
