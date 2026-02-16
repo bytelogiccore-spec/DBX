@@ -1,0 +1,32 @@
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   D:\ByteLogicCore\DBX\core\dbx-py\Cargo.toml
+workspace: D:\ByteLogicCore\DBX\Cargo.toml
+warning: profiles for the non root package will be ignored, specify profiles at the workspace root:
+package:   D:\ByteLogicCore\DBX\core\dbx-csharp\Cargo.toml
+workspace: D:\ByteLogicCore\DBX\Cargo.toml
+   Compiling dbx-core v0.0.6-beta (D:\ByteLogicCore\DBX\core\dbx-core)
+error[E0599]: no method named `is_empty` found for enum `std::option::Option<T>` in the current scope
+  --> core\dbx-core\src\sql\planner\logical\select.rs:29:28
+   |
+29 |         if !query.order_by.is_empty() {
+   |                            ^^^^^^^^ method not found in `std::option::Option<sqlparser::ast::OrderBy>`
+
+error[E0308]: mismatched types
+   --> core\dbx-core\src\sql\planner\logical\select.rs:33:51
+    |
+ 33 |                 .map(|ob| self.plan_order_by_expr(ob))
+    |                                ------------------ ^^ expected `&OrderByExpr`, found `&OrderBy`
+    |                                |
+    |                                arguments to this method are incorrect
+    |
+    = note: expected reference `&OrderByExpr`
+               found reference `&sqlparser::ast::OrderBy`
+note: method defined here
+   --> core\dbx-core\src\sql\planner\logical\select.rs:115:19
+    |
+115 |     pub(super) fn plan_order_by_expr(&self, ob: &SqlOrderByExpr) -> DbxResult<SortExpr> {
+    |                   ^^^^^^^^^^^^^^^^^^        -------------------
+
+Some errors have detailed explanations: E0308, E0599.
+For more information about an error, try `rustc --explain E0308`.
+error: could not compile `dbx-core` (lib) due to 2 previous errors
