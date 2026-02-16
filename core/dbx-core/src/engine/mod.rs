@@ -20,7 +20,6 @@ pub mod serialization;
 pub mod snapshot;
 pub mod sql_interface;
 pub mod stream;
-pub mod transactions;
 pub mod types;
 pub mod udf_api;
 pub mod utilities;

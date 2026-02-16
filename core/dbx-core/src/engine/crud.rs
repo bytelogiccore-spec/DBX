@@ -4,7 +4,6 @@ use crate::engine::Database;
 use crate::engine::types::{BackgroundJob, DurabilityLevel};
 use crate::error::{DbxError, DbxResult};
 use crate::storage::StorageBackend;
-use std::collections::HashMap;
 
 // ════════════════════════════════════════════
 // ⚠️ MVCC Value Encoding Constants
@@ -23,6 +22,42 @@ pub(crate) const MVCC_PREFIX_LEN: usize = 2;
 
 impl Database {
     // ════════════════════════════════════════════
+    // WAL Helper
+    // ════════════════════════════════════════════
+
+    /// Append a WAL record if durability is enabled and a WAL backend exists.
+    #[inline]
+    fn append_to_wal(&self, record: &crate::wal::WalRecord) -> DbxResult<()> {
+        if self.durability == DurabilityLevel::None {
+            return Ok(());
+        }
+        if let Some(wal) = &self.wal {
+            wal.append(record)?;
+            if self.durability == DurabilityLevel::Full {
+                if let Some(tx) = &self.job_sender {
+                    let _ = tx.send(BackgroundJob::WalSync);
+                } else {
+                    wal.sync()?;
+                }
+            }
+        } else if let Some(encrypted_wal) = &self.encrypted_wal {
+            encrypted_wal.append(record)?;
+            if self.durability == DurabilityLevel::Full {
+                if let Some(tx) = &self.job_sender {
+                    let _ = tx.send(BackgroundJob::EncryptedWalSync);
+                } else {
+                    encrypted_wal.sync()?;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    // ════════════════════════════════════════════
+    // CRUD Operations
+    // ════════════════════════════════════════════
+
+    // ════════════════════════════════════════════
     // CREATE Operations
     // ════════════════════════════════════════════
 
@@ -37,47 +72,30 @@ impl Database {
     /// * `key` - 키 (바이트 배열)
     /// * `value` - 값 (바이트 배열)
     pub fn insert(&self, table: &str, key: &[u8], value: &[u8]) -> DbxResult<()> {
-        if self.durability != DurabilityLevel::None {
-            // Log to WAL first (Write-Ahead Logging)
-            let wal_record = crate::wal::WalRecord::Insert {
+        // Log to WAL first — only allocate record if WAL exists
+        #[cfg(feature = "wal")]
+        if self.durability != DurabilityLevel::None
+            && (self.wal.is_some() || self.encrypted_wal.is_some())
+        {
+            self.append_to_wal(&crate::wal::WalRecord::Insert {
                 table: table.to_string(),
                 key: key.to_vec(),
                 value: value.to_vec(),
                 ts: 0,
-            };
-            if let Some(wal) = &self.wal {
-                wal.append(&wal_record)?;
-                if self.durability == DurabilityLevel::Full {
-                    if let Some(tx) = &self.job_sender {
-                        let _ = tx.send(BackgroundJob::WalSync);
-                    } else {
-                        wal.sync()?;
-                    }
-                }
-            } else if let Some(encrypted_wal) = &self.encrypted_wal {
-                encrypted_wal.append(&wal_record)?;
-                if self.durability == DurabilityLevel::Full {
-                    if let Some(tx) = &self.job_sender {
-                        let _ = tx.send(BackgroundJob::EncryptedWalSync);
-                    } else {
-                        encrypted_wal.sync()?;
-                    }
-                }
-            }
+            })?;
         }
-
-        // O(1) row_id 계산 (증분 카운터 사용)
-        let counter = self
-            .row_counters
-            .entry(table.to_string())
-            .or_insert_with(|| std::sync::atomic::AtomicUsize::new(0));
-        let row_id = counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
 
         // 데이터 삽입
         self.delta.insert(table, key, value)?;
 
-        // 비동기 인덱스 업데이트 예약
+        // O(1) row_id 계산 + 인덱스 업데이트 — only when index exists
+        #[cfg(feature = "index")]
         if self.has_index(table, "key") {
+            let counter = self
+                .row_counters
+                .entry(table.to_string())
+                .or_insert_with(|| std::sync::atomic::AtomicUsize::new(0));
+            let row_id = counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
             if let Some(tx) = &self.job_sender {
                 let _ = tx.send(BackgroundJob::IndexUpdate {
                     table: table.to_string(),
@@ -100,33 +118,15 @@ impl Database {
 
     /// 여러 키-값 쌍을 일괄 삽입합니다 (최적화됨).
     pub fn insert_batch(&self, table: &str, rows: Vec<(Vec<u8>, Vec<u8>)>) -> DbxResult<()> {
-        if self.durability != DurabilityLevel::None {
-            // Log to WAL first
-            let wal_record = crate::wal::WalRecord::Batch {
+        #[cfg(feature = "wal")]
+        if self.durability != DurabilityLevel::None
+            && (self.wal.is_some() || self.encrypted_wal.is_some())
+        {
+            self.append_to_wal(&crate::wal::WalRecord::Batch {
                 table: table.to_string(),
                 rows: rows.clone(),
                 ts: 0,
-            };
-
-            if let Some(wal) = &self.wal {
-                wal.append(&wal_record)?;
-                if self.durability == DurabilityLevel::Full {
-                    if let Some(tx) = &self.job_sender {
-                        let _ = tx.send(BackgroundJob::WalSync);
-                    } else {
-                        wal.sync()?;
-                    }
-                }
-            } else if let Some(encrypted_wal) = &self.encrypted_wal {
-                encrypted_wal.append(&wal_record)?;
-                if self.durability == DurabilityLevel::Full {
-                    if let Some(tx) = &self.job_sender {
-                        let _ = tx.send(BackgroundJob::EncryptedWalSync);
-                    } else {
-                        encrypted_wal.sync()?;
-                    }
-                }
-            }
+            })?;
         }
 
         self.delta.insert_batch(table, rows)?;
@@ -245,14 +245,13 @@ impl Database {
     }
 
     /// 키로 값을 조회합니다.
+    ///
+    /// 성능 최적화: MVCC feature가 비활성화되면 Fast-path만 사용하여
+    /// 최대 성능을 달성합니다.
+    #[inline(always)]
     pub fn get(&self, table: &str, key: &[u8]) -> DbxResult<Option<Vec<u8>>> {
-        // 1. Prioritize MVCC Snapshot Read — versioned keys
-        let current_ts = self.tx_manager.current_ts();
-        if let Some(result) = self.get_snapshot(table, key, current_ts)? {
-            return Ok(result); // Some(val) or None (tombstone)
-        }
-
-        // 2. Fallback to Legacy Read (Delta → WOS) — non-versioned keys
+        // Fast-path: Delta → WOS 직접 조회 (MVCC 오버헤드 없음)
+        // MVCC feature가 활성화되어도 Fast-path를 우선 사용
         if let Some(value) = self.delta.get(table, key)? {
             return Ok(Some(value));
         }
@@ -263,58 +262,96 @@ impl Database {
         Ok(None)
     }
 
+    /// MVCC 값 디코딩 (Tombstone 필터링)
+    #[inline(always)]
+    fn decode_mvcc_value(v: Vec<u8>) -> Option<Vec<u8>> {
+        if v.len() < MVCC_PREFIX_LEN || v[0] != 0x00 {
+            return Some(v); // Legacy value
+        }
+
+        match v[1] {
+            0x01 => Some(v[MVCC_PREFIX_LEN..].to_vec()), // Value
+            0x02 => None,                                // Tombstone
+            _ => Some(v),                                // Unknown tag
+        }
+    }
+
+    /// VersionedKey 디코딩
+    #[inline(always)]
+    fn decode_versioned_key(k: Vec<u8>) -> Vec<u8> {
+        if k.len() <= 8 {
+            return k;
+        }
+
+        crate::transaction::version::VersionedKey::decode(&k)
+            .map(|vk| vk.user_key)
+            .unwrap_or(k)
+    }
+
     /// 테이블의 모든 키-값 쌍을 스캔합니다.
     pub fn scan(&self, table: &str) -> DbxResult<Vec<(Vec<u8>, Vec<u8>)>> {
-        // 1. Collect from Delta Store
+        // Fast-path: Delta가 비어있으면 WOS 직접 스캔 (merge 오버헤드 제거)
         let delta_entries = self.delta.scan(table, ..)?;
+        if delta_entries.is_empty() {
+            return self.wos.scan(table, ..);
+        }
 
-        // 2. Collect from WOS
+        // 1. Collect from Delta Store and WOS
         let wos_entries = self.wos.scan(table, ..)?;
 
-        // 3. Merge (Delta overrides WOS for same keys)
-        let mut merged = HashMap::new();
+        // 2. Direct 2-way merge (both are already sorted)
+        let mut result = Vec::with_capacity(delta_entries.len() + wos_entries.len());
 
-        // WOS first (lower priority)
-        for (key, value) in wos_entries {
-            merged.insert(key, value);
-        }
+        let mut i = 0;
+        let mut j = 0;
 
-        // Delta second (higher priority - overrides WOS)
-        for (key, value) in delta_entries {
-            merged.insert(key, value);
-        }
-
-        // 4. Convert to sorted Vec and handle prefixes
-        let mut result = Vec::new();
-        for (k, v) in merged {
-            // Decode value
-            // ⚠️ MVCC 매직 헤더 디코딩 — [0x00, tag] 확인
-            let decoded_v = if v.is_empty() {
-                v
-            } else if v.len() >= MVCC_PREFIX_LEN && v[0] == 0x00 {
-                match v[1] {
-                    0x01 => v[MVCC_PREFIX_LEN..].to_vec(), // Value
-                    0x02 => continue,                      // Tombstone
-                    _ => v,                                // Unknown tag → legacy
+        while i < delta_entries.len() && j < wos_entries.len() {
+            match delta_entries[i].0.cmp(&wos_entries[j].0) {
+                std::cmp::Ordering::Less => {
+                    // Delta key is smaller
+                    if let Some(decoded_v) = Self::decode_mvcc_value(delta_entries[i].1.clone()) {
+                        let user_key = Self::decode_versioned_key(delta_entries[i].0.clone());
+                        result.push((user_key, decoded_v));
+                    }
+                    i += 1;
                 }
-            } else {
-                v
-            };
-
-            // Decode key if versioned
-            let user_key = if k.len() > 8 {
-                if let Ok(vk) = crate::transaction::version::VersionedKey::decode(&k) {
-                    vk.user_key
-                } else {
-                    k
+                std::cmp::Ordering::Equal => {
+                    // Same key - Delta takes priority
+                    if let Some(decoded_v) = Self::decode_mvcc_value(delta_entries[i].1.clone()) {
+                        let user_key = Self::decode_versioned_key(delta_entries[i].0.clone());
+                        result.push((user_key, decoded_v));
+                    }
+                    i += 1;
+                    j += 1; // Skip WOS entry
                 }
-            } else {
-                k
-            };
-
-            result.push((user_key, decoded_v));
+                std::cmp::Ordering::Greater => {
+                    // WOS key is smaller
+                    if let Some(decoded_v) = Self::decode_mvcc_value(wos_entries[j].1.clone()) {
+                        let user_key = Self::decode_versioned_key(wos_entries[j].0.clone());
+                        result.push((user_key, decoded_v));
+                    }
+                    j += 1;
+                }
+            }
         }
-        result.sort_by(|a, b| a.0.cmp(&b.0));
+
+        // 3. Process remaining Delta entries
+        while i < delta_entries.len() {
+            if let Some(decoded_v) = Self::decode_mvcc_value(delta_entries[i].1.clone()) {
+                let user_key = Self::decode_versioned_key(delta_entries[i].0.clone());
+                result.push((user_key, decoded_v));
+            }
+            i += 1;
+        }
+
+        // 4. Process remaining WOS entries
+        while j < wos_entries.len() {
+            if let Some(decoded_v) = Self::decode_mvcc_value(wos_entries[j].1.clone()) {
+                let user_key = Self::decode_versioned_key(wos_entries[j].0.clone());
+                result.push((user_key, decoded_v));
+            }
+            j += 1;
+        }
 
         Ok(result)
     }
@@ -326,18 +363,23 @@ impl Database {
         start_key: &[u8],
         end_key: &[u8],
     ) -> DbxResult<Vec<(Vec<u8>, Vec<u8>)>> {
-        // Use full scan and filter for now (simpler than range bound conversion)
-        let all = self.scan(table)?;
-        Ok(all
-            .into_iter()
-            .filter(|(k, _)| k.as_slice() >= start_key && k.as_slice() < end_key)
-            .collect())
+        let range = start_key.to_vec()..end_key.to_vec();
+
+        // Scan both Delta Store and WOS with range bounds
+        let mut merged = std::collections::BTreeMap::new();
+        for (k, v) in self.delta.scan(table, range.clone())? {
+            merged.insert(k, v);
+        }
+        for (k, v) in self.wos.scan(table, range)? {
+            merged.entry(k).or_insert(v);
+        }
+
+        Ok(merged.into_iter().collect())
     }
 
     /// 테이블의 행 개수를 반환합니다.
     pub fn table_row_count(&self, table: &str) -> DbxResult<usize> {
-        let all = self.scan(table)?;
-        Ok(all.len())
+        self.count(table)
     }
 
     // ════════════════════════════════════════════
@@ -346,6 +388,7 @@ impl Database {
 
     /// 키를 삭제합니다.
     pub fn delete(&self, table: &str, key: &[u8]) -> DbxResult<bool> {
+        #[cfg(feature = "index")]
         if self.has_index(table, "key") {
             let row_ids = self.index.lookup(table, "key", key)?;
             for row_id in row_ids {
@@ -358,8 +401,11 @@ impl Database {
         let wos_deleted = self.wos.delete(table, key)?;
 
         // 2. Add versioned tombstone if it was a versioned key
-        let commit_ts = self.tx_manager.allocate_commit_ts();
-        self.insert_versioned(table, key, None, commit_ts)?;
+        #[cfg(feature = "mvcc")]
+        {
+            let commit_ts = self.tx_manager.allocate_commit_ts();
+            self.insert_versioned(table, key, None, commit_ts)?;
+        }
 
         Ok(delta_deleted || wos_deleted)
     }

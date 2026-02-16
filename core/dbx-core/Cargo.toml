@@ -1,6 +1,6 @@
 [package]
 name = "dbx-core"
-version.workspace = true
+version = "0.0.6-beta"
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
@@ -39,6 +39,10 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 bincode = "1"
 
+# Cron scheduling
+cron = "0.12"
+chrono = "0.4"
+
 # Compression and Checksum
 zstd = "0.13"
 
@@ -59,7 +63,11 @@ sled = "0.34"
 redb = "2.1"
 
 [features]
-default = []
+default = ["wal", "mvcc", "index"]
+wal = []
+mvcc = []
+index = []
+minimal = []
 simd = []
 jit = []
 gpu = ["cudarc"]
@@ -108,4 +116,12 @@ harness = false
 
 [[bench]]
 name = "phase2_comparison"
+harness = false
+
+[[bench]]
+name = "cleanup_bench"
+harness = false
+
+[[bench]]
+name = "official_db_comparison"
 harness = false

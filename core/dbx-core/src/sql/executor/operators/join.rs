@@ -452,7 +452,6 @@ impl PhysicalOperator for HashJoinOperator {
             }
         }
 
-        eprintln!("DEBUG: Probe phase complete, no more batches");
         self.done = true;
         Ok(None)
     }

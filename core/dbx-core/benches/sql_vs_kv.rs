@@ -75,8 +75,12 @@ fn bench_update_kv_single(c: &mut Criterion) {
                 25,
                 100.0 + counter as f64
             );
-            db.put(black_box(key.as_bytes()), black_box(value.as_bytes()))
-                .unwrap();
+            db.insert(
+                "users",
+                black_box(key.as_bytes()),
+                black_box(value.as_bytes()),
+            )
+            .unwrap();
             counter += 1;
         });
     });
@@ -123,7 +127,8 @@ fn bench_update_kv_batch(c: &mut Criterion) {
                             25,
                             200.0 + i as f64
                         );
-                        db.put(key.as_bytes(), value.as_bytes()).unwrap();
+                        db.insert("users", key.as_bytes(), value.as_bytes())
+                            .unwrap();
                     }
                 },
             );
@@ -165,7 +170,8 @@ fn bench_update_kv_with_index(c: &mut Criterion) {
                 25,
                 150.0 + counter as f64
             );
-            db.put(key.as_bytes(), value.as_bytes()).unwrap();
+            db.insert("users", key.as_bytes(), value.as_bytes())
+                .unwrap();
             counter += 1;
         });
     });
@@ -191,7 +197,7 @@ fn bench_delete_kv_single(c: &mut Criterion) {
         b.iter_with_setup(
             || setup_db_with_data(1000),
             |db| {
-                db.delete(b"user:500").unwrap();
+                db.delete("users", b"user:500").unwrap();
             },
         );
     });
@@ -227,7 +233,7 @@ fn bench_delete_kv_batch(c: &mut Criterion) {
                 |db| {
                     for i in 0..size {
                         let key = format!("user:{}", i);
-                        db.delete(key.as_bytes()).unwrap();
+                        db.delete("users", key.as_bytes()).unwrap();
                     }
                 },
             );
@@ -256,7 +262,7 @@ fn bench_delete_kv_with_index(c: &mut Criterion) {
                 // KV API는 인덱스를 직접 사용하지 않으므로 개별 삭제
                 for i in 0..1000 {
                     let key = format!("user:{}", i);
-                    db.delete(key.as_bytes()).unwrap();
+                    db.delete("users", key.as_bytes()).unwrap();
                 }
             },
         );

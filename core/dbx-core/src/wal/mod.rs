@@ -264,9 +264,9 @@ impl WriteAheadLog {
     ///
     /// ```rust
     /// # use dbx_core::wal::WriteAheadLog;
-    /// # use std::path::Path;
     /// # fn main() -> dbx_core::DbxResult<()> {
-    /// let wal = WriteAheadLog::open(Path::new("./wal.log"))?;
+    /// let tmp = tempfile::NamedTempFile::new().unwrap();
+    /// let wal = WriteAheadLog::open(tmp.path())?;
     /// let records = wal.replay()?;
     /// for record in records {
     ///     // Apply record to database

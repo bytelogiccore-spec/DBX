@@ -222,6 +222,155 @@ pub fn load_all_indexes(wos: &WosBackend) -> DbxResult<HashMap<String, (String, 
 }
 
 // ════════════════════════════════════════════
+// Trigger Metadata Persistence Functions
+// ════════════════════════════════════════════
+
+/// Save trigger metadata to persistent storage
+pub fn save_trigger(wos: &WosBackend, trigger: &crate::automation::Trigger) -> DbxResult<()> {
+    let json = trigger.to_json()?;
+    wos.insert(
+        "__meta__/triggers",
+        trigger.name.as_bytes(),
+        json.as_bytes(),
+    )?;
+    Ok(())
+}
+
+/// Load trigger metadata from persistent storage
+pub fn load_trigger(wos: &WosBackend, name: &str) -> DbxResult<Option<crate::automation::Trigger>> {
+    match wos.get("__meta__/triggers", name.as_bytes())? {
+        Some(json_bytes) => {
+            let json = String::from_utf8(json_bytes)
+                .map_err(|e| DbxError::Serialization(e.to_string()))?;
+            let trigger = crate::automation::Trigger::from_json(&json)?;
+            Ok(Some(trigger))
+        }
+        None => Ok(None),
+    }
+}
+
+/// Delete trigger metadata from persistent storage
+pub fn delete_trigger(wos: &WosBackend, name: &str) -> DbxResult<()> {
+    wos.delete("__meta__/triggers", name.as_bytes())?;
+    Ok(())
+}
+
+/// Load all trigger metadata from persistent storage
+pub fn load_all_triggers(wos: &WosBackend) -> DbxResult<Vec<crate::automation::Trigger>> {
+    let mut triggers = Vec::new();
+    let all_records = wos.scan("__meta__/triggers", ..)?;
+
+    for (_key_vec, value_vec) in all_records {
+        let json =
+            String::from_utf8(value_vec).map_err(|e| DbxError::Serialization(e.to_string()))?;
+        let trigger = crate::automation::Trigger::from_json(&json)?;
+        triggers.push(trigger);
+    }
+
+    Ok(triggers)
+}
+
+// ════════════════════════════════════════════
+// Stored Procedure Metadata Persistence Functions
+// ════════════════════════════════════════════
+
+/// Save stored procedure metadata to persistent storage
+pub fn save_procedure(
+    wos: &WosBackend,
+    procedure: &crate::automation::StoredProcedure,
+) -> DbxResult<()> {
+    let json = procedure.to_json()?;
+    wos.insert(
+        "__meta__/procedures",
+        procedure.name.as_bytes(),
+        json.as_bytes(),
+    )?;
+    Ok(())
+}
+
+/// Load stored procedure metadata from persistent storage
+pub fn load_procedure(
+    wos: &WosBackend,
+    name: &str,
+) -> DbxResult<Option<crate::automation::StoredProcedure>> {
+    match wos.get("__meta__/procedures", name.as_bytes())? {
+        Some(json_bytes) => {
+            let json = String::from_utf8(json_bytes)
+                .map_err(|e| DbxError::Serialization(e.to_string()))?;
+            let procedure = crate::automation::StoredProcedure::from_json(&json)?;
+            Ok(Some(procedure))
+        }
+        None => Ok(None),
+    }
+}
+
+/// Delete stored procedure metadata from persistent storage
+pub fn delete_procedure(wos: &WosBackend, name: &str) -> DbxResult<()> {
+    wos.delete("__meta__/procedures", name.as_bytes())?;
+    Ok(())
+}
+
+/// Load all stored procedure metadata from persistent storage
+pub fn load_all_procedures(wos: &WosBackend) -> DbxResult<Vec<crate::automation::StoredProcedure>> {
+    let mut procedures = Vec::new();
+    let all_records = wos.scan("__meta__/procedures", ..)?;
+
+    for (_key_vec, value_vec) in all_records {
+        let json =
+            String::from_utf8(value_vec).map_err(|e| DbxError::Serialization(e.to_string()))?;
+        let procedure = crate::automation::StoredProcedure::from_json(&json)?;
+        procedures.push(procedure);
+    }
+
+    Ok(procedures)
+}
+
+// ════════════════════════════════════════════
+// UDF Metadata Persistence Functions
+// ════════════════════════════════════════════
+
+/// Save UDF metadata to persistent storage
+pub fn save_udf(wos: &WosBackend, udf: &crate::automation::UdfMetadata) -> DbxResult<()> {
+    let json = udf.to_json()?;
+    wos.insert("__meta__/udfs", udf.name.as_bytes(), json.as_bytes())?;
+    Ok(())
+}
+
+/// Load UDF metadata from persistent storage
+pub fn load_udf(wos: &WosBackend, name: &str) -> DbxResult<Option<crate::automation::UdfMetadata>> {
+    match wos.get("__meta__/udfs", name.as_bytes())? {
+        Some(json_bytes) => {
+            let json = String::from_utf8(json_bytes)
+                .map_err(|e| DbxError::Serialization(e.to_string()))?;
+            let udf = crate::automation::UdfMetadata::from_json(&json)?;
+            Ok(Some(udf))
+        }
+        None => Ok(None),
+    }
+}
+
+/// Delete UDF metadata from persistent storage
+pub fn delete_udf(wos: &WosBackend, name: &str) -> DbxResult<()> {
+    wos.delete("__meta__/udfs", name.as_bytes())?;
+    Ok(())
+}
+
+/// Load all UDF metadata from persistent storage
+pub fn load_all_udfs(wos: &WosBackend) -> DbxResult<Vec<crate::automation::UdfMetadata>> {
+    let mut udfs = Vec::new();
+    let all_records = wos.scan("__meta__/udfs", ..)?;
+
+    for (_key_vec, value_vec) in all_records {
+        let json =
+            String::from_utf8(value_vec).map_err(|e| DbxError::Serialization(e.to_string()))?;
+        let udf = crate::automation::UdfMetadata::from_json(&json)?;
+        udfs.push(udf);
+    }
+
+    Ok(udfs)
+}
+
+// ════════════════════════════════════════════
 // Tests
 // ════════════════════════════════════════════
 
@@ -313,4 +462,64 @@ mod tests {
         let deleted = load_all_indexes(&wos).unwrap();
         assert!(deleted.is_empty());
     }
+}
+
+// ════════════════════════════════════════════
+// Schedule Metadata Persistence
+// ════════════════════════════════════════════
+
+/// Save schedule metadata
+pub fn save_schedule(wos: &WosBackend, schedule: &crate::automation::Schedule) -> DbxResult<()> {
+    let json = schedule.to_json()?;
+    wos.insert(
+        "__meta__/schedules",
+        schedule.name.as_bytes(),
+        json.as_bytes(),
+    )?;
+    Ok(())
+}
+
+/// Load schedule metadata by name
+pub fn load_schedule(
+    wos: &WosBackend,
+    name: &str,
+) -> DbxResult<Option<crate::automation::Schedule>> {
+    match wos.get("__meta__/schedules", name.as_bytes())? {
+        Some(bytes) => {
+            let json = String::from_utf8(bytes.to_vec()).map_err(|e| {
+                DbxError::Serialization(format!("Failed to decode schedule JSON: {}", e))
+            })?;
+            let schedule = crate::automation::Schedule::from_json(&json)?;
+            Ok(Some(schedule))
+        }
+        None => Ok(None),
+    }
+}
+
+/// Delete schedule metadata
+pub fn delete_schedule(wos: &WosBackend, name: &str) -> DbxResult<()> {
+    wos.delete("__meta__/schedules", name.as_bytes())?;
+    Ok(())
+}
+
+/// Load all schedules
+pub fn load_all_schedules(
+    wos: &WosBackend,
+) -> DbxResult<HashMap<String, crate::automation::Schedule>> {
+    let mut schedules = HashMap::new();
+    let all_records = wos.scan("__meta__/schedules", ..)?;
+
+    for (key_vec, value_vec) in all_records {
+        let name =
+            String::from_utf8(key_vec).map_err(|e| DbxError::Serialization(e.to_string()))?;
+
+        let json = String::from_utf8(value_vec).map_err(|e| {
+            DbxError::Serialization(format!("Failed to decode schedule JSON: {}", e))
+        })?;
+
+        let schedule = crate::automation::Schedule::from_json(&json)?;
+        schedules.insert(name, schedule);
+    }
+
+    Ok(schedules)
 }

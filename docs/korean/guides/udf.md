@@ -23,6 +23,19 @@ DBX의 UDF 프레임워크는 세 가지 유형의 사용자 정의 함수를 �
 | **집계** | 여러 행을 받아 값 하나를 반환 | `SUM(price)`, `MEDIAN(score)` |
 | **테이블** | 입력을 받아 테이블(행 집합)을 반환 | `GENERATE_SERIES(1, 100)` |
 
+### SQL 문법 지원
+
+v0.0.6-beta4부터 SQL 표준 CREATE FUNCTION 문법을 지원합니다:
+
+```sql
+CREATE FUNCTION add_numbers (a INT, b INT) RETURNS INT
+BEGIN
+    RETURN a + b;
+END;
+```
+
+> **참고**: 현재는 메타데이터 파싱만 지원하며, 실제 함수 로직은 Rust 코드로 등록해야 합니다.
+
 ---
 
 ## 스칼라 UDF

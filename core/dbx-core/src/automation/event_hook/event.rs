@@ -1,13 +1,13 @@
-//! Trigger Events
+//! EventHook Events
 //!
-//! 트리거를 발생시키는 이벤트 정의
+//! 이벤트 훅을 발생시키는 이벤트 정의
 
 use crate::automation::callable::Value;
 use std::collections::HashMap;
 
-/// 트리거 이벤트 타입
+/// 이벤트 훅 이벤트 타입
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum TriggerEventType {
+pub enum EventHookEventType {
     /// INSERT 이벤트
     BeforeInsert,
     AfterInsert,
@@ -24,11 +24,11 @@ pub enum TriggerEventType {
     Scheduled,
 }
 
-/// 트리거 이벤트
+/// 이벤트 훅 이벤트
 #[derive(Debug, Clone)]
-pub struct TriggerEvent {
+pub struct EventHookEvent {
     /// 이벤트 타입
-    pub event_type: TriggerEventType,
+    pub event_type: EventHookEventType,
 
     /// 테이블 이름
     pub table: String,
@@ -40,9 +40,9 @@ pub struct TriggerEvent {
     pub timestamp: u64,
 }
 
-impl TriggerEvent {
+impl EventHookEvent {
     /// 새 이벤트 생성
-    pub fn new(event_type: TriggerEventType, table: impl Into<String>) -> Self {
+    pub fn new(event_type: EventHookEventType, table: impl Into<String>) -> Self {
         Self {
             event_type,
             table: table.into(),
@@ -66,12 +66,12 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_trigger_event_creation() {
-        let event = TriggerEvent::new(TriggerEventType::AfterInsert, "users")
+    fn test_event_hook_event_creation() {
+        let event = EventHookEvent::new(EventHookEventType::AfterInsert, "users")
             .with_data("id", Value::Int(1))
             .with_data("name", Value::String("Alice".to_string()));
 
-        assert_eq!(event.event_type, TriggerEventType::AfterInsert);
+        assert_eq!(event.event_type, EventHookEventType::AfterInsert);
         assert_eq!(event.table, "users");
         assert_eq!(event.data.len(), 2);
     }

@@ -18,7 +18,6 @@ pub enum WosVariant {
 }
 
 impl WosVariant {
-    #[allow(dead_code)]
     pub fn insert(&self, table: &str, key: &[u8], value: &[u8]) -> DbxResult<()> {
         match self {
             Self::Plain(wos) => wos.as_ref().insert(table, key, value),
@@ -51,7 +50,6 @@ impl WosVariant {
         }
     }
 
-    #[allow(dead_code)]
     pub fn scan<R: std::ops::RangeBounds<Vec<u8>> + Clone>(
         &self,
         table: &str,

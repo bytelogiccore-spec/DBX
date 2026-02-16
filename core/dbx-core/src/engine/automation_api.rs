@@ -1,16 +1,16 @@
 //! Automation API for Database
 //!
-//! 트리거 및 스케줄러 관리 API
+//! 이벤트 훅 및 스케줄러 관리 API
 
 use crate::automation::callable::ExecutionContext;
-use crate::automation::{ScheduledJob, Scheduler, Trigger, TriggerEvent};
+use crate::automation::{EventHook, EventHookEvent, ScheduledJob, Scheduler};
 use crate::engine::Database;
 use crate::error::DbxResult;
 use std::sync::{Arc, RwLock};
 
-/// 트리거 레지스트리 (이벤트 매칭용)
+/// 이벤트 훅 레지스트리 (이벤트 매칭용)
 pub struct TriggerRegistry {
-    triggers: RwLock<Vec<Arc<Trigger>>>,
+    triggers: RwLock<Vec<Arc<EventHook>>>,
 }
 
 impl TriggerRegistry {
@@ -20,20 +20,20 @@ impl TriggerRegistry {
         }
     }
 
-    pub fn register(&self, trigger: Arc<Trigger>) -> DbxResult<()> {
+    pub fn register(&self, hook: Arc<EventHook>) -> DbxResult<()> {
         let mut triggers = self
             .triggers
             .write()
             .map_err(|_| crate::error::DbxError::LockPoisoned)?;
 
         // 중복 이름 체크
-        if triggers.iter().any(|t| t.name() == trigger.name()) {
+        if triggers.iter().any(|t| t.name() == hook.name()) {
             return Err(crate::error::DbxError::DuplicateCallable(
-                trigger.name().to_string(),
+                hook.name().to_string(),
             ));
         }
 
-        triggers.push(trigger);
+        triggers.push(hook);
         Ok(())
     }
 
@@ -53,7 +53,7 @@ impl TriggerRegistry {
     }
 
     /// 이벤트에 매칭되는 트리거를 찾아서 조건 평가 후 실행
-    pub fn fire(&self, ctx: &ExecutionContext, event: &TriggerEvent) -> DbxResult<Vec<String>> {
+    pub fn fire(&self, ctx: &ExecutionContext, event: &EventHookEvent) -> DbxResult<Vec<String>> {
         let triggers = self
             .triggers
             .read()
@@ -61,13 +61,13 @@ impl TriggerRegistry {
 
         let mut executed = Vec::new();
 
-        for trigger in triggers.iter() {
-            match trigger.fire(ctx, event) {
-                Ok(true) => executed.push(trigger.name().to_string()),
+        for hook in triggers.iter() {
+            match hook.fire(ctx, event) {
+                Ok(true) => executed.push(hook.name().to_string()),
                 Ok(false) => {} // 매칭 안 됨 또는 조건 불충족
                 Err(e) => {
-                    // 개별 트리거 실패는 로그만 남기고 계속 진행
-                    eprintln!("[TRIGGER ERROR] {}: {}", trigger.name(), e);
+                    // 개별 훅 실패는 로그만 남기고 계속 진행
+                    eprintln!("[EVENT HOOK ERROR] {}: {}", hook.name(), e);
                 }
             }
         }
@@ -103,28 +103,28 @@ impl Database {
     /// # fn main() -> dbx_core::DbxResult<()> {
     /// let db = Database::open_in_memory()?;
     ///
-    /// let trigger = Trigger::new(
+    /// let hook = EventHook::new(
     ///     "audit_trigger",
-    ///     TriggerEventType::AfterInsert,
+    ///     EventHookEventType::AfterInsert,
     ///     "users",
-    ///     TriggerCondition::Always,
-    ///     TriggerAction::Custom(Box::new(|_ctx, _event| {
+    ///     EventHookCondition::Always,
+    ///     EventHookAction::Custom(Box::new(|_ctx, _event| {
     ///         // 감사 로그 기록
     ///         Ok(())
     ///     })),
     /// );
     ///
-    /// db.register_trigger(trigger)?;
+    /// db.register_trigger(hook)?;
     /// # Ok(())
     /// # }
     /// ```
-    pub fn register_trigger(&self, trigger: Trigger) -> DbxResult<()> {
-        let trigger = Arc::new(trigger);
+    pub fn register_trigger(&self, hook: EventHook) -> DbxResult<()> {
+        let hook = Arc::new(hook);
         // automation_engine에도 등록 (Callable 인터페이스)
         self.automation_engine
-            .register(Arc::clone(&trigger) as Arc<dyn crate::automation::callable::Callable>)?;
+            .register(Arc::clone(&hook) as Arc<dyn crate::automation::callable::Callable>)?;
         // trigger_registry에도 등록 (이벤트 매칭용)
-        self.trigger_registry.register(trigger)
+        self.trigger_registry.register(hook)
     }
 
     /// 트리거 등록 해제
@@ -136,7 +136,7 @@ impl Database {
     /// 트리거 발생
     ///
     /// 이벤트를 발생시켜 매칭되는 트리거들을 실행합니다.
-    pub fn fire_trigger(&self, event: TriggerEvent) -> DbxResult<Vec<String>> {
+    pub fn fire_trigger(&self, event: EventHookEvent) -> DbxResult<Vec<String>> {
         let ctx = ExecutionContext::new(Arc::new(Database::open_in_memory()?));
         self.trigger_registry.fire(&ctx, &event)
     }
@@ -145,7 +145,7 @@ impl Database {
     pub fn fire_trigger_with_ctx(
         &self,
         ctx: &ExecutionContext,
-        event: TriggerEvent,
+        event: EventHookEvent,
     ) -> DbxResult<Vec<String>> {
         self.trigger_registry.fire(ctx, &event)
     }
@@ -174,9 +174,10 @@ impl Database {
 mod tests {
     use super::*;
     use crate::automation::callable::{DataType, Signature, Value};
-    use crate::automation::{
-        ScalarUDF, Schedule, ScheduleType, TriggerAction, TriggerCondition, TriggerEventType,
+    use crate::automation::event_hook::{
+        EventHook, EventHookAction, EventHookCondition, EventHookEvent, EventHookEventType,
     };
+    use crate::automation::{Schedule, ScheduleType};
     use std::sync::Mutex;
     use std::time::Duration;
 
@@ -187,18 +188,18 @@ mod tests {
         let executed = Arc::new(Mutex::new(false));
         let executed_clone = Arc::clone(&executed);
 
-        let trigger = Trigger::new(
+        let hook = EventHook::new(
             "test_trigger",
-            TriggerEventType::AfterInsert,
+            EventHookEventType::AfterInsert,
             "users",
-            TriggerCondition::Always,
-            TriggerAction::Custom(Box::new(move |_ctx, _event| {
+            EventHookCondition::Always,
+            EventHookAction::Custom(Box::new(move |_ctx, _event| {
                 *executed_clone.lock().unwrap() = true;
                 Ok(())
             })),
         );
 
-        db.register_trigger(trigger).unwrap();
+        db.register_trigger(hook).unwrap();
 
         let triggers = db.list_triggers().unwrap();
         assert_eq!(triggers.len(), 1);
@@ -209,15 +210,15 @@ mod tests {
     fn test_unregister_trigger() {
         let db = Database::open_in_memory().unwrap();
 
-        let trigger = Trigger::new(
+        let hook = EventHook::new(
             "test_trigger",
-            TriggerEventType::AfterInsert,
+            EventHookEventType::AfterInsert,
             "users",
-            TriggerCondition::Always,
-            TriggerAction::Custom(Box::new(|_ctx, _event| Ok(()))),
+            EventHookCondition::Always,
+            EventHookAction::Custom(Box::new(|_ctx, _event| Ok(()))),
         );
 
-        db.register_trigger(trigger).unwrap();
+        db.register_trigger(hook).unwrap();
         assert_eq!(db.list_triggers().unwrap().len(), 1);
 
         db.unregister_trigger("test_trigger").unwrap();
@@ -261,12 +262,12 @@ mod tests {
         let result = Arc::new(Mutex::new(0i64));
         let result_clone = Arc::clone(&result);
 
-        let trigger = Trigger::new(
+        let hook = EventHook::new(
             "double_trigger",
-            TriggerEventType::AfterInsert,
+            EventHookEventType::AfterInsert,
             "users",
-            TriggerCondition::Always,
-            TriggerAction::Custom(Box::new(move |ctx, event| {
+            EventHookCondition::Always,
+            EventHookAction::Custom(Box::new(move |ctx, event| {
                 if let Some(value) = event.data.get("id") {
                     let doubled = ctx.dbx.call_udf("double", &[value.clone()])?;
                     *result_clone.lock().unwrap() = doubled.as_i64()?;
@@ -275,10 +276,10 @@ mod tests {
             })),
         );
 
-        db.register_trigger(trigger).unwrap();
+        db.register_trigger(hook).unwrap();
 
         // 트리거 발생
-        let event = TriggerEvent::new(TriggerEventType::AfterInsert, "users")
+        let event = EventHookEvent::new(EventHookEventType::AfterInsert, "users")
             .with_data("id", Value::Int(21));
 
         db.fire_trigger(event).unwrap();

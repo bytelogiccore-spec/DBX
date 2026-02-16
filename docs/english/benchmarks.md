@@ -20,32 +20,37 @@ Performance benchmarks comparing DBX against other embedded databases.
 
 ---
 
-## CPU vs GPU Performance
-
-### Aggregation (1,000,000 rows)
-
-| Operation | CPU | GPU | Speedup |
-|-----------|-----|-----|---------|
-| SUM | 456.66µs | 783.36µs | 0.58x |
-| COUNT | 234.12µs | 156.78µs | 1.49x |
-| MIN/MAX | 345.67µs | 189.45µs | 1.82x |
-
-### Filtering (1,000,000 rows)
-
-| Filter | CPU | GPU | Speedup |
-|--------|-----|-----|---------|
-| `age > 500K` | 2.06ms | 673.38µs | **3.06x** |
-| `age > 250K` | 1.45ms | 512.34µs | **2.83x** |
 ## Executive Summary
 
-DBX is a high-performance embedded database engine written in pure Rust. This benchmark demonstrates that DBX achieves **29x faster file-based GET performance compared to SQLite** and competitive INSERT performance. All tests were conducted under identical conditions (transaction mode, WAL disabled) to ensure fair comparison, using the industry-standard benchmarking tool Criterion.rs to establish statistical significance.
+DBX is a high-performance embedded database engine written in pure Rust. **v0.0.6-beta achieved 1st place in all major operations** (INSERT, GET, SCAN).
 
-**Latest Benchmark Results (10,000 records):**
-- **Memory INSERT**: DBX 25.37 ms vs SQLite 29.50 ms (**1.16x faster**)
-- **File GET**: DBX 17.28 ms vs SQLite 497.64 ms (**28.8x faster**)
+### Latest Benchmark Results (v0.0.6-beta, 10,000 records)
 
-**Version**: DBX v{{ site.dbx_version }}  
-**Test Date**: February 14, 2026  
+| Operation | DBX | SQLite | Sled | Redb | Rank |
+|-----------|-----|--------|------|------|------|
+| **INSERT** | **44.92ms** 🥇 | 53.06ms | 60.56ms | 54.05ms | **1st** |
+| **GET** | **2.84ms** 🥇 | 37.39ms | 5.88ms | 3.25ms | **1st** |
+| **SCAN** | **1.60ms** 🥇 | 2.98ms | 4.64ms | 2.15ms | **1st** |
+
+### Performance vs Competitors
+
+**vs SQLite**:
+- INSERT: **18% faster**
+- GET: **1,217% faster (13x)**
+- SCAN: **86% faster**
+
+**vs Redb**:
+- INSERT: **20% faster**
+- GET: **14% faster**
+- SCAN: **34% faster**
+
+**vs Sled**:
+- INSERT: **35% faster**
+- GET: **107% faster (2x)**
+- SCAN: **190% faster (2.9x)**
+
+**Version**: DBX v0.0.6-beta  
+**Test Date**: February 16, 2026  
 **Report Type**: Official Performance Comparison Analysis
 
 ---
@@ -55,12 +60,11 @@ DBX is a high-performance embedded database engine written in pure Rust. This be
 ### Hardware Specifications
 
 | Item | Specification |
-|------|--------------|
+|------|---------------|
 | **Operating System** | Microsoft Windows 11 Pro (Build 26200) |
 | **System Type** | x64-based PC |
 | **Processor** | 1 Processor (Multiprocessor Free) |
 | **Memory** | 16,273 MB (approx. 16GB) |
-| **Build Type** | Multiprocessor Free |
 
 ### Software Environment
 
@@ -71,11 +75,13 @@ DBX is a high-performance embedded database engine written in pure Rust. This be
 | **Build Profile** | `release` (optimizations enabled) |
 | **Benchmark Framework** | Criterion.rs v0.5 |
 
-### Tested Databases
+---
+
+## Tested Databases
 
 | Database | Version | Language | Features |
 |----------|---------|----------|----------|
-| **DBX** | {{ site.dbx_version }} | Pure Rust | 5-Tier Hybrid Storage, MVCC |
+| **DBX** | 0.0.6-beta | Pure Rust | 5-Tier Hybrid Storage, MVCC |
 | **SQLite** | 0.32 (rusqlite) | C (bundled) | Industry-standard embedded DB |
 | **Sled** | 0.34 | Pure Rust | Lock-free B+ tree |
 | **Redb** | 2.1 | Pure Rust | LMDB-inspired, file-only |
@@ -94,7 +100,17 @@ DBX is a high-performance embedded database engine written in pure Rust. This be
 
 ### Fair Comparison Conditions
 
-#### Common Settings for All Databases:
+#### DBX Configuration
+
+```rust
+// Default features enabled
+features = ["wal", "mvcc", "index"]
+
+// Durability disabled for fair comparison
+durability = DurabilityLevel::None
+```
+
+#### Common Settings for All Databases
 
 1. **Transaction/Batch Mode**
    - Fair comparison using batch commits instead of individual INSERTs
@@ -112,224 +128,147 @@ DBX is a high-performance embedded database engine written in pure Rust. This be
 3. **Identical Data Size**
    - Key: String format `"key_{i}"`
    - Value: String format `"value_data_{i}"`
-   - Test sizes: 100, 1,000, 10,000 records
-
-### Test Scenarios
-
-#### INSERT Benchmark
-- **Purpose**: Measure bulk data insertion performance
-- **Method**: Insert N records in a single transaction and commit
-- **Measurement**: Total operation time (from transaction start to commit)
-
-#### GET Benchmark
-- **Purpose**: Measure random read performance
-- **Method**: Sequential retrieval of N pre-inserted records
-- **Measurement**: Total query operation time
-
-#### Test Modes
-- **Memory Mode**: In-memory database (no disk I/O)
-- **File Mode**: File-based database in temporary directory
+   - Test size: 10,000 records
 
 ---
 
-## DBX Performance Results
+## Detailed Benchmark Results
 
-### INSERT Performance
+### INSERT Performance (10,000 records)
 
-#### Memory Mode
+| Database | Average Time | Std Dev | Throughput (rec/sec) | vs DBX |
+|----------|--------------|---------|----------------------|--------|
+| **DBX** | **44.92ms** | ±0.20ms | **222,619** | **1.0× (baseline)** |
+| SQLite | 53.06ms | ±0.38ms | 188,465 | **0.85× (18% slower)** |
+| Redb | 54.05ms | ±0.72ms | 185,015 | **0.83× (20% slower)** |
+| Sled | 60.56ms | ±1.55ms | 165,123 | **0.74× (35% slower)** |
 
-| Record Count | Average Time | Throughput (rec/sec) |
-|--------------|--------------|---------------------|
-| 100 | ~200 µs | ~500,000 |
-| 1,000 | ~2.0 ms | ~500,000 |
-| 10,000 | **25.37 ms** | **394,160** |
+**DBX Advantages**:
+- ✅ **Faster than all competitors**
+- ✅ 18% faster than SQLite
+- ✅ Stable performance (low std dev)
 
-#### File Mode
+### GET Performance (10,000 records)
 
-| Record Count | Average Time | Throughput (rec/sec) |
-|--------------|--------------|---------------------|
-| 100 | ~2.0 ms | ~50,000 |
-| 1,000 | ~20 ms | ~50,000 |
-| 10,000 | ~190 ms | ~53,000 |
+| Database | Average Time | Std Dev | Throughput (rec/sec) | vs DBX |
+|----------|--------------|---------|----------------------|--------|
+| **DBX** | **2.84ms** | ±0.01ms | **3,521,127** | **1.0× (baseline)** |
+| Redb | 3.25ms | ±0.17ms | 3,076,923 | **0.87× (14% slower)** |
+| Sled | 5.88ms | ±0.03ms | 1,700,680 | **0.48× (107% slower)** |
+| SQLite | 37.39ms | ±0.48ms | 267,452 | **0.08× (1,217% slower)** |
 
-**Key Insights:**
-- ✅ **~400,000 records per second** insertion in memory mode
-- ✅ Maintains **50,000+ records per second** in file mode
-- ✅ Linear performance scaling with data size
+**DBX Advantages**:
+- ✅ **13x faster than SQLite**
+- ✅ 14% faster than Redb
+- ✅ 2x faster than Sled
 
-### GET Performance
+### SCAN Performance (10,000 records)
 
-#### Memory Mode
+| Database | Average Time | Std Dev | Throughput (rec/sec) | vs DBX |
+|----------|--------------|---------|----------------------|--------|
+| **DBX** | **1.60ms** | ±0.07ms | **6,250,000** | **1.0× (baseline)** |
+| Redb | 2.15ms | ±0.02ms | 4,651,163 | **0.74× (34% slower)** |
+| SQLite | 2.98ms | ±0.16ms | 3,355,705 | **0.54× (86% slower)** |
+| Sled | 4.64ms | ±0.10ms | 2,155,172 | **0.34× (190% slower)** |
 
-| Record Count | Average Time | Throughput (rec/sec) |
-|--------------|--------------|---------------------|
-| 100 | ~18 µs | ~5,600,000 |
-| 1,000 | ~180 µs | ~5,600,000 |
-| 10,000 | ~1.8 ms | ~5,600,000 |
-
-#### File Mode
-
-| Record Count | Average Time | Throughput (rec/sec) |
-|--------------|--------------|---------------------|
-| 100 | ~1.7 ms | ~58,000 |
-| 1,000 | ~17 ms | ~58,000 |
-| 10,000 | **17.28 ms** | **578,704** |
-
-**Key Insights:**
-- ✅ **5.6 million records per second** query in memory mode
-- ✅ **580,000 records per second** query in file mode
-- ✅ Consistent performance characteristics (independent of data size)
+**DBX Advantages**:
+- ✅ **Faster than all competitors**
+- ✅ 34% faster than Redb
+- ✅ 86% faster than SQLite
 
 ---
 
-## Performance vs Competing Databases
+## Performance Optimization Techniques
 
-### INSERT Performance Comparison (10,000 records)
+### Phase 1: GET Optimization (+70% improvement)
 
-#### Memory Mode
+1. **Inline Attributes**
+   - Added `#[inline(always)]` to eliminate function call overhead
+   - Improved compiler optimization
 
-| Database | Time | Speed vs DBX |
-|----------|------|--------------|
-| **DBX** | **25.37 ms** | **1.0× (baseline)** |
-| SQLite | 29.50 ms | **0.86× (1.16x slower)** |
-| Sled | ~660 ms | **0.04× (26x slower)** |
+2. **MVCC Overhead Removal**
+   - Removed MVCC checks from hot path
+   - Eliminated unnecessary timestamp acquisition cost
 
-#### File Mode
+3. **Code Path Simplification**
+   - Removed conditionals for better branch prediction
+   - Improved CPU pipeline efficiency
 
-| Database | Time | Speed vs DBX |
-|----------|------|--------------|
-| **DBX** | **~190 ms** | **1.0× (baseline)** |
-| Redb | ~400 ms | **0.48× (2.1x slower)** |
-| SQLite | ~490 ms | **0.39× (2.6x slower)** |
-| Sled | ~1,850 ms | **0.10× (9.7x slower)** |
+**Result**: 9.63ms → 2.84ms (3.4x faster)
 
-**DBX Advantages:**
-- 🥇 **Fastest INSERT** in both memory and file modes
-- 🥇 **1.16x faster** than SQLite in memory mode
+### Phase 2: SCAN Optimization (+57% improvement)
 
-### GET Performance Comparison (10,000 records)
+1. **Delta Store Fast-path**
+   - Early return when Delta is empty
+   - Eliminated unnecessary scan operations
 
-#### Memory Mode
+2. **2-way Merge Optimization**
+   - Direct WOS scan when Delta is empty
+   - Completely removed merge overhead
 
-| Database | Time | Speed vs DBX |
-|----------|------|--------------|
-| Sled | **~540 µs** | 3.3× (faster) |
-| **DBX** | **~1.8 ms** | **1.0× (baseline)** |
-| SQLite | ~15 ms | 0.12× (8.3x slower) |
+3. **Cache Locality Improvement**
+   - Optimized memory access pattern with single scan
+   - Improved CPU cache efficiency
 
-#### File Mode
-
-| Database | Time | Speed vs DBX |
-|----------|------|--------------|
-| Sled | ~7.4 ms | 2.3× (faster) |
-| Redb | ~8.4 ms | 2.1× (faster) |
-| **DBX** | **17.28 ms** | **1.0× (baseline)** |
-| SQLite | **497.64 ms** | **0.03× (28.8x slower)** |
-
-**DBX Advantages:**
-- 🥇 **28.8x faster** than SQLite in file GET
-- ✅ Balanced read/write performance
+**Result**: 3.70ms → 1.60ms (2.3x faster)
 
 ---
 
-## Performance Analysis
+## Architecture Strengths
 
-### DBX Core Strengths
+### 5-Tier Hybrid Storage
 
-#### 1. Outstanding INSERT Performance
-- **Memory Mode**: 520,000 records per second insertion
-- **File Mode**: 2.6x faster than SQLite, 9.9x faster than Sled
-- **Cause**: Delta Store optimization in 5-Tier Hybrid Storage architecture
+1. **Delta Store (Tier 1)**
+   - DashMap + SkipMap (Lock-free)
+   - Ultra-fast INSERT performance
 
-#### 2. Excellent File GET Performance
-- 30x faster file reads compared to SQLite
-- **Cause**: Efficient indexing and caching strategies
+2. **WOS (Tier 2)**
+   - BTreeMap (sorted storage)
+   - Efficient range scans
 
-#### 3. Linear Scalability
-- Consistent throughput despite data size growth
-- Predictable performance characteristics
-
-### Use Case Recommendations
-
-| Workload Type | Recommended DB | Reason |
-|---------------|----------------|--------|
-| **High-speed Write-heavy** | **DBX** | Best INSERT performance (520K rec/sec) |
-| **Balanced Read/Write** | **DBX** | Balanced performance |
-| **File-based OLTP** | **DBX** | 2.6x faster INSERT than SQLite |
-| **Pure Read-only** | Sled | Best GET performance (1.85M rec/sec) |
-| **SQL Compatibility Required** | SQLite | Standard SQL support |
+3. **Optimized Data Flow**
+   - Automatic Delta → WOS flush
+   - Efficient utilization of memory and disk
 
 ---
 
 ## Reproducing Benchmarks
 
-### Environment Setup
-
 ```bash
-# Install Rust (1.92.0 or later)
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-
 # Clone project
 git clone https://github.com/ByteLogicCore/DBX.git
 cd DBX
-```
 
-### Run Individual Database Benchmarks
+# Run full comparison benchmark
+cargo bench --bench official_db_comparison
 
-```bash
-# DBX benchmark
-cargo bench -p benchmarks --bench db_comparison -- dbx_
-
-# SQLite benchmark
-cargo bench -p benchmarks --bench db_comparison -- sqlite_
-
-# Sled benchmark
-cargo bench -p benchmarks --bench db_comparison -- sled_
-
-# Redb benchmark
-cargo bench -p benchmarks --bench db_comparison -- redb_
-
-# Full comparison benchmark
-cargo bench -p benchmarks --bench db_comparison
-```
-
-### View Results
-
-```bash
-# Generate HTML report (Criterion.rs)
-# Results saved in target/criterion/ directory
-open target/criterion/report/index.html
+# Run individual database benchmarks
+cargo bench --bench official_db_comparison -- dbx_
+cargo bench --bench official_db_comparison -- sqlite_
+cargo bench --bench official_db_comparison -- sled_
+cargo bench --bench official_db_comparison -- redb_
 ```
 
 ---
 
 ## Conclusion
 
-DBX has demonstrated **6.7x faster INSERT performance compared to the industry-standard SQLite** in this benchmark. Particularly in file-based GET performance, it showed an **overwhelming 30x advantage**.
+DBX v0.0.6-beta **achieved 1st place in all major operations** (INSERT, GET, SCAN).
 
 ### Key Achievements
-- ✅ **Memory INSERT**: 520,000 records/sec (6.7x faster than SQLite)
-- ✅ **File INSERT**: 50,000 records/sec (2.6x faster than SQLite)
-- ✅ **File GET**: 550,000 records/sec (30x faster than SQLite)
-- ✅ **Linear Scalability**: Consistent performance despite data size growth
+
+- ✅ **INSERT 1st**: 44.92ms (18-35% faster than competitors)
+- ✅ **GET 1st**: 2.84ms (13x faster than SQLite)
+- ✅ **SCAN 1st**: 1.60ms (34-190% faster than competitors)
 
 ### Technical Differentiators
+
 1. **5-Tier Hybrid Storage**: Efficient utilization of memory and disk
-2. **MVCC Concurrency Control**: Lock-free read performance
+2. **Lock-Free Architecture**: DashMap + SkipMap
 3. **Pure Rust**: Memory safety and zero-cost abstractions
-4. **Optimized Indexing**: Fast query performance
+4. **Optimized Algorithms**: Fast-path and inline optimizations
 
 DBX is the **optimal choice for applications requiring high-performance write workloads and balanced read/write performance**.
-
----
-
-## Statistical Significance
-
-All benchmark results were validated through Criterion.rs statistical analysis:
-- **Confidence Interval**: 95%
-- **Sample Count**: 100 iterations
-- **Outlier Handling**: Automatic detection and removal
-- **Performance Regression Detection**: Change rate tracking vs previous results
 
 ---
 

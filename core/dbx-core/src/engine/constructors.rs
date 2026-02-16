@@ -18,6 +18,39 @@ use std::path::Path;
 use std::sync::{Arc, RwLock};
 use tracing::{info, instrument};
 
+/// Spawn a background worker thread that handles WAL sync and index update jobs.
+fn spawn_background_worker(
+    rx: std::sync::mpsc::Receiver<BackgroundJob>,
+    wal: Option<Arc<crate::wal::WriteAheadLog>>,
+    enc_wal: Option<Arc<crate::wal::encrypted_wal::EncryptedWal>>,
+    index: Arc<HashIndex>,
+) {
+    std::thread::spawn(move || {
+        while let Ok(job) = rx.recv() {
+            match job {
+                BackgroundJob::WalSync => {
+                    if let Some(w) = &wal {
+                        let _ = w.sync();
+                    }
+                }
+                BackgroundJob::EncryptedWalSync => {
+                    if let Some(w) = &enc_wal {
+                        let _ = w.sync();
+                    }
+                }
+                BackgroundJob::IndexUpdate {
+                    table,
+                    column,
+                    key,
+                    row_id,
+                } => {
+                    let _ = index.update_on_insert(&table, &column, &key, row_id);
+                }
+            }
+        }
+    });
+}
+
 impl Database {
     /// 데이터베이스를 열거나 생성합니다.
     ///
@@ -40,7 +73,7 @@ impl Database {
     /// # }
     /// ```
     #[instrument(skip(path))]
-    pub fn open(path: &Path) -> DbxResult<Self> {
+    pub fn open(path: &Path) -> DbxResult<Arc<Self>> {
         info!("Opening database at {:?}", path);
         let wos_path = path.join("wos");
         std::fs::create_dir_all(&wos_path)?;
@@ -48,53 +81,28 @@ impl Database {
         // Initialize WAL
         let wal_path = path.join("wal.log");
         let wal = Arc::new(crate::wal::WriteAheadLog::open(&wal_path)?);
-        let checkpoint_manager = Arc::new(crate::wal::checkpoint::CheckpointManager::new(
-            Arc::clone(&wal),
-            &wal_path,
-        ));
 
         let wos_backend = Arc::new(WosBackend::open(&wos_path)?);
         let db_index = Arc::new(HashIndex::new());
 
-        // Load persisted metadata (schemas and indexes)
+        // Load persisted metadata (schemas, indexes, and triggers)
         let loaded_schemas = crate::engine::metadata::load_all_schemas(&wos_backend)?;
         let loaded_indexes = crate::engine::metadata::load_all_indexes(&wos_backend)?;
+        let loaded_triggers = crate::engine::metadata::load_all_triggers(&wos_backend)?;
+        let loaded_procedures = crate::engine::metadata::load_all_procedures(&wos_backend)?;
+        let loaded_schedules = crate::engine::metadata::load_all_schedules(&wos_backend)?;
 
         info!(
-            "Loaded {} schemas and {} indexes from persistent storage",
+            "Loaded {} schemas, {} indexes, {} triggers, {} procedures, and {} schedules from persistent storage",
             loaded_schemas.len(),
-            loaded_indexes.len()
+            loaded_indexes.len(),
+            loaded_triggers.len(),
+            loaded_procedures.len(),
+            loaded_schedules.len()
         );
 
         let (tx, rx) = std::sync::mpsc::channel::<BackgroundJob>();
-        let wal_for_worker = Some(wal.clone());
-        let enc_wal_for_worker: Option<Arc<crate::wal::encrypted_wal::EncryptedWal>> = None;
-        let index_for_worker = Arc::clone(&db_index);
-
-        std::thread::spawn(move || {
-            while let Ok(job) = rx.recv() {
-                match job {
-                    BackgroundJob::WalSync => {
-                        if let Some(w) = &wal_for_worker {
-                            let _ = w.sync();
-                        }
-                    }
-                    BackgroundJob::EncryptedWalSync => {
-                        if let Some(w) = &enc_wal_for_worker {
-                            let _ = w.sync();
-                        }
-                    }
-                    BackgroundJob::IndexUpdate {
-                        table,
-                        column,
-                        key,
-                        row_id,
-                    } => {
-                        let _ = index_for_worker.update_on_insert(&table, &column, &key, row_id);
-                    }
-                }
-            }
-        });
+        spawn_background_worker(rx, Some(wal.clone()), None, Arc::clone(&db_index));
 
         let db = Self {
             delta: DeltaVariant::RowBased(Arc::new(DeltaStore::new())),
@@ -108,7 +116,7 @@ impl Database {
             sql_optimizer: QueryOptimizer::new(),
             wal: Some(wal),
             encrypted_wal: None,
-            checkpoint_manager: Some(checkpoint_manager.clone()),
+
             encryption: RwLock::new(None),
             tx_manager: Arc::new(TransactionManager::new()),
             columnar_cache: Arc::new(crate::storage::columnar_cache::ColumnarCache::new()),
@@ -118,6 +126,9 @@ impl Database {
             index_registry: RwLock::new(loaded_indexes),
             automation_engine: Arc::new(crate::automation::ExecutionEngine::new()),
             trigger_registry: crate::engine::automation_api::TriggerRegistry::new(),
+            trigger_executor: Arc::new(RwLock::new(crate::automation::TriggerExecutor::new())),
+            procedure_executor: Arc::new(RwLock::new(crate::automation::ProcedureExecutor::new())),
+            schedule_executor: Arc::new(RwLock::new(crate::automation::ScheduleExecutor::new())),
             parallel_engine: Arc::new(
                 crate::engine::parallel_engine::ParallelExecutionEngine::new_auto()
                     .expect("Failed to create parallel engine"),
@@ -155,8 +166,52 @@ impl Database {
             db.flush()?;
         }
 
+        // Auto-register loaded SQL triggers
+        if !loaded_triggers.is_empty() {
+            info!(
+                "Auto-registering {} persisted triggers",
+                loaded_triggers.len()
+            );
+            let mut executor = db.trigger_executor.write().unwrap();
+            executor.register_all(loaded_triggers);
+        }
+
+        // Auto-register loaded SQL procedures
+        if !loaded_procedures.is_empty() {
+            info!(
+                "Auto-registering {} persisted procedures",
+                loaded_procedures.len()
+            );
+            let mut executor = db.procedure_executor.write().unwrap();
+            executor.register_all(loaded_procedures);
+        }
+
+        // Auto-register loaded SQL schedules
+        if !loaded_schedules.is_empty() {
+            info!(
+                "Auto-registering {} persisted schedules",
+                loaded_schedules.len()
+            );
+            let executor = db.schedule_executor.write().unwrap();
+            for (_, schedule) in loaded_schedules {
+                let _ = executor.register(schedule);
+            }
+        }
+
         info!("Database opened successfully");
-        Ok(db)
+
+        // Wrap in Arc
+        let db_arc = Arc::new(db);
+
+        // Start background scheduler
+        let db_weak = Arc::downgrade(&db_arc);
+        db_arc
+            .schedule_executor
+            .write()
+            .unwrap()
+            .start_scheduler(db_weak)?;
+
+        Ok(db_arc)
     }
 
     /// 암호화된 데이터베이스를 열거나 생성합니다.
@@ -197,34 +252,12 @@ impl Database {
         let db_index = Arc::new(HashIndex::new());
 
         let (tx, rx) = std::sync::mpsc::channel::<BackgroundJob>();
-        let wal_for_worker: Option<Arc<crate::wal::WriteAheadLog>> = None;
-        let enc_wal_for_worker = Some(Arc::clone(&encrypted_wal));
-        let index_for_worker = Arc::clone(&db_index);
-
-        std::thread::spawn(move || {
-            while let Ok(job) = rx.recv() {
-                match job {
-                    BackgroundJob::WalSync => {
-                        if let Some(w) = &wal_for_worker {
-                            let _ = w.sync();
-                        }
-                    }
-                    BackgroundJob::EncryptedWalSync => {
-                        if let Some(w) = &enc_wal_for_worker {
-                            let _ = w.sync();
-                        }
-                    }
-                    BackgroundJob::IndexUpdate {
-                        table,
-                        column,
-                        key,
-                        row_id,
-                    } => {
-                        let _ = index_for_worker.update_on_insert(&table, &column, &key, row_id);
-                    }
-                }
-            }
-        });
+        spawn_background_worker(
+            rx,
+            None,
+            Some(Arc::clone(&encrypted_wal)),
+            Arc::clone(&db_index),
+        );
 
         let db = Self {
             delta: DeltaVariant::RowBased(Arc::new(DeltaStore::new())),
@@ -238,7 +271,7 @@ impl Database {
             sql_optimizer: QueryOptimizer::new(),
             wal: None,
             encrypted_wal: Some(Arc::clone(&encrypted_wal)),
-            checkpoint_manager: None,
+
             encryption: RwLock::new(Some(encryption)),
             tx_manager: Arc::new(TransactionManager::new()),
             columnar_cache: Arc::new(crate::storage::columnar_cache::ColumnarCache::new()),
@@ -248,6 +281,9 @@ impl Database {
             index_registry: RwLock::new(HashMap::new()),
             automation_engine: Arc::new(crate::automation::ExecutionEngine::new()),
             trigger_registry: crate::engine::automation_api::TriggerRegistry::new(),
+            trigger_executor: Arc::new(RwLock::new(crate::automation::TriggerExecutor::new())),
+            procedure_executor: Arc::new(RwLock::new(crate::automation::ProcedureExecutor::new())),
+            schedule_executor: Arc::new(RwLock::new(crate::automation::ScheduleExecutor::new())),
             parallel_engine: Arc::new(
                 crate::engine::parallel_engine::ParallelExecutionEngine::new_auto()
                     .expect("Failed to create parallel engine"),
@@ -307,30 +343,7 @@ impl Database {
         info!("Creating in-memory database");
         let db_index = Arc::new(HashIndex::new());
         let (tx, rx) = std::sync::mpsc::channel::<BackgroundJob>();
-        let index_for_worker = Arc::clone(&db_index);
-
-        std::thread::spawn(move || {
-            while let Ok(job) = rx.recv() {
-                match job {
-                    BackgroundJob::WalSync => {
-                        // In-memory has no WAL to sync
-                    }
-                    _ => {
-                        // Other jobs or IndexUpdate
-                        if let BackgroundJob::IndexUpdate {
-                            table,
-                            column,
-                            key,
-                            row_id,
-                        } = job
-                        {
-                            let _ =
-                                index_for_worker.update_on_insert(&table, &column, &key, row_id);
-                        }
-                    }
-                }
-            }
-        });
+        spawn_background_worker(rx, None, None, Arc::clone(&db_index));
 
         Ok(Self {
             delta: DeltaVariant::RowBased(Arc::new(DeltaStore::new())),
@@ -346,7 +359,7 @@ impl Database {
             sql_optimizer: QueryOptimizer::new(),
             wal: None,
             encrypted_wal: None,
-            checkpoint_manager: None,
+
             encryption: RwLock::new(None),
             tx_manager: Arc::new(TransactionManager::new()),
             columnar_cache: Arc::new(crate::storage::columnar_cache::ColumnarCache::new()),
@@ -356,6 +369,9 @@ impl Database {
             index_registry: RwLock::new(HashMap::new()),
             automation_engine: Arc::new(crate::automation::ExecutionEngine::new()),
             trigger_registry: crate::engine::automation_api::TriggerRegistry::new(),
+            trigger_executor: Arc::new(RwLock::new(crate::automation::TriggerExecutor::new())),
+            procedure_executor: Arc::new(RwLock::new(crate::automation::ProcedureExecutor::new())),
+            schedule_executor: Arc::new(RwLock::new(crate::automation::ScheduleExecutor::new())),
             parallel_engine: Arc::new(
                 crate::engine::parallel_engine::ParallelExecutionEngine::new_auto()
                     .expect("Failed to create parallel engine"),
@@ -385,29 +401,7 @@ impl Database {
     pub fn open_in_memory_encrypted(encryption: EncryptionConfig) -> DbxResult<Self> {
         let db_index = Arc::new(HashIndex::new());
         let (tx, rx) = std::sync::mpsc::channel::<BackgroundJob>();
-        let index_for_worker = Arc::clone(&db_index);
-
-        std::thread::spawn(move || {
-            while let Ok(job) = rx.recv() {
-                match job {
-                    BackgroundJob::WalSync => {
-                        // In-memory has no WAL to sync
-                    }
-                    _ => {
-                        if let BackgroundJob::IndexUpdate {
-                            table,
-                            column,
-                            key,
-                            row_id,
-                        } = job
-                        {
-                            let _ =
-                                index_for_worker.update_on_insert(&table, &column, &key, row_id);
-                        }
-                    }
-                }
-            }
-        });
+        spawn_background_worker(rx, None, None, Arc::clone(&db_index));
 
         Ok(Self {
             delta: DeltaVariant::RowBased(Arc::new(DeltaStore::new())),
@@ -423,7 +417,7 @@ impl Database {
             sql_optimizer: QueryOptimizer::new(),
             wal: None,
             encrypted_wal: None,
-            checkpoint_manager: None,
+
             encryption: RwLock::new(Some(encryption)),
             tx_manager: Arc::new(TransactionManager::new()),
             columnar_cache: Arc::new(crate::storage::columnar_cache::ColumnarCache::new()),
@@ -433,6 +427,9 @@ impl Database {
             index_registry: RwLock::new(HashMap::new()),
             automation_engine: Arc::new(crate::automation::ExecutionEngine::new()),
             trigger_registry: crate::engine::automation_api::TriggerRegistry::new(),
+            trigger_executor: Arc::new(RwLock::new(crate::automation::TriggerExecutor::new())),
+            procedure_executor: Arc::new(RwLock::new(crate::automation::ProcedureExecutor::new())),
+            schedule_executor: Arc::new(RwLock::new(crate::automation::ScheduleExecutor::new())),
             parallel_engine: Arc::new(
                 crate::engine::parallel_engine::ParallelExecutionEngine::new_auto()
                     .expect("Failed to create parallel engine"),
@@ -460,9 +457,9 @@ impl Database {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn open_safe(path: impl AsRef<Path>) -> DbxResult<Self> {
-        let mut db = Self::open(path.as_ref())?;
-        db.durability = DurabilityLevel::Full;
+    pub fn open_safe(path: impl AsRef<Path>) -> DbxResult<Arc<Self>> {
+        let db = Self::open(path.as_ref())?;
+        Arc::get_mut(&mut db.clone()).unwrap().durability = DurabilityLevel::Full;
         Ok(db)
     }
 
@@ -486,9 +483,9 @@ impl Database {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn open_fast(path: impl AsRef<Path>) -> DbxResult<Self> {
-        let mut db = Self::open(path.as_ref())?;
-        db.durability = DurabilityLevel::None;
+    pub fn open_fast(path: impl AsRef<Path>) -> DbxResult<Arc<Self>> {
+        let db = Self::open(path.as_ref())?;
+        Arc::get_mut(&mut db.clone()).unwrap().durability = DurabilityLevel::None;
         Ok(db)
     }
 
@@ -511,9 +508,9 @@ impl Database {
     pub fn open_with_durability(
         path: impl AsRef<Path>,
         durability: DurabilityLevel,
-    ) -> DbxResult<Self> {
-        let mut db = Self::open(path.as_ref())?;
-        db.durability = durability;
+    ) -> DbxResult<Arc<Self>> {
+        let db = Self::open(path.as_ref())?;
+        Arc::get_mut(&mut db.clone()).unwrap().durability = durability;
         Ok(db)
     }
 }

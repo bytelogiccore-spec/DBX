@@ -47,7 +47,7 @@ impl GpuGroupByStrategy {
 
 /// Estimate cardinality (number of unique groups) using HyperLogLog-inspired sampling
 /// This is a simplified version for quick estimation
-#[allow(dead_code)]
+#[cfg(test)]
 pub fn estimate_cardinality_i32(keys: &[i32]) -> usize {
     use std::collections::HashSet;
 

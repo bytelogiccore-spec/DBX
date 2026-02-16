@@ -195,6 +195,11 @@ impl StorageBackend for DeltaStore {
             return Ok(Vec::new());
         };
 
+        // Fast-path: Delta가 비어있으면 스캔 불필요
+        if table_map.is_empty() {
+            return Ok(Vec::new());
+        }
+
         let start = Self::convert_start_bound(range.start_bound());
         let end = Self::convert_end_bound(range.end_bound());
 

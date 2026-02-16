@@ -70,10 +70,6 @@ pub struct Database {
     /// Encrypted WAL (optional, used when encryption is enabled)
     pub(crate) encrypted_wal: Option<Arc<crate::wal::encrypted_wal::EncryptedWal>>,
 
-    /// Checkpoint manager for WAL maintenance (optional)
-    #[allow(dead_code)]
-    pub(crate) checkpoint_manager: Option<Arc<crate::wal::checkpoint::CheckpointManager>>,
-
     /// Encryption config (None = no encryption)
     pub(crate) encryption: RwLock<Option<EncryptionConfig>>,
 
@@ -100,6 +96,15 @@ pub struct Database {
 
     /// Trigger Registry (이벤트 매칭용)
     pub(crate) trigger_registry: crate::engine::automation_api::TriggerRegistry,
+
+    /// SQL Trigger Executor
+    pub(crate) trigger_executor: Arc<RwLock<crate::automation::TriggerExecutor>>,
+
+    /// Stored Procedure Executor
+    pub(crate) procedure_executor: Arc<RwLock<crate::automation::ProcedureExecutor>>,
+
+    /// SQL Schedule Executor
+    pub(crate) schedule_executor: Arc<RwLock<crate::automation::ScheduleExecutor>>,
 
     /// Parallel Execution Engine for multi-threaded query execution
     #[allow(dead_code)]

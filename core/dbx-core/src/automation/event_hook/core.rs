@@ -1,13 +1,13 @@
-//! Trigger implementation
+//! EventHook implementation
 //!
-//! 트리거 정의 및 실행
+//! 이벤트 훅 정의 및 실행
 
-use super::event::{TriggerEvent, TriggerEventType};
+use super::event::{EventHookEvent, EventHookEventType};
 use crate::automation::callable::{Callable, ExecutionContext, Signature, Value};
 use crate::error::DbxResult;
 
-/// 트리거 조건
-pub enum TriggerCondition {
+/// 이벤트 훅 조건
+pub enum EventHookCondition {
     /// 항상 실행
     Always,
 
@@ -15,39 +15,40 @@ pub enum TriggerCondition {
     UdfCondition(String),
 
     /// 커스텀 조건 함수
-    Custom(Box<dyn Fn(&TriggerEvent) -> bool + Send + Sync>),
+    Custom(Box<dyn Fn(&EventHookEvent) -> bool + Send + Sync>),
 }
 
-/// Type alias for trigger action function
-type TriggerActionFn = Box<dyn Fn(&ExecutionContext, &TriggerEvent) -> DbxResult<()> + Send + Sync>;
+/// Type alias for event hook action function
+type EventHookActionFn =
+    Box<dyn Fn(&ExecutionContext, &EventHookEvent) -> DbxResult<()> + Send + Sync>;
 
-/// 트리거 액션
-pub enum TriggerAction {
+/// 이벤트 훅 액션
+pub enum EventHookAction {
     /// UDF 호출
     CallUdf(String),
 
     /// 커스텀 액션
-    Custom(TriggerActionFn),
+    Custom(EventHookActionFn),
 }
 
-/// 트리거
-pub struct Trigger {
+/// 이벤트 훅
+pub struct EventHook {
     name: String,
-    event_type: TriggerEventType,
+    event_type: EventHookEventType,
     table: String,
-    condition: TriggerCondition,
-    action: TriggerAction,
+    condition: EventHookCondition,
+    action: EventHookAction,
     signature: Signature,
 }
 
-impl Trigger {
-    /// 새 트리거 생성
+impl EventHook {
+    /// 새 이벤트 훅 생성
     pub fn new(
         name: impl Into<String>,
-        event_type: TriggerEventType,
+        event_type: EventHookEventType,
         table: impl Into<String>,
-        condition: TriggerCondition,
-        action: TriggerAction,
+        condition: EventHookCondition,
+        action: EventHookAction,
     ) -> Self {
         Self {
             name: name.into(),
@@ -63,46 +64,46 @@ impl Trigger {
         }
     }
 
-    /// 이벤트가 이 트리거와 매칭되는지 확인
-    pub fn matches(&self, event: &TriggerEvent) -> bool {
+    /// 이벤트가 이 훅과 매칭되는지 확인
+    pub fn matches(&self, event: &EventHookEvent) -> bool {
         self.event_type == event.event_type && self.table == event.table
     }
 
     /// 조건 평가
-    pub fn evaluate_condition(&self, ctx: &ExecutionContext, event: &TriggerEvent) -> bool {
+    pub fn evaluate_condition(&self, ctx: &ExecutionContext, event: &EventHookEvent) -> bool {
         match &self.condition {
-            TriggerCondition::Always => true,
-            TriggerCondition::UdfCondition(udf_name) => {
+            EventHookCondition::Always => true,
+            EventHookCondition::UdfCondition(udf_name) => {
                 // UDF를 호출하여 조건 평가 (truthy 판단)
                 match ctx.dbx.call_udf(udf_name, &[]) {
                     Ok(value) => value.is_truthy(),
                     Err(_) => false, // UDF 호출 실패 시 조건 불충족
                 }
             }
-            TriggerCondition::Custom(func) => func(event),
+            EventHookCondition::Custom(func) => func(event),
         }
     }
 
     /// 액션 실행
-    pub fn execute_action(&self, ctx: &ExecutionContext, event: &TriggerEvent) -> DbxResult<()> {
+    pub fn execute_action(&self, ctx: &ExecutionContext, event: &EventHookEvent) -> DbxResult<()> {
         match &self.action {
-            TriggerAction::CallUdf(udf_name) => {
+            EventHookAction::CallUdf(udf_name) => {
                 // 이벤트 데이터를 인자로 변환하여 UDF 호출
                 let args: Vec<Value> = event.data.values().cloned().collect();
                 ctx.dbx.call_udf(udf_name, &args)?;
                 Ok(())
             }
-            TriggerAction::Custom(func) => func(ctx, event),
+            EventHookAction::Custom(func) => func(ctx, event),
         }
     }
 
-    /// 트리거 이름
+    /// 이벤트 훅 이름
     pub fn name(&self) -> &str {
         &self.name
     }
 
     /// 이벤트 타입
-    pub fn event_type(&self) -> &TriggerEventType {
+    pub fn event_type(&self) -> &EventHookEventType {
         &self.event_type
     }
 
@@ -112,7 +113,7 @@ impl Trigger {
     }
 
     /// 이벤트 매칭 + 조건 평가 + 액션 실행 (통합)
-    pub fn fire(&self, ctx: &ExecutionContext, event: &TriggerEvent) -> DbxResult<bool> {
+    pub fn fire(&self, ctx: &ExecutionContext, event: &EventHookEvent) -> DbxResult<bool> {
         if !self.matches(event) {
             return Ok(false);
         }
@@ -124,7 +125,7 @@ impl Trigger {
     }
 }
 
-impl Callable for Trigger {
+impl Callable for EventHook {
     fn call(&self, _ctx: &ExecutionContext, _args: &[Value]) -> DbxResult<Value> {
         // 트리거는 이벤트 기반이므로 직접 호출되지 않음
         // 대신 fire_trigger를 통해 실행됨
@@ -147,67 +148,67 @@ mod tests {
     use std::sync::Arc;
 
     #[test]
-    fn test_trigger_creation() {
-        let trigger = Trigger::new(
+    fn test_event_hook_creation() {
+        let hook = EventHook::new(
             "test_trigger",
-            TriggerEventType::AfterInsert,
+            EventHookEventType::AfterInsert,
             "users",
-            TriggerCondition::Always,
-            TriggerAction::Custom(Box::new(|_ctx, _event| Ok(()))),
+            EventHookCondition::Always,
+            EventHookAction::Custom(Box::new(|_ctx, _event| Ok(()))),
         );
 
-        assert_eq!(trigger.name(), "test_trigger");
-        assert_eq!(trigger.event_type(), &TriggerEventType::AfterInsert);
-        assert_eq!(trigger.table(), "users");
+        assert_eq!(hook.name(), "test_trigger");
+        assert_eq!(hook.event_type(), &EventHookEventType::AfterInsert);
+        assert_eq!(hook.table(), "users");
     }
 
     #[test]
-    fn test_trigger_matching() {
-        let trigger = Trigger::new(
+    fn test_event_hook_matching() {
+        let hook = EventHook::new(
             "test_trigger",
-            TriggerEventType::AfterInsert,
+            EventHookEventType::AfterInsert,
             "users",
-            TriggerCondition::Always,
-            TriggerAction::Custom(Box::new(|_ctx, _event| Ok(()))),
+            EventHookCondition::Always,
+            EventHookAction::Custom(Box::new(|_ctx, _event| Ok(()))),
         );
 
-        let event = TriggerEvent::new(TriggerEventType::AfterInsert, "users");
-        assert!(trigger.matches(&event));
+        let event = EventHookEvent::new(EventHookEventType::AfterInsert, "users");
+        assert!(hook.matches(&event));
 
-        let event2 = TriggerEvent::new(TriggerEventType::AfterInsert, "posts");
-        assert!(!trigger.matches(&event2));
+        let event2 = EventHookEvent::new(EventHookEventType::AfterInsert, "posts");
+        assert!(!hook.matches(&event2));
     }
 
     #[test]
-    fn test_trigger_condition() {
+    fn test_event_hook_condition() {
         let db = Database::open_in_memory().unwrap();
         let ctx = ExecutionContext::new(Arc::new(db));
 
-        let trigger = Trigger::new(
+        let hook = EventHook::new(
             "test_trigger",
-            TriggerEventType::AfterInsert,
+            EventHookEventType::AfterInsert,
             "users",
-            TriggerCondition::Custom(Box::new(|event| event.data.contains_key("id"))),
-            TriggerAction::Custom(Box::new(|_ctx, _event| Ok(()))),
+            EventHookCondition::Custom(Box::new(|event| event.data.contains_key("id"))),
+            EventHookAction::Custom(Box::new(|_ctx, _event| Ok(()))),
         );
 
-        let event = TriggerEvent::new(TriggerEventType::AfterInsert, "users")
+        let event = EventHookEvent::new(EventHookEventType::AfterInsert, "users")
             .with_data("id", Value::Int(1));
 
-        assert!(trigger.evaluate_condition(&ctx, &event));
+        assert!(hook.evaluate_condition(&ctx, &event));
     }
 
     #[test]
-    fn test_trigger_action() {
+    fn test_event_hook_action() {
         let executed = Arc::new(std::sync::Mutex::new(false));
         let executed_clone = Arc::clone(&executed);
 
-        let trigger = Trigger::new(
+        let hook = EventHook::new(
             "test_trigger",
-            TriggerEventType::AfterInsert,
+            EventHookEventType::AfterInsert,
             "users",
-            TriggerCondition::Always,
-            TriggerAction::Custom(Box::new(move |_ctx, _event| {
+            EventHookCondition::Always,
+            EventHookAction::Custom(Box::new(move |_ctx, _event| {
                 *executed_clone.lock().unwrap() = true;
                 Ok(())
             })),
@@ -215,23 +216,23 @@ mod tests {
 
         let db = Database::open_in_memory().unwrap();
         let ctx = ExecutionContext::new(Arc::new(db));
-        let event = TriggerEvent::new(TriggerEventType::AfterInsert, "users");
+        let event = EventHookEvent::new(EventHookEventType::AfterInsert, "users");
 
-        trigger.execute_action(&ctx, &event).unwrap();
+        hook.execute_action(&ctx, &event).unwrap();
         assert!(*executed.lock().unwrap());
     }
 
     #[test]
-    fn test_trigger_fire_integration() {
+    fn test_event_hook_fire_integration() {
         let executed = Arc::new(std::sync::Mutex::new(false));
         let executed_clone = Arc::clone(&executed);
 
-        let trigger = Trigger::new(
+        let hook = EventHook::new(
             "fire_test",
-            TriggerEventType::AfterInsert,
+            EventHookEventType::AfterInsert,
             "users",
-            TriggerCondition::Always,
-            TriggerAction::Custom(Box::new(move |_ctx, _event| {
+            EventHookCondition::Always,
+            EventHookAction::Custom(Box::new(move |_ctx, _event| {
                 *executed_clone.lock().unwrap() = true;
                 Ok(())
             })),
@@ -241,17 +242,17 @@ mod tests {
         let ctx = ExecutionContext::new(Arc::new(db));
 
         // 매칭되는 이벤트
-        let event = TriggerEvent::new(TriggerEventType::AfterInsert, "users");
-        assert_eq!(trigger.fire(&ctx, &event).unwrap(), true);
+        let event = EventHookEvent::new(EventHookEventType::AfterInsert, "users");
+        assert_eq!(hook.fire(&ctx, &event).unwrap(), true);
         assert!(*executed.lock().unwrap());
 
         // 매칭 안 되는 이벤트
-        let event2 = TriggerEvent::new(TriggerEventType::AfterDelete, "posts");
-        assert_eq!(trigger.fire(&ctx, &event2).unwrap(), false);
+        let event2 = EventHookEvent::new(EventHookEventType::AfterDelete, "posts");
+        assert_eq!(hook.fire(&ctx, &event2).unwrap(), false);
     }
 
     #[test]
-    fn test_trigger_call_udf_action() {
+    fn test_event_hook_call_udf_action() {
         use crate::automation::callable::{DataType, Signature};
 
         let db = Database::open_in_memory().unwrap();
@@ -271,19 +272,19 @@ mod tests {
         )
         .unwrap();
 
-        let trigger = Trigger::new(
+        let hook = EventHook::new(
             "udf_trigger",
-            TriggerEventType::AfterInsert,
+            EventHookEventType::AfterInsert,
             "users",
-            TriggerCondition::Always,
-            TriggerAction::CallUdf("log_insert".to_string()),
+            EventHookCondition::Always,
+            EventHookAction::CallUdf("log_insert".to_string()),
         );
 
         let ctx = ExecutionContext::new(Arc::new(db));
-        let event = TriggerEvent::new(TriggerEventType::AfterInsert, "users")
+        let event = EventHookEvent::new(EventHookEventType::AfterInsert, "users")
             .with_data("id", Value::Int(42));
 
         // CallUdf 액션이 실제로 UDF를 호출
-        assert!(trigger.fire(&ctx, &event).is_ok());
+        assert!(hook.fire(&ctx, &event).is_ok());
     }
 }

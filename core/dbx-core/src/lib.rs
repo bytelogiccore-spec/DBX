@@ -89,14 +89,6 @@ pub mod storage;
 pub mod transaction;
 pub mod wal;
 
-// Hash index for fast key lookups
-// This comment was for `pub mod index;` but the instruction moved `index` up without its comment.
-// Keeping the comment here as it was not explicitly removed.
-
-// Write-Ahead Logging for crash recovery
-// This comment was for `pub mod wal;` but the instruction moved `wal` up without its comment.
-// Keeping the comment here as it was not explicitly removed.
-
 // ===== Re-exports =====
 #[cfg(feature = "simd")]
 pub mod simd;
