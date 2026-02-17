@@ -62,6 +62,13 @@ sqlite_bench_*.db
 **/physical_temp.txt
 dotnet_err.txt
 
+# Test files
+test_*.txt
+test_*.rs
+test_*.log
+*.exe
+
+
 # ═══════════════════════════════════════
 # Project Config
 # ═══════════════════════════════════════

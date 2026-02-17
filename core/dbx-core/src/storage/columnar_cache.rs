@@ -9,6 +9,7 @@ use crate::storage::StorageBackend;
 use arrow::array::{ArrayRef, BinaryBuilder, RecordBatch};
 
 use arrow::datatypes::{DataType, Field, Schema, SchemaRef};
+use arrow::ipc::reader::StreamReader;
 
 use dashmap::DashMap;
 use std::sync::Arc;
@@ -16,6 +17,54 @@ use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 
 /// Default maximum memory usage: 1GB
 const DEFAULT_MAX_MEMORY: usize = 1024 * 1024 * 1024;
+
+/// Cached data type: Typed (SQL tables) vs Raw (CRUD data)
+#[derive(Clone)]
+pub enum CachedData {
+    /// SQL tables: Schema-based type conversion
+    Typed {
+        schema: SchemaRef,
+        batches: Vec<RecordBatch>,
+    },
+    
+    /// CRUD data: Raw Binary format
+    Raw {
+        batches: Vec<RecordBatch>, // Schema: [Binary(key), Binary(value)]
+    },
+}
+
+impl CachedData {
+    /// Get batches from cached data
+    pub fn batches(&self) -> &[RecordBatch] {
+        match self {
+            CachedData::Typed { batches, .. } => batches,
+            CachedData::Raw { batches } => batches,
+        }
+    }
+    
+    /// Get schema from cached data
+    pub fn schema(&self) -> SchemaRef {
+        match self {
+            CachedData::Typed { schema, .. } => schema.clone(),
+            CachedData::Raw { batches } => {
+                if batches.is_empty() {
+                    // Default Binary schema
+                    Arc::new(Schema::new(vec![
+                        Field::new("key", DataType::Binary, false),
+                        Field::new("value", DataType::Binary, true),
+                    ]))
+                } else {
+                    batches[0].schema()
+                }
+            }
+        }
+    }
+    
+    /// Check if cached data is typed (SQL table)
+    pub fn is_typed(&self) -> bool {
+        matches!(self, CachedData::Typed { .. })
+    }
+}
 
 /// Tier 2: Columnar cache for OLAP queries
 pub struct ColumnarCache {
@@ -34,12 +83,8 @@ pub struct ColumnarCache {
 
 /// Per-table columnar cache
 struct TableCache {
-    /// Arrow schema for this table
-    schema: SchemaRef,
-
-    /// Columnar data (Arrow RecordBatch)
-    /// Multiple batches for large tables
-    batches: parking_lot::RwLock<Vec<RecordBatch>>,
+    /// Cached data (Typed or Raw)
+    data: parking_lot::RwLock<CachedData>,
 
     /// Last sync timestamp from Delta
     _last_sync_ts: AtomicU64,
@@ -97,7 +142,9 @@ impl ColumnarCache {
             .get(table)
             .ok_or_else(|| DbxError::Storage(format!("Table '{}' not in cache", table)))?;
 
-        let batches = table_cache.batches.read();
+        let data = table_cache.data.read();
+        let batches = data.batches();
+        
         if batches.is_empty() {
             return Ok(());
         }
@@ -180,9 +227,8 @@ impl ColumnarCache {
         Ok(())
     }
 
-    /// Insert a RecordBatch into the cache.
+    /// Insert a RecordBatch into the cache as Raw (Binary) data.
     pub fn insert_batch(&self, table: &str, batch: RecordBatch) -> DbxResult<()> {
-        let schema = batch.schema();
         let memory_size = estimate_batch_memory(&batch);
 
         // Check memory limit and evict if necessary
@@ -204,11 +250,12 @@ impl ColumnarCache {
             attempts += 1;
         }
 
-        // Get or create table cache
+        // Get or create table cache with Raw data
         let table_cache = self.tables.entry(table.to_string()).or_insert_with(|| {
             Arc::new(TableCache {
-                schema: schema.clone(),
-                batches: parking_lot::RwLock::new(Vec::new()),
+                data: parking_lot::RwLock::new(CachedData::Raw {
+                    batches: Vec::new(),
+                }),
                 _last_sync_ts: AtomicU64::new(0),
                 last_access: AtomicU64::new(self.access_counter.fetch_add(1, Ordering::Relaxed)),
                 memory_usage: AtomicUsize::new(0),
@@ -221,8 +268,13 @@ impl ColumnarCache {
             Ordering::Relaxed,
         );
 
-        // Insert batch
-        table_cache.batches.write().push(batch);
+        // Insert batch into existing data
+        let mut data = table_cache.data.write();
+        match &mut *data {
+            CachedData::Raw { batches } => batches.push(batch),
+            CachedData::Typed { batches, .. } => batches.push(batch),
+        }
+        
         table_cache
             .memory_usage
             .fetch_add(memory_size, Ordering::Relaxed);
@@ -234,22 +286,102 @@ impl ColumnarCache {
 
     /// Sync data from Delta Store (Tier 1) to Columnar Cache (Tier 2).
     ///
-    /// Reads all data from Delta Store and converts it to RecordBatches (key, value),
-    /// then replaces the cache content for the table.
+    /// If table_schema is provided, converts data to typed format (SQL table).
+    /// Otherwise, stores as raw Binary format (CRUD data).
     pub fn sync_from_delta<S: StorageBackend + ?Sized>(
         &self,
         delta: &S,
         table: &str,
+        table_schema: Option<SchemaRef>,
     ) -> DbxResult<usize> {
-        // 1. Scan from Delta Store
-        let rows = delta.scan(table, ..)?;
+        eprintln!("[sync_from_delta] Syncing table: '{}'", table);
+        
+        // 1. Normalize table name to lowercase for Delta Store lookup
+        let table_lower = table.to_lowercase();
+        eprintln!("[sync_from_delta] Using lowercase table name: '{}'", table_lower);
+        
+        // 2. Scan from Delta Store
+        let rows = delta.scan(&table_lower, ..)?;
+        eprintln!("[sync_from_delta] Scanned {} rows from Delta Store", rows.len());
 
         if rows.is_empty() {
+            eprintln!("[sync_from_delta] No rows found, clearing table");
             self.clear_table(table)?;
             return Ok(0);
         }
 
+        // 3. Branch: Typed (SQL) vs Raw (CRUD)
+        if let Some(schema) = table_schema {
+            eprintln!("[sync_from_delta] Using Typed mode (SQL table)");
+            self.sync_typed(table, rows, schema)
+        } else {
+            eprintln!("[sync_from_delta] Using Raw mode (CRUD table)");
+            self.sync_raw(table, rows)
+        }
+    }
+
+    /// Deserialize Arrow IPC format to RecordBatch
+    fn deserialize_arrow_ipc(value: &[u8]) -> DbxResult<RecordBatch> {
+        let cursor = std::io::Cursor::new(value);
+        let mut reader = StreamReader::try_new(cursor, None)
+            .map_err(|e| DbxError::Serialization(format!("Arrow IPC read error: {}", e)))?;
+        
+        // Read the first (and only) batch
+        reader.next()
+            .ok_or_else(|| DbxError::Serialization("No batch in Arrow IPC stream".to_string()))?
+            .map_err(|e| DbxError::Serialization(format!("Arrow IPC batch error: {}", e)))
+    }
+
+    /// Sync as typed data (SQL tables with schema)
+    fn sync_typed(
+        &self,
+        table: &str,
+        rows: Vec<(Vec<u8>, Vec<u8>)>,
+        schema: SchemaRef,
+    ) -> DbxResult<usize> {
+        eprintln!("[sync_typed] Syncing {} rows for table '{}'", rows.len(), table);
+        eprintln!("[sync_typed] Schema: {:?}", schema);
+        
+        // Deserialize Arrow IPC and collect batches
+        let mut batches = Vec::new();
+        
+        for (idx, (_key, value)) in rows.iter().enumerate() {
+            eprintln!("[sync_typed] Deserializing row {} (Arrow IPC, {} bytes)", idx, value.len());
+            
+            let batch = Self::deserialize_arrow_ipc(value)
+                .map_err(|e| {
+                    eprintln!("[sync_typed] ❌ Arrow IPC deserialization error for row {}: {}", idx, e);
+                    e
+                })?;
+            
+            eprintln!("[sync_typed] ✅ Deserialized batch with {} rows", batch.num_rows());
+            batches.push(batch);
+        }
+        
+        eprintln!("[sync_typed] Clearing table and inserting {} batches", batches.len());
+        
+        // Clear table and insert all batches
+        self.clear_table(table)?;
+        for batch in batches {
+            self.insert_typed_batch(table, schema.clone(), batch)?;
+        }
+        
+        let total_rows = rows.len();
+        eprintln!("[sync_typed] ✅ Successfully synced {} rows for table '{}'", total_rows, table);
+        Ok(total_rows)
+
+    }
+
+    /// Sync as raw Binary data (CRUD tables without schema)
+    fn sync_raw(
+        &self,
+        table: &str,
+        rows: Vec<(Vec<u8>, Vec<u8>)>,
+    ) -> DbxResult<usize> {
+        eprintln!("[sync_raw] Syncing {} rows for table '{}'", rows.len(), table);
         // 2. Convert to RecordBatch (Schema: key[Binary], value[Binary])
+        use arrow::array::{ArrayRef, BinaryArray};
+        use arrow::array::builder::BinaryBuilder;
         let schema = Arc::new(Schema::new(vec![
             Field::new("key", DataType::Binary, false),
             Field::new("value", DataType::Binary, true),
@@ -290,6 +422,89 @@ impl ColumnarCache {
         Ok(row_count)
     }
 
+    /// Insert a typed batch (SQL table)
+    fn insert_typed_batch(
+        &self,
+        table: &str,
+        schema: SchemaRef,
+        batch: RecordBatch,
+    ) -> DbxResult<()> {
+        eprintln!("[insert_typed_batch] Inserting batch for table: '{}'", table);
+        eprintln!("[insert_typed_batch] Batch has {} rows", batch.num_rows());
+        
+        let memory_size = estimate_batch_memory(&batch);
+
+        // Check memory limit (same as insert_batch)
+        let mut attempts = 0;
+        const MAX_EVICTION_ATTEMPTS: usize = 10;
+
+        while self.current_memory.load(Ordering::Relaxed) + memory_size > self.max_memory {
+            if attempts >= MAX_EVICTION_ATTEMPTS {
+                return Err(DbxError::Storage(
+                    "Columnar cache memory limit exceeded (eviction failed)".to_string(),
+                ));
+            }
+            if !self.evict_lru() {
+                return Err(DbxError::Storage(
+                    "Columnar cache memory limit exceeded (nothing to evict)".to_string(),
+                ));
+            }
+            attempts += 1;
+        }
+
+        // Get or create table cache with Typed data
+        eprintln!("[insert_typed_batch] Getting or creating table cache for '{}'", table);
+        let table_cache = self.tables.entry(table.to_string()).or_insert_with(|| {
+            eprintln!("[insert_typed_batch] Creating new table cache for '{}'", table);
+            Arc::new(TableCache {
+                data: parking_lot::RwLock::new(CachedData::Typed {
+                    schema: schema.clone(),
+                    batches: Vec::new(),
+                }),
+                _last_sync_ts: AtomicU64::new(0),
+                last_access: AtomicU64::new(self.access_counter.fetch_add(1, Ordering::Relaxed)),
+                memory_usage: AtomicUsize::new(0),
+            })
+        });
+
+        // Update access time
+        table_cache.last_access.store(
+            self.access_counter.fetch_add(1, Ordering::Relaxed),
+            Ordering::Relaxed,
+        );
+
+        // Insert batch
+        eprintln!("[insert_typed_batch] Inserting batch into table cache");
+        let mut data = table_cache.data.write();
+        match &mut *data {
+            CachedData::Typed { batches, .. } => {
+                eprintln!("[insert_typed_batch] Appending to existing Typed batches (current count: {})", batches.len());
+                batches.push(batch);
+                eprintln!("[insert_typed_batch] ✅ Batch appended (new count: {})", batches.len());
+            }
+            CachedData::Raw { .. } => {
+                eprintln!("[insert_typed_batch] Replacing Raw with Typed");
+                *data = CachedData::Typed {
+                    schema,
+                    batches: vec![batch],
+                };
+                eprintln!("[insert_typed_batch] ✅ Replaced with Typed batch");
+            }
+        }
+        drop(data);
+        
+        eprintln!("[insert_typed_batch] Current tables in cache: {:?}", self.tables.iter().map(|e| e.key().clone()).collect::<Vec<_>>());
+        
+        table_cache
+            .memory_usage
+            .fetch_add(memory_size, Ordering::Relaxed);
+        self.current_memory
+            .fetch_add(memory_size, Ordering::Relaxed);
+
+        eprintln!("[insert_typed_batch] ✅ Successfully inserted batch for table '{}'", table);
+        Ok(())
+    }
+
     /// Get batches with filter pushdown.
     ///
     /// The filter closure takes a full RecordBatch and returns a BooleanArray (mask).
@@ -313,7 +528,8 @@ impl ColumnarCache {
             .last_access
             .store(current_access, Ordering::Relaxed);
 
-        let batches = table_cache.batches.read();
+        let data = table_cache.data.read();
+        let batches = data.batches();
 
         if batches.is_empty() {
             return Ok(None);
@@ -352,9 +568,23 @@ impl ColumnarCache {
         table: &str,
         projection: Option<&[usize]>,
     ) -> DbxResult<Option<Vec<RecordBatch>>> {
-        let Some(table_cache) = self.tables.get(table) else {
+        eprintln!("[get_batches] Looking for table: '{}'", table);
+        eprintln!("[get_batches] Available tables: {:?}", self.tables.iter().map(|e| e.key().clone()).collect::<Vec<_>>());
+        
+        // Try case-insensitive lookup
+        let table_key = self.tables.iter()
+            .find(|entry| entry.key().to_lowercase() == table.to_lowercase())
+            .map(|entry| entry.key().clone());
+        
+        let lookup_key = table_key.as_deref().unwrap_or(table);
+        eprintln!("[get_batches] Using lookup key: '{}'", lookup_key);
+        
+        let Some(table_cache) = self.tables.get(lookup_key) else {
+            eprintln!("[get_batches] ❌ Table '{}' not found in cache", table);
             return Ok(None);
         };
+        
+        eprintln!("[get_batches] ✅ Found table in cache");
 
         // Update LRU on access
         let current_access = self.access_counter.fetch_add(1, Ordering::Relaxed);
@@ -362,7 +592,8 @@ impl ColumnarCache {
             .last_access
             .store(current_access, Ordering::Relaxed);
 
-        let batches = table_cache.batches.read();
+        let data = table_cache.data.read();
+        let batches = data.batches();
 
         if batches.is_empty() {
             return Ok(None);
@@ -375,7 +606,7 @@ impl ColumnarCache {
                 .map(|batch| project_batch(batch, indices))
                 .collect::<DbxResult<Vec<_>>>()?
         } else {
-            batches.clone()
+            batches.to_vec()
         };
 
         Ok(Some(result))
@@ -399,7 +630,10 @@ impl ColumnarCache {
 
     /// Get schema for a table.
     pub fn get_schema(&self, table: &str) -> Option<SchemaRef> {
-        self.tables.get(table).map(|tc| tc.schema.clone())
+        self.tables.get(table).map(|tc| {
+            let data = tc.data.read();
+            data.schema()
+        })
     }
 
     /// Evict the least recently used table.
@@ -635,7 +869,7 @@ mod tests {
         delta.insert("t1", b"k2", b"v2").unwrap();
 
         let cache = ColumnarCache::new();
-        let count = cache.sync_from_delta(&delta, "t1").unwrap();
+        let count = cache.sync_from_delta(&delta, "t1", None).unwrap();
 
         assert_eq!(count, 2);
 

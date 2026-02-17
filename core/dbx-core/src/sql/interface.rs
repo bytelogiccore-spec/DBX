@@ -10,8 +10,141 @@ use crate::sql::planner::{LogicalPlanner, PhysicalExpr, PhysicalPlan, PhysicalPl
 use crate::storage::columnar_cache::ColumnarCache;
 use arrow::array::RecordBatch;
 use arrow::datatypes::Schema;
+use arrow::ipc::writer::StreamWriter;
 use std::collections::HashMap;
 use std::sync::Arc;
+
+// ════════════════════════════════════════════
+// Arrow IPC Serialization
+// ════════════════════════════════════════════
+
+/// Infer Arrow schema from row values
+fn infer_schema_from_values(values: &[PhysicalExpr]) -> DbxResult<Schema> {
+    use arrow::datatypes::{DataType, Field};
+    use crate::storage::columnar::ScalarValue;
+    
+    let fields: Vec<Field> = values
+        .iter()
+        .enumerate()
+        .map(|(i, expr)| {
+            let name = format!("col_{}", i);
+            let data_type = match expr {
+                PhysicalExpr::Literal(scalar) => match scalar {
+                    ScalarValue::Int32(_) => DataType::Int32,
+                    ScalarValue::Int64(_) => DataType::Int64,
+                    ScalarValue::Float64(_) => DataType::Float64,
+                    ScalarValue::Utf8(_) => DataType::Utf8,
+                    ScalarValue::Boolean(_) => DataType::Boolean,
+                    ScalarValue::Binary(_) => DataType::Binary,
+                    ScalarValue::Null => DataType::Utf8, // Default to string for nulls
+                },
+                _ => DataType::Utf8, // Fallback to string
+            };
+            Field::new(name, data_type, true) // All fields nullable
+        })
+        .collect();
+    
+    Ok(Schema::new(fields))
+}
+
+/// Serialize row values to Arrow IPC format
+fn serialize_to_arrow_ipc(
+    schema: &Schema,
+    row_values: &[PhysicalExpr],
+) -> DbxResult<Vec<u8>> {
+    use arrow::array::*;
+    use crate::storage::columnar::ScalarValue;
+    
+    // Build arrays for each field
+    let mut arrays: Vec<ArrayRef> = Vec::new();
+    
+    for (field, expr) in schema.fields().iter().zip(row_values) {
+        let array: ArrayRef = match expr {
+            PhysicalExpr::Literal(scalar) => {
+                match (field.data_type(), scalar) {
+                    (arrow::datatypes::DataType::Int32, ScalarValue::Int32(v)) => {
+                        Arc::new(Int32Array::from(vec![*v]))
+                    }
+                    (arrow::datatypes::DataType::Int64, ScalarValue::Int64(v)) => {
+                        Arc::new(Int64Array::from(vec![*v]))
+                    }
+                    // Auto-convert Int32 to Int64
+                    (arrow::datatypes::DataType::Int64, ScalarValue::Int32(v)) => {
+                        Arc::new(Int64Array::from(vec![*v as i64]))
+                    }
+                    (arrow::datatypes::DataType::Float64, ScalarValue::Float64(v)) => {
+                        Arc::new(Float64Array::from(vec![*v]))
+                    }
+                    (arrow::datatypes::DataType::Utf8, ScalarValue::Utf8(s)) => {
+                        Arc::new(StringArray::from(vec![s.as_str()]))
+                    }
+                    (arrow::datatypes::DataType::Boolean, ScalarValue::Boolean(b)) => {
+                        Arc::new(BooleanArray::from(vec![*b]))
+                    }
+                    (arrow::datatypes::DataType::Binary, ScalarValue::Binary(b)) => {
+                        Arc::new(BinaryArray::from(vec![b.as_slice()]))
+                    }
+                    (_, ScalarValue::Null) => {
+                        // Create null array of appropriate type
+                        match field.data_type() {
+                            arrow::datatypes::DataType::Int32 => {
+                                Arc::new(Int32Array::from(vec![None as Option<i32>]))
+                            }
+                            arrow::datatypes::DataType::Int64 => {
+                                Arc::new(Int64Array::from(vec![None as Option<i64>]))
+                            }
+                            arrow::datatypes::DataType::Float64 => {
+                                Arc::new(Float64Array::from(vec![None as Option<f64>]))
+                            }
+                            arrow::datatypes::DataType::Utf8 => {
+                                Arc::new(StringArray::from(vec![None as Option<&str>]))
+                            }
+                            arrow::datatypes::DataType::Boolean => {
+                                Arc::new(BooleanArray::from(vec![None as Option<bool>]))
+                            }
+                            arrow::datatypes::DataType::Binary => {
+                                Arc::new(BinaryArray::from(vec![None as Option<&[u8]>]))
+                            }
+                            _ => {
+                                return Err(DbxError::NotImplemented(
+                                    format!("Unsupported null type: {:?}", field.data_type())
+                                ));
+                            }
+                        }
+                    }
+                    _ => {
+                        return Err(DbxError::NotImplemented(
+                            format!("Type mismatch: field {:?} vs scalar {:?}", field.data_type(), scalar)
+                        ));
+                    }
+                }
+            }
+            _ => {
+                return Err(DbxError::NotImplemented(
+                    "Non-literal value in INSERT".to_string(),
+                ));
+            }
+        };
+        arrays.push(array);
+    }
+    
+    // Create RecordBatch
+    let batch = RecordBatch::try_new(Arc::new(schema.clone()), arrays)
+        .map_err(|e| DbxError::Storage(e.to_string()))?;
+    
+    // Serialize to Arrow IPC Stream format
+    let mut buffer = Vec::new();
+    {
+        let mut writer = StreamWriter::try_new(&mut buffer, &schema)
+            .map_err(|e| DbxError::Serialization(e.to_string()))?;
+        writer.write(&batch)
+            .map_err(|e| DbxError::Serialization(e.to_string()))?;
+        writer.finish()
+            .map_err(|e| DbxError::Serialization(e.to_string()))?;
+    }
+    
+    Ok(buffer)
+}
 
 // ════════════════════════════════════════════
 // Helper Functions for WHERE Clause Evaluation
@@ -227,95 +360,21 @@ impl Database {
                         }
                     };
 
-                    // Schema-based serialization: use column names if schema is registered
-                    let schema_fields = {
+                    // Get or infer schema for Arrow IPC serialization
+                    let schema = {
                         let schemas = self.table_schemas.read().unwrap();
-                        schemas.get(table.as_str()).map(|schema| {
-                            schema
-                                .fields()
-                                .iter()
-                                .map(|f| f.name().clone())
-                                .collect::<Vec<_>>()
-                        })
-                    };
+                        schemas.get(table.as_str()).cloned()
+                    }.unwrap_or_else(|| {
+                        // No registered schema: infer from row values
+                        Arc::new(infer_schema_from_values(&row_values)
+                            .expect("Failed to infer schema from values"))
+                    });
 
-                    let value_json = if let Some(fields) = &schema_fields {
-                        // Schema-based: create JSON object with column names as keys
-                        let mut map = serde_json::Map::new();
-                        for (i, expr) in row_values[1..].iter().enumerate() {
-                            let fallback_name = format!("col_{}", i);
-                            let col_name = fields
-                                .get(i + 1)
-                                .map(|s| s.as_str())
-                                .unwrap_or(&fallback_name);
-                            match expr {
-                                PhysicalExpr::Literal(scalar) => {
-                                    use crate::storage::columnar::ScalarValue;
-                                    let json_val = match scalar {
-                                        ScalarValue::Utf8(s) => {
-                                            serde_json::Value::String(s.clone())
-                                        }
-                                        ScalarValue::Int32(i) => {
-                                            serde_json::Value::Number((*i).into())
-                                        }
-                                        ScalarValue::Int64(i) => {
-                                            serde_json::Value::Number((*i).into())
-                                        }
-                                        ScalarValue::Float64(f) => serde_json::Number::from_f64(*f)
-                                            .map(serde_json::Value::Number)
-                                            .unwrap_or(serde_json::Value::Null),
-                                        ScalarValue::Boolean(b) => serde_json::Value::Bool(*b),
-                                        ScalarValue::Null => serde_json::Value::Null,
-                                    };
-                                    map.insert(col_name.to_string(), json_val);
-                                }
-                                _ => {
-                                    return Err(DbxError::NotImplemented(
-                                        "Non-literal value in INSERT".to_string(),
-                                    ));
-                                }
-                            }
-                        }
-                        serde_json::to_vec(&serde_json::Value::Object(map))
-                            .map_err(|e| DbxError::Serialization(e.to_string()))?
-                    } else {
-                        // Fallback: serialize as JSON array (no schema available)
-                        let mut value_vec = Vec::new();
-                        for expr in &row_values[1..] {
-                            match expr {
-                                PhysicalExpr::Literal(scalar) => {
-                                    use crate::storage::columnar::ScalarValue;
-                                    let json_val = match scalar {
-                                        ScalarValue::Utf8(s) => {
-                                            serde_json::Value::String(s.clone())
-                                        }
-                                        ScalarValue::Int32(i) => {
-                                            serde_json::Value::Number((*i).into())
-                                        }
-                                        ScalarValue::Int64(i) => {
-                                            serde_json::Value::Number((*i).into())
-                                        }
-                                        ScalarValue::Float64(f) => serde_json::Number::from_f64(*f)
-                                            .map(serde_json::Value::Number)
-                                            .unwrap_or(serde_json::Value::Null),
-                                        ScalarValue::Boolean(b) => serde_json::Value::Bool(*b),
-                                        ScalarValue::Null => serde_json::Value::Null,
-                                    };
-                                    value_vec.push(json_val);
-                                }
-                                _ => {
-                                    return Err(DbxError::NotImplemented(
-                                        "Non-literal value in INSERT".to_string(),
-                                    ));
-                                }
-                            }
-                        }
-                        serde_json::to_vec(&value_vec)
-                            .map_err(|e| DbxError::Serialization(e.to_string()))?
-                    };
+                    // Always use Arrow IPC serialization
+                    let value_bytes = serialize_to_arrow_ipc(&schema, &row_values)?;
 
                     // Insert into Delta Store
-                    self.insert(table, &key, &value_json)?;
+                    self.insert(table, &key, &value_bytes)?;
                     rows_inserted += 1;
                 }
 
@@ -389,6 +448,13 @@ impl Database {
                                         .map(serde_json::Value::Number)
                                         .unwrap_or(serde_json::Value::Null),
                                     ScalarValue::Boolean(b) => serde_json::Value::Bool(*b),
+                                    ScalarValue::Binary(b) => {
+                                        // Encode binary as base64 string
+                                        serde_json::Value::String(base64::Engine::encode(
+                                            &base64::engine::general_purpose::STANDARD,
+                                            b,
+                                        ))
+                                    }
                                     ScalarValue::Null => serde_json::Value::Null,
                                 };
 
@@ -893,17 +959,56 @@ impl Database {
                         // Reset flag if cache miss
                         filter_pushed_down = false;
 
-                        // Fallback to HashMap
-                        let batches = tables
-                            .get(table)
-                            .ok_or_else(|| DbxError::TableNotFound(table.clone()))?;
+                        // Try to sync from Delta Store to Cache
+                        let _ = self.sync_columnar_cache(table);
 
-                        if batches.is_empty() {
-                            return Err(DbxError::TableNotFound(table.clone()));
+                        // Try cache again after sync
+                        let cached_after_sync = columnar_cache.get_batches(
+                            table,
+                            if projection.is_empty() {
+                                None
+                            } else {
+                                Some(projection)
+                            },
+                        )?;
+
+                        if let Some(batches) = cached_after_sync {
+                            if !batches.is_empty() {
+                                let schema = batches[0].schema();
+                                (batches, schema, vec![])
+                            } else {
+                                return Err(DbxError::TableNotFound(table.clone()));
+                            }
+                        } else {
+                            // Still not in cache, fallback to HashMap
+                            eprintln!("[execute_physical_plan] Looking for table '{}' in tables HashMap", table);
+                            
+                            // Try case-insensitive table lookup
+                            let batches = tables.get(table).or_else(|| {
+                                eprintln!("[execute_physical_plan] Exact match failed, trying case-insensitive...");
+                                let table_lower = table.to_lowercase();
+                                tables
+                                    .iter()
+                                    .find(|(k, _)| {
+                                        let matches = k.to_lowercase() == table_lower;
+                                        eprintln!("[execute_physical_plan] Comparing '{}' with '{}': {}", k, table, matches);
+                                        matches
+                                    })
+                                    .map(|(_, v)| v)
+                            }).ok_or_else(|| {
+                                eprintln!("[execute_physical_plan] ❌ TableNotFound: '{}'", table);
+                                DbxError::TableNotFound(table.clone())
+                            })?;
+
+                            if batches.is_empty() {
+                                eprintln!("[execute_physical_plan] ❌ Table '{}' has no batches", table);
+                                return Err(DbxError::TableNotFound(table.clone()));
+                            }
+
+                            eprintln!("[execute_physical_plan] ✅ Found {} batches for table '{}'", batches.len(), table);
+                            let schema = batches[0].schema();
+                            (batches.clone(), schema, projection.clone())
                         }
-
-                        let schema = batches[0].schema();
-                        (batches.clone(), schema, projection.clone())
                     };
 
                 let mut scan =
