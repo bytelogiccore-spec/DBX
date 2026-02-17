@@ -23,15 +23,15 @@ jobs:
       - run: cargo build --release --locked -p dbx-node
 
       - name: npm 의존성 설치
-        working-directory: lang/nodejs
+        working-directory: packages/nodejs
         run: npm install
 
       - name: npm 패키지 생성
-        working-directory: lang/nodejs
+        working-directory: packages/nodejs
         run: npm pack
 
       - name: npm 배포
-        working-directory: lang/nodejs
+        working-directory: packages/nodejs
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: npm publish --access public --ignore-scripts
@@ -40,4 +40,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: npm-package
-          path: lang/nodejs/*.tgz
+          path: packages/nodejs/*.tgz

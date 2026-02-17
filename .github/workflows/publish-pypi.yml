@@ -25,11 +25,11 @@ jobs:
         run: pip install setuptools wheel twine
 
       - name: 패키지 빌드
-        working-directory: lang/python
+        working-directory: packages/python
         run: python setup.py sdist bdist_wheel
 
       - name: PyPI 배포
-        working-directory: lang/python
+        working-directory: packages/python
         env:
           TWINE_USERNAME: __token__
           TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
@@ -39,4 +39,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: python-package
-          path: lang/python/dist/*
+          path: packages/python/dist/*
