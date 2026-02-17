@@ -4,7 +4,7 @@
 // cargo bench --bench ddl_api_benchmark
 
 use arrow::datatypes::{DataType, Field, Schema};
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, black_box, criterion_group, criterion_main};
 use dbx_core::Database;
 
 // ════════════════════════════════════════════
@@ -76,7 +76,8 @@ fn bench_api_create_sql_index(c: &mut Criterion) {
                 Field::new("email", DataType::Utf8, true),
             ]);
             db.create_table("users", schema).unwrap();
-            db.create_sql_index("users", "idx_email", vec!["email".to_string()]).unwrap();
+            db.create_sql_index("users", "idx_email", vec!["email".to_string()])
+                .unwrap();
             black_box(());
         });
     });
@@ -91,7 +92,8 @@ fn bench_api_drop_sql_index(c: &mut Criterion) {
                 Field::new("email", DataType::Utf8, true),
             ]);
             db.create_table("users", schema).unwrap();
-            db.create_sql_index("users", "idx_email", vec!["email".to_string()]).unwrap();
+            db.create_sql_index("users", "idx_email", vec!["email".to_string()])
+                .unwrap();
             db.drop_sql_index("users", "idx_email").unwrap();
             black_box(());
         });
@@ -106,7 +108,8 @@ fn bench_api_sql_index_exists(c: &mut Criterion) {
             Field::new("email", DataType::Utf8, true),
         ]);
         db.create_table("users", schema).unwrap();
-        db.create_sql_index("users", "idx_email", vec!["email".to_string()]).unwrap();
+        db.create_sql_index("users", "idx_email", vec!["email".to_string()])
+            .unwrap();
 
         b.iter(|| {
             black_box(db.sql_index_exists("idx_email"));
@@ -123,8 +126,10 @@ fn bench_api_list_sql_indexes(c: &mut Criterion) {
             Field::new("name", DataType::Utf8, true),
         ]);
         db.create_table("users", schema).unwrap();
-        db.create_sql_index("users", "idx_email", vec!["email".to_string()]).unwrap();
-        db.create_sql_index("users", "idx_name", vec!["name".to_string()]).unwrap();
+        db.create_sql_index("users", "idx_email", vec!["email".to_string()])
+            .unwrap();
+        db.create_sql_index("users", "idx_name", vec!["name".to_string()])
+            .unwrap();
 
         b.iter(|| {
             black_box(db.list_sql_indexes("users"));
@@ -195,7 +200,10 @@ fn bench_sql_create_index(c: &mut Criterion) {
                 Field::new("email", DataType::Utf8, true),
             ]);
             db.create_table("users", schema).unwrap();
-            black_box(db.execute_sql("CREATE INDEX idx_email ON users (email)").unwrap());
+            black_box(
+                db.execute_sql("CREATE INDEX idx_email ON users (email)")
+                    .unwrap(),
+            );
         });
     });
 }
@@ -209,7 +217,10 @@ fn bench_sql_alter_table_add(c: &mut Criterion) {
                 Field::new("name", DataType::Utf8, true),
             ]);
             db.create_table("users", schema).unwrap();
-            black_box(db.execute_sql("ALTER TABLE users ADD COLUMN email TEXT").unwrap());
+            black_box(
+                db.execute_sql("ALTER TABLE users ADD COLUMN email TEXT")
+                    .unwrap(),
+            );
         });
     });
 }

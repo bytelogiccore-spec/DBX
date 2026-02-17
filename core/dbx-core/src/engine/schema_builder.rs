@@ -35,9 +35,7 @@ impl SchemaBuilder {
     /// let builder = SchemaBuilder::new();
     /// ```
     pub fn new() -> Self {
-        Self {
-            fields: Vec::new(),
-        }
+        Self { fields: Vec::new() }
     }
 
     /// Add a column with explicit type and nullability

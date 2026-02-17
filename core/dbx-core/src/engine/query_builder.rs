@@ -398,7 +398,6 @@ impl<'a> QueryBuilder<'a> {
         self
     }
 
-
     /// Count rows
     ///
     /// # Example
@@ -468,17 +467,17 @@ impl<'a> QueryBuilder<'a> {
         // JOIN clauses
         for join in &self.join_clauses {
             sql.push_str(&format!(" {} {}", join.join_type.to_sql(), join.table));
-            
+
             if !join.on_conditions.is_empty() {
                 sql.push_str(" ON ");
-                let conditions: Vec<String> = join.on_conditions
+                let conditions: Vec<String> = join
+                    .on_conditions
                     .iter()
                     .map(|(left, right)| format!("{} = {}", left, right))
                     .collect();
                 sql.push_str(&conditions.join(" AND "));
             }
         }
-
 
         // WHERE clause
         if !self.where_clauses.is_empty() {
@@ -487,7 +486,10 @@ impl<'a> QueryBuilder<'a> {
                 if i > 0 {
                     sql.push_str(&format!(" {} ", clause.connector.to_sql()));
                 }
-                sql.push_str(&format!("{} {} {}", clause.column, clause.operator, clause.value));
+                sql.push_str(&format!(
+                    "{} {} {}",
+                    clause.column, clause.operator, clause.value
+                ));
             }
         }
 

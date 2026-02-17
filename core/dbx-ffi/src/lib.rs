@@ -1007,10 +1007,7 @@ pub unsafe extern "C" fn dbx_transaction_rollback(tx: *mut DbxTransaction) {
 
 /// Drop a table
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn dbx_drop_table(
-    handle: *mut DbxHandle,
-    table: *const c_char,
-) -> c_int {
+pub unsafe extern "C" fn dbx_drop_table(handle: *mut DbxHandle, table: *const c_char) -> c_int {
     if handle.is_null() || table.is_null() {
         return DBX_ERR_NULL_PTR;
     }
@@ -1030,10 +1027,7 @@ pub unsafe extern "C" fn dbx_drop_table(
 
 /// Check if a table exists. Returns 1 if exists, 0 if not.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn dbx_table_exists(
-    handle: *mut DbxHandle,
-    table: *const c_char,
-) -> c_int {
+pub unsafe extern "C" fn dbx_table_exists(handle: *mut DbxHandle, table: *const c_char) -> c_int {
     if handle.is_null() || table.is_null() {
         return 0;
     }
@@ -1045,7 +1039,11 @@ pub unsafe extern "C" fn dbx_table_exists(
         Err(_) => return 0,
     };
 
-    if handle.db.table_exists(table_str) { 1 } else { 0 }
+    if handle.db.table_exists(table_str) {
+        1
+    } else {
+        0
+    }
 }
 
 /// List all tables. Returns an opaque DbxStringList handle.

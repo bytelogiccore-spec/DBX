@@ -472,7 +472,6 @@ impl Database {
     }
 }
 
-
 // ════════════════════════════════════════════
 // DatabaseQuery Trait Implementation
 // ════════════════════════════════════════════
@@ -637,4 +636,3 @@ mod tests {
         assert!(matches!(Some(10i32).into_scalar(), ScalarValue::Int32(10)));
     }
 }
-

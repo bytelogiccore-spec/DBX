@@ -2,8 +2,8 @@
 //!
 //! Tests for SQL-based index management functions
 
-use dbx_core::Database;
 use arrow::datatypes::{DataType, Field, Schema};
+use dbx_core::Database;
 
 #[test]
 fn test_create_and_drop_sql_index() -> dbx_core::DbxResult<()> {
@@ -83,7 +83,7 @@ fn test_ddl_api_integration() -> dbx_core::DbxResult<()> {
     ]);
     db.create_table("users", schema)?;
     assert!(db.table_exists("users"));
-    
+
     // Debug: Check if schema is stored
     let stored_schema = db.get_table_schema("users")?;
     println!("✅ Table 'users' created with schema: {:?}", stored_schema);
@@ -95,12 +95,12 @@ fn test_ddl_api_integration() -> dbx_core::DbxResult<()> {
 
     // 3. Query via SQL API (with WHERE clause - tests Binary type comparison fix!)
     println!("Attempting SELECT...");
-    
+
     // Debug: Print all registered tables
     let tables = db.list_tables();
     println!("Registered tables: {:?}", tables);
-    
-    let results = db.execute_sql("SELECT * FROM users WHERE email = 'test@example.com'")?;  // 소문자로 변경
+
+    let results = db.execute_sql("SELECT * FROM users WHERE email = 'test@example.com'")?; // 소문자로 변경
     assert!(!results.is_empty());
     println!("✅ SELECT successful, found {} rows", results.len());
 
@@ -143,4 +143,3 @@ fn test_sql_index_vs_hash_index() -> dbx_core::DbxResult<()> {
 
     Ok(())
 }
-

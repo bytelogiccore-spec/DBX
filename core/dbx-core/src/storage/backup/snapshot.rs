@@ -1,8 +1,8 @@
 //! Database snapshot save/load implementation
 
 use crate::engine::metadata::SchemaMetadata;
-use crate::engine::snapshot::TableData;
 pub use crate::engine::snapshot::DatabaseSnapshot;
+use crate::engine::snapshot::TableData;
 use crate::engine::{Database, WosVariant};
 use crate::error::{DbxError, DbxResult};
 use arrow::datatypes::Schema;
@@ -182,7 +182,6 @@ impl Database {
     }
 }
 
-
 // ════════════════════════════════════════════
 // DatabaseSnapshot Trait Implementation
 // ════════════════════════════════════════════
@@ -221,4 +220,3 @@ mod tests {
         assert!(result.unwrap_err().to_string().contains("in-memory"));
     }
 }
-

@@ -13,19 +13,19 @@ use crate::error::DbxResult;
 pub trait DatabaseCore {
     /// 데이터 삽입
     fn insert(&self, table: &str, key: &[u8], value: &[u8]) -> DbxResult<()>;
-    
+
     /// 데이터 조회
     fn get(&self, table: &str, key: &[u8]) -> DbxResult<Option<Vec<u8>>>;
-    
+
     /// 데이터 삭제
     fn delete(&self, table: &str, key: &[u8]) -> DbxResult<()>;
-    
+
     /// 전체 스캔
     fn scan(&self, table: &str) -> DbxResult<Vec<(Vec<u8>, Vec<u8>)>>;
-    
+
     /// 메모리 → 디스크 플러시
     fn flush(&self) -> DbxResult<()>;
-    
+
     /// 배치 삽입
     fn insert_batch(&self, table: &str, entries: Vec<(Vec<u8>, Vec<u8>)>) -> DbxResult<()>;
 }
@@ -38,10 +38,10 @@ pub trait DatabaseCore {
 pub trait DatabaseSql {
     /// SQL 문 실행 (RecordBatch는 engine에서 정의)
     fn execute_sql(&self, sql: &str) -> DbxResult<Vec<arrow::record_batch::RecordBatch>>;
-    
+
     /// 테이블 등록 (Arrow RecordBatch)
     fn register_table(&self, name: &str, batches: Vec<arrow::record_batch::RecordBatch>);
-    
+
     /// 배치 추가
     fn append_batch(&self, table: &str, batch: arrow::record_batch::RecordBatch) -> DbxResult<()>;
 }
@@ -63,7 +63,9 @@ pub trait DatabaseQuery {
 /// 트랜잭션 관리 기능을 제공하는 Trait
 pub trait DatabaseTransaction {
     /// 트랜잭션 시작
-    fn begin(&self) -> DbxResult<crate::transaction::api::Transaction<'_, crate::transaction::api::Active>>;
+    fn begin(
+        &self,
+    ) -> DbxResult<crate::transaction::api::Transaction<'_, crate::transaction::api::Active>>;
 }
 
 // ════════════════════════════════════════════
@@ -74,7 +76,7 @@ pub trait DatabaseTransaction {
 pub trait DatabaseSnapshot {
     /// 데이터베이스를 파일로 저장
     fn save_to_file(&self, path: &str) -> DbxResult<()>;
-    
+
     /// 파일에서 데이터베이스 로드
     fn load_from_file(path: &str) -> DbxResult<Self>
     where

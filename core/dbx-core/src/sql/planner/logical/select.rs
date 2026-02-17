@@ -4,13 +4,12 @@ use crate::error::{DbxError, DbxResult};
 use crate::sql::planner::types::*;
 use crate::storage::columnar::ScalarValue;
 use sqlparser::ast::{
-    Expr as SqlExpr, GroupByExpr, JoinConstraint, JoinOperator,
-    OrderByExpr as SqlOrderByExpr, Query, Select, SelectItem, SetExpr, TableFactor,
-    TableWithJoins,
+    Expr as SqlExpr, GroupByExpr, JoinConstraint, JoinOperator, OrderByExpr as SqlOrderByExpr,
+    Query, Select, SelectItem, SetExpr, TableFactor, TableWithJoins,
 };
 
-use super::helpers::{convert_binary_op, match_scalar_function};
 use super::LogicalPlanner;
+use super::helpers::{convert_binary_op, match_scalar_function};
 
 impl LogicalPlanner {
     /// Query → LogicalPlan 변환
@@ -122,7 +121,10 @@ impl LogicalPlanner {
     }
 
     /// Extract aggregate function calls from SELECT items.
-    pub(super) fn extract_aggregates(&self, projection: &[SelectItem]) -> DbxResult<Vec<AggregateExpr>> {
+    pub(super) fn extract_aggregates(
+        &self,
+        projection: &[SelectItem],
+    ) -> DbxResult<Vec<AggregateExpr>> {
         let mut aggregates = Vec::new();
         for item in projection {
             match item {
@@ -184,7 +186,10 @@ impl LogicalPlanner {
     }
 
     /// Plan function arguments (take first arg).
-    pub(super) fn plan_function_arg(&self, args: &sqlparser::ast::FunctionArguments) -> DbxResult<Expr> {
+    pub(super) fn plan_function_arg(
+        &self,
+        args: &sqlparser::ast::FunctionArguments,
+    ) -> DbxResult<Expr> {
         match args {
             sqlparser::ast::FunctionArguments::List(arg_list) => {
                 if arg_list.args.is_empty() {
@@ -324,7 +329,10 @@ impl LogicalPlanner {
     }
 
     /// SELECT 절 → Vec<(Expr, Option<String>)>
-    pub(super) fn plan_projection(&self, projection: &[SelectItem]) -> DbxResult<Vec<(Expr, Option<String>)>> {
+    pub(super) fn plan_projection(
+        &self,
+        projection: &[SelectItem],
+    ) -> DbxResult<Vec<(Expr, Option<String>)>> {
         let mut projections = Vec::new();
 
         for item in projection {

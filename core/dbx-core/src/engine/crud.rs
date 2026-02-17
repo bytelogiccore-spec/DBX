@@ -184,7 +184,8 @@ impl Database {
 
         // Helper: returns Some(Some(v)), Some(None) (tombstone), or None (mismatch)
         let check_entry = |entry_key: &[u8], entry_val: &[u8]| -> Option<Option<Vec<u8>>> {
-            let decoded = crate::transaction::mvcc::version::VersionedKey::decode(entry_key).ok()?;
+            let decoded =
+                crate::transaction::mvcc::version::VersionedKey::decode(entry_key).ok()?;
             if decoded.user_key != key {
                 return None;
             }
@@ -265,7 +266,7 @@ impl Database {
         // ════════════════════════════════════════════
         // Transaction::commit()은 insert_versioned()와 insert()를 모두 호출하므로
         // 일반적으로 위의 Fast-path에서 데이터를 찾을 수 있습니다.
-        // 
+        //
         // 하지만 다음 경우에 이 Fallback이 필요합니다:
         // 1. insert_versioned()만 호출된 경우 (일반 key 없음)
         // 2. 향후 MVCC 전용 모드 지원 시
@@ -276,12 +277,12 @@ impl Database {
         let current_ts = self.tx_manager.allocate_commit_ts();
         let vk = crate::transaction::mvcc::version::VersionedKey::new(key.to_vec(), current_ts);
         let encoded_key = vk.encode();
-        
+
         // Delta에서 versioned key 조회
         if let Some(value) = self.delta.get(table, &encoded_key)? {
             return Ok(Self::decode_mvcc_value(value));
         }
-        
+
         // WOS에서 versioned key 조회
         if let Some(value) = self.wos.get(table, &encoded_key)? {
             return Ok(Self::decode_mvcc_value(value));
@@ -443,35 +444,48 @@ impl Database {
     // ════════════════════════════════════════════
 
     /// Synchronize the Columnar Cache with the latest data from Delta Store.
-    /// 
+    ///
     /// If the table has a schema in table_schemas, it will be synced as typed data.
     /// Otherwise, it will be synced as raw Binary data.
     pub fn sync_columnar_cache(&self, table: &str) -> DbxResult<usize> {
         eprintln!("[sync_columnar_cache] Syncing table: '{}'", table);
-        
+
         // Check if table has a schema (SQL table) - case-insensitive
         let schemas = self.table_schemas.read().unwrap();
-        let table_schema = schemas.get(table).or_else(|| {
-            eprintln!("[sync_columnar_cache] Exact match failed, trying case-insensitive...");
-            let table_lower = table.to_lowercase();
-            schemas
-                .iter()
-                .find(|(k, _)| {
-                    let matches = k.to_lowercase() == table_lower;
-                    eprintln!("[sync_columnar_cache] Comparing '{}' with '{}': {}", k, table, matches);
-                    matches
-                })
-                .map(|(_, v)| v)
-        }).cloned();
+        let table_schema = schemas
+            .get(table)
+            .or_else(|| {
+                eprintln!("[sync_columnar_cache] Exact match failed, trying case-insensitive...");
+                let table_lower = table.to_lowercase();
+                schemas
+                    .iter()
+                    .find(|(k, _)| {
+                        let matches = k.to_lowercase() == table_lower;
+                        eprintln!(
+                            "[sync_columnar_cache] Comparing '{}' with '{}': {}",
+                            k, table, matches
+                        );
+                        matches
+                    })
+                    .map(|(_, v)| v)
+            })
+            .cloned();
         drop(schemas);
-        
+
         if table_schema.is_some() {
-            eprintln!("[sync_columnar_cache] ✅ Found schema for table '{}'", table);
+            eprintln!(
+                "[sync_columnar_cache] ✅ Found schema for table '{}'",
+                table
+            );
         } else {
-            eprintln!("[sync_columnar_cache] ⚠️ No schema found for table '{}', treating as Raw", table);
+            eprintln!(
+                "[sync_columnar_cache] ⚠️ No schema found for table '{}', treating as Raw",
+                table
+            );
         }
-        
-        self.columnar_cache.sync_from_delta(&self.delta, table, table_schema)
+
+        self.columnar_cache
+            .sync_from_delta(&self.delta, table, table_schema)
     }
 
     /// Sync data from multiple tiers (Delta and ROS) to GPU for merge operations.
@@ -560,4 +574,3 @@ impl crate::traits::DatabaseCore for Database {
         Database::insert_batch(self, table, entries)
     }
 }
-

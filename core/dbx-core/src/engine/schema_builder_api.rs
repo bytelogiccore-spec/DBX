@@ -1,8 +1,8 @@
 //! Schema Builder API implementation for Database
 
+use crate::DbxResult;
 use crate::engine::Database;
 use crate::engine::schema_builder::SchemaBuilder;
-use crate::DbxResult;
 
 impl Database {
     /// Create a table using SchemaBuilder

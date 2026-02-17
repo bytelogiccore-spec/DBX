@@ -3,7 +3,7 @@
 // 사용법:
 // cargo bench --bench dbx_baseline
 
-use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
+use criterion::{BenchmarkId, Criterion, Throughput, black_box, criterion_group, criterion_main};
 use dbx_core::Database;
 use std::sync::Arc;
 
@@ -95,7 +95,7 @@ fn bench_dbx_mixed_workload(c: &mut Criterion) {
         group.bench_with_input(BenchmarkId::from_parameter(size), &size, |b, &size| {
             b.iter(|| {
                 let db = Database::open_in_memory().unwrap();
-                
+
                 // 70% Insert
                 for i in 0..(size * 7 / 10) {
                     let key = format!("key_{}", i);
@@ -103,13 +103,13 @@ fn bench_dbx_mixed_workload(c: &mut Criterion) {
                     db.insert("bench", key.as_bytes(), value.as_bytes())
                         .unwrap();
                 }
-                
+
                 // 20% Get
                 for i in 0..(size * 2 / 10) {
                     let key = format!("key_{}", i);
                     let _ = black_box(db.get("bench", key.as_bytes()).unwrap());
                 }
-                
+
                 // 10% Delete
                 for i in 0..(size / 10) {
                     let key = format!("key_{}", i);

@@ -370,7 +370,6 @@ pub fn load_all_udfs(wos: &WosBackend) -> DbxResult<Vec<crate::automation::UdfMe
     Ok(udfs)
 }
 
-
 // ════════════════════════════════════════════
 // Schedule Metadata Persistence
 // ════════════════════════════════════════════

@@ -1,7 +1,7 @@
 // Query Builder API implementation for Database
 
-use crate::engine::query_builder::QueryBuilder;
 use crate::engine::Database;
+use crate::engine::query_builder::QueryBuilder;
 
 impl Database {
     /// Create a new QueryBuilder for building SQL queries

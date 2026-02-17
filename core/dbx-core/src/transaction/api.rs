@@ -4,9 +4,9 @@
 //! 트랜잭션 내 쓰기는 로컬 버퍼에 축적되며,
 //! `commit()` 시 메인 Delta Store에 원자적으로 반영됩니다.
 
-use crate::sql::builder::{Execute, Query, QueryOne, QueryOptional, QueryScalar};
 use crate::engine::Database;
 use crate::error::DbxResult;
+use crate::sql::builder::{Execute, Query, QueryOne, QueryOptional, QueryScalar};
 use std::collections::HashMap;
 use std::marker::PhantomData;
 
@@ -249,7 +249,6 @@ impl<'a> Transaction<'a, RolledBack> {
     }
 }
 
-
 // ════════════════════════════════════════════
 // DatabaseTransaction Trait Implementation
 // ════════════════════════════════════════════
@@ -380,4 +379,3 @@ mod tests {
         assert!(rolled_back.is_rolled_back());
     }
 }
-

@@ -2,9 +2,9 @@
 //!
 //! Tests for the Query Builder API
 
-use dbx_core::Database;
-use arrow::datatypes::{DataType, Field, Schema};
 use arrow::array::{Int64Array, StringArray};
+use arrow::datatypes::{DataType, Field, Schema};
+use dbx_core::Database;
 
 #[test]
 fn test_basic_select() -> dbx_core::DbxResult<()> {
@@ -19,7 +19,10 @@ fn test_basic_select() -> dbx_core::DbxResult<()> {
     db.create_table("users", schema)?;
 
     // Debug: Check if table exists
-    eprintln!("DEBUG: table_exists('users') = {}", db.table_exists("users"));
+    eprintln!(
+        "DEBUG: table_exists('users') = {}",
+        db.table_exists("users")
+    );
     eprintln!("DEBUG: list_tables() = {:?}", db.list_tables());
 
     // Insert test data
@@ -35,7 +38,8 @@ fn test_basic_select() -> dbx_core::DbxResult<()> {
     db.execute_sql("INSERT INTO users (id, name, age) VALUES (3, 'Charlie', 35)")?;
 
     // Test basic SELECT
-    let results = db.query_builder()
+    let results = db
+        .query_builder()
         .select(&["id", "name"])
         .from("users")
         .execute()?;
@@ -65,7 +69,8 @@ fn test_where_clause() -> dbx_core::DbxResult<()> {
     db.execute_sql("INSERT INTO users (id, name, age) VALUES (3, 'Charlie', 35)")?;
 
     // Test WHERE clause
-    let results = db.query_builder()
+    let results = db
+        .query_builder()
         .select(&["id", "name", "age"])
         .from("users")
         .where_("age", ">", "25")
@@ -93,10 +98,13 @@ fn test_and_or_conditions() -> dbx_core::DbxResult<()> {
     // Insert test data
     db.execute_sql("INSERT INTO users (id, name, age, status) VALUES (1, 'Alice', 25, 'active')")?;
     db.execute_sql("INSERT INTO users (id, name, age, status) VALUES (2, 'Bob', 30, 'inactive')")?;
-    db.execute_sql("INSERT INTO users (id, name, age, status) VALUES (3, 'Charlie', 35, 'active')")?;
+    db.execute_sql(
+        "INSERT INTO users (id, name, age, status) VALUES (3, 'Charlie', 35, 'active')",
+    )?;
 
     // Test AND condition
-    let results = db.query_builder()
+    let results = db
+        .query_builder()
         .select(&["id", "name"])
         .from("users")
         .where_("age", ">", "25")
@@ -127,7 +135,8 @@ fn test_order_by() -> dbx_core::DbxResult<()> {
     db.execute_sql("INSERT INTO users (id, name, age) VALUES (3, 'Bob', 30)")?;
 
     // Test ORDER BY
-    let results = db.query_builder()
+    let results = db
+        .query_builder()
         .select(&["id", "name"])
         .from("users")
         .order_by("name", "ASC")
@@ -162,11 +171,15 @@ fn test_limit_offset() -> dbx_core::DbxResult<()> {
 
     // Insert test data
     for i in 1..=10 {
-        db.execute_sql(&format!("INSERT INTO users (id, name) VALUES ({}, 'User{}')", i, i))?;
+        db.execute_sql(&format!(
+            "INSERT INTO users (id, name) VALUES ({}, 'User{}')",
+            i, i
+        ))?;
     }
 
     // Test LIMIT
-    let results = db.query_builder()
+    let results = db
+        .query_builder()
         .select(&["id", "name"])
         .from("users")
         .limit(5)
@@ -176,7 +189,8 @@ fn test_limit_offset() -> dbx_core::DbxResult<()> {
     assert_eq!(results[0].num_rows(), 5);
 
     // Test LIMIT with OFFSET
-    let results = db.query_builder()
+    let results = db
+        .query_builder()
         .select(&["id", "name"])
         .from("users")
         .limit(3)
@@ -217,7 +231,8 @@ fn test_count_aggregate() -> dbx_core::DbxResult<()> {
     db.execute_sql("INSERT INTO users (id, name, status) VALUES (3, 'Charlie', 'inactive')")?;
 
     // Test COUNT
-    let results = db.query_builder()
+    let results = db
+        .query_builder()
         .count("*")
         .from("users")
         .where_("status", "=", "'active'")
@@ -253,12 +268,15 @@ fn test_complex_query() -> dbx_core::DbxResult<()> {
     // Insert test data
     db.execute_sql("INSERT INTO users (id, name, age, status) VALUES (1, 'Alice', 25, 'active')")?;
     db.execute_sql("INSERT INTO users (id, name, age, status) VALUES (2, 'Bob', 30, 'active')")?;
-    db.execute_sql("INSERT INTO users (id, name, age, status) VALUES (3, 'Charlie', 35, 'inactive')")?;
+    db.execute_sql(
+        "INSERT INTO users (id, name, age, status) VALUES (3, 'Charlie', 35, 'inactive')",
+    )?;
     db.execute_sql("INSERT INTO users (id, name, age, status) VALUES (4, 'David', 28, 'active')")?;
     db.execute_sql("INSERT INTO users (id, name, age, status) VALUES (5, 'Eve', 32, 'active')")?;
 
     // Complex query: active users over 27, ordered by age, limit 2
-    let results = db.query_builder()
+    let results = db
+        .query_builder()
         .select(&["id", "name", "age"])
         .from("users")
         .where_("status", "=", "'active'")

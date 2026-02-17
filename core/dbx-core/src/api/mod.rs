@@ -5,7 +5,9 @@
 pub mod traits;
 
 // Re-export from sql::builder for backward compatibility
-pub use crate::sql::builder::{Execute, FromScalar, IntoParam, Query, QueryOne, QueryOptional, QueryScalar};
+pub use crate::sql::builder::{
+    Execute, FromScalar, IntoParam, Query, QueryOne, QueryOptional, QueryScalar,
+};
 pub use traits::{FromColumn, FromRow, IntoArrowType};
 
 // Re-export from transaction::api for backward compatibility

@@ -20,9 +20,9 @@ use std::sync::Arc;
 
 /// Infer Arrow schema from row values
 fn infer_schema_from_values(values: &[PhysicalExpr]) -> DbxResult<Schema> {
-    use arrow::datatypes::{DataType, Field};
     use crate::storage::columnar::ScalarValue;
-    
+    use arrow::datatypes::{DataType, Field};
+
     let fields: Vec<Field> = values
         .iter()
         .enumerate()
@@ -43,21 +43,18 @@ fn infer_schema_from_values(values: &[PhysicalExpr]) -> DbxResult<Schema> {
             Field::new(name, data_type, true) // All fields nullable
         })
         .collect();
-    
+
     Ok(Schema::new(fields))
 }
 
 /// Serialize row values to Arrow IPC format
-fn serialize_to_arrow_ipc(
-    schema: &Schema,
-    row_values: &[PhysicalExpr],
-) -> DbxResult<Vec<u8>> {
-    use arrow::array::*;
+fn serialize_to_arrow_ipc(schema: &Schema, row_values: &[PhysicalExpr]) -> DbxResult<Vec<u8>> {
     use crate::storage::columnar::ScalarValue;
-    
+    use arrow::array::*;
+
     // Build arrays for each field
     let mut arrays: Vec<ArrayRef> = Vec::new();
-    
+
     for (field, expr) in schema.fields().iter().zip(row_values) {
         let array: ArrayRef = match expr {
             PhysicalExpr::Literal(scalar) => {
@@ -106,16 +103,19 @@ fn serialize_to_arrow_ipc(
                                 Arc::new(BinaryArray::from(vec![None as Option<&[u8]>]))
                             }
                             _ => {
-                                return Err(DbxError::NotImplemented(
-                                    format!("Unsupported null type: {:?}", field.data_type())
-                                ));
+                                return Err(DbxError::NotImplemented(format!(
+                                    "Unsupported null type: {:?}",
+                                    field.data_type()
+                                )));
                             }
                         }
                     }
                     _ => {
-                        return Err(DbxError::NotImplemented(
-                            format!("Type mismatch: field {:?} vs scalar {:?}", field.data_type(), scalar)
-                        ));
+                        return Err(DbxError::NotImplemented(format!(
+                            "Type mismatch: field {:?} vs scalar {:?}",
+                            field.data_type(),
+                            scalar
+                        )));
                     }
                 }
             }
@@ -127,22 +127,24 @@ fn serialize_to_arrow_ipc(
         };
         arrays.push(array);
     }
-    
+
     // Create RecordBatch
     let batch = RecordBatch::try_new(Arc::new(schema.clone()), arrays)
         .map_err(|e| DbxError::Storage(e.to_string()))?;
-    
+
     // Serialize to Arrow IPC Stream format
     let mut buffer = Vec::new();
     {
         let mut writer = StreamWriter::try_new(&mut buffer, schema)
             .map_err(|e| DbxError::Serialization(e.to_string()))?;
-        writer.write(&batch)
+        writer
+            .write(&batch)
             .map_err(|e| DbxError::Serialization(e.to_string()))?;
-        writer.finish()
+        writer
+            .finish()
             .map_err(|e| DbxError::Serialization(e.to_string()))?;
     }
-    
+
     Ok(buffer)
 }
 
@@ -364,10 +366,13 @@ impl Database {
                     let schema = {
                         let schemas = self.table_schemas.read().unwrap();
                         schemas.get(table.as_str()).cloned()
-                    }.unwrap_or_else(|| {
+                    }
+                    .unwrap_or_else(|| {
                         // No registered schema: infer from row values
-                        Arc::new(infer_schema_from_values(row_values)
-                            .expect("Failed to infer schema from values"))
+                        Arc::new(
+                            infer_schema_from_values(row_values)
+                                .expect("Failed to infer schema from values"),
+                        )
                     });
 
                     // Always use Arrow IPC serialization
@@ -946,45 +951,49 @@ impl Database {
                     )?
                 };
 
-                let (batches, schema, projection_to_use) =
-                    if let Some(cached_batches) = cached_results {
-                        if cached_batches.is_empty() {
+                let (batches, schema, projection_to_use) = if let Some(cached_batches) =
+                    cached_results
+                {
+                    if cached_batches.is_empty() {
+                        return Err(DbxError::TableNotFound(table.clone()));
+                    }
+                    // Cache hit! Batches are already projected (and filtered if pushed down).
+                    let schema = cached_batches[0].schema();
+                    // Projection is already applied, so pass empty projection to operator.
+                    (cached_batches, schema, vec![])
+                } else {
+                    // Reset flag if cache miss
+                    filter_pushed_down = false;
+
+                    // Try to sync from Delta Store to Cache
+                    let _ = self.sync_columnar_cache(table);
+
+                    // Try cache again after sync
+                    let cached_after_sync = columnar_cache.get_batches(
+                        table,
+                        if projection.is_empty() {
+                            None
+                        } else {
+                            Some(projection)
+                        },
+                    )?;
+
+                    if let Some(batches) = cached_after_sync {
+                        if !batches.is_empty() {
+                            let schema = batches[0].schema();
+                            (batches, schema, vec![])
+                        } else {
                             return Err(DbxError::TableNotFound(table.clone()));
                         }
-                        // Cache hit! Batches are already projected (and filtered if pushed down).
-                        let schema = cached_batches[0].schema();
-                        // Projection is already applied, so pass empty projection to operator.
-                        (cached_batches, schema, vec![])
                     } else {
-                        // Reset flag if cache miss
-                        filter_pushed_down = false;
+                        // Still not in cache, fallback to HashMap
+                        eprintln!(
+                            "[execute_physical_plan] Looking for table '{}' in tables HashMap",
+                            table
+                        );
 
-                        // Try to sync from Delta Store to Cache
-                        let _ = self.sync_columnar_cache(table);
-
-                        // Try cache again after sync
-                        let cached_after_sync = columnar_cache.get_batches(
-                            table,
-                            if projection.is_empty() {
-                                None
-                            } else {
-                                Some(projection)
-                            },
-                        )?;
-
-                        if let Some(batches) = cached_after_sync {
-                            if !batches.is_empty() {
-                                let schema = batches[0].schema();
-                                (batches, schema, vec![])
-                            } else {
-                                return Err(DbxError::TableNotFound(table.clone()));
-                            }
-                        } else {
-                            // Still not in cache, fallback to HashMap
-                            eprintln!("[execute_physical_plan] Looking for table '{}' in tables HashMap", table);
-                            
-                            // Try case-insensitive table lookup
-                            let batches = tables.get(table).or_else(|| {
+                        // Try case-insensitive table lookup
+                        let batches = tables.get(table).or_else(|| {
                                 eprintln!("[execute_physical_plan] Exact match failed, trying case-insensitive...");
                                 let table_lower = table.to_lowercase();
                                 tables
@@ -1000,16 +1009,23 @@ impl Database {
                                 DbxError::TableNotFound(table.clone())
                             })?;
 
-                            if batches.is_empty() {
-                                eprintln!("[execute_physical_plan] ❌ Table '{}' has no batches", table);
-                                return Err(DbxError::TableNotFound(table.clone()));
-                            }
-
-                            eprintln!("[execute_physical_plan] ✅ Found {} batches for table '{}'", batches.len(), table);
-                            let schema = batches[0].schema();
-                            (batches.clone(), schema, projection.clone())
+                        if batches.is_empty() {
+                            eprintln!(
+                                "[execute_physical_plan] ❌ Table '{}' has no batches",
+                                table
+                            );
+                            return Err(DbxError::TableNotFound(table.clone()));
                         }
-                    };
+
+                        eprintln!(
+                            "[execute_physical_plan] ✅ Found {} batches for table '{}'",
+                            batches.len(),
+                            table
+                        );
+                        let schema = batches[0].schema();
+                        (batches.clone(), schema, projection.clone())
+                    }
+                };
 
                 let mut scan =
                     TableScanOperator::new(table.clone(), Arc::clone(&schema), projection_to_use);
@@ -1225,4 +1241,3 @@ impl crate::traits::DatabaseSql for Database {
         Ok(())
     }
 }
-

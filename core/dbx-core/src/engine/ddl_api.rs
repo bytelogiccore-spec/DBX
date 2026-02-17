@@ -33,9 +33,9 @@ impl Database {
     /// ```
     pub fn create_table(&self, name: &str, schema: Schema) -> DbxResult<()> {
         eprintln!("[create_table] Creating table: '{}'", name);
-        
+
         let schema_arc = Arc::new(schema);
-        
+
         // Generate CREATE TABLE SQL from Arrow Schema
         let sql = self.generate_create_table_sql(name, &schema_arc);
         eprintln!("[create_table] Generated SQL: {}", sql);
@@ -44,26 +44,30 @@ impl Database {
         eprintln!("[create_table] Executing SQL...");
         self.execute_sql(&sql)?;
         eprintln!("[create_table] ✅ SQL executed successfully");
-        
+
         // THEN store schema (after SQL succeeds)
         self.table_schemas
             .write()
             .unwrap()
             .insert(name.to_string(), Arc::clone(&schema_arc));
-        
+
         eprintln!("[create_table] ✅ Schema stored for table '{}'", name);
         let stored_tables = self.table_schemas.read().unwrap();
-        eprintln!("[create_table] All tables after insert: {:?}", stored_tables.keys().collect::<Vec<_>>());
+        eprintln!(
+            "[create_table] All tables after insert: {:?}",
+            stored_tables.keys().collect::<Vec<_>>()
+        );
         drop(stored_tables);
 
         // Initialize empty table data
-        self.tables.write().unwrap().insert(name.to_string(), vec![]);
+        self.tables
+            .write()
+            .unwrap()
+            .insert(name.to_string(), vec![]);
 
         // Initialize row counter
-        self.row_counters.insert(
-            name.to_string(),
-            std::sync::atomic::AtomicUsize::new(0),
-        );
+        self.row_counters
+            .insert(name.to_string(), std::sync::atomic::AtomicUsize::new(0));
 
         Ok(())
     }
@@ -177,12 +181,7 @@ impl Database {
     /// # }
     /// ```
     pub fn list_tables(&self) -> Vec<String> {
-        self.table_schemas
-            .read()
-            .unwrap()
-            .keys()
-            .cloned()
-            .collect()
+        self.table_schemas.read().unwrap().keys().cloned().collect()
     }
 
     /// Helper: Generate CREATE TABLE SQL from Arrow Schema
@@ -244,10 +243,7 @@ impl Database {
     ) -> DbxResult<()> {
         // Generate CREATE INDEX SQL
         let columns_str = columns.join(", ");
-        let sql = format!(
-            "CREATE INDEX {} ON {} ({})",
-            index_name, table, columns_str
-        );
+        let sql = format!("CREATE INDEX {} ON {} ({})", index_name, table, columns_str);
 
         // Execute SQL
         self.execute_sql(&sql)?;
@@ -316,10 +312,7 @@ impl Database {
     /// # }
     /// ```
     pub fn sql_index_exists(&self, index_name: &str) -> bool {
-        self.index_registry
-            .read()
-            .unwrap()
-            .contains_key(index_name)
+        self.index_registry.read().unwrap().contains_key(index_name)
     }
 
     /// List all SQL indexes for a table
@@ -391,7 +384,10 @@ impl Database {
     /// # }
     /// ```
     pub fn add_column(&self, table: &str, column_name: &str, data_type: &str) -> DbxResult<()> {
-        let sql = format!("ALTER TABLE {} ADD COLUMN {} {}", table, column_name, data_type);
+        let sql = format!(
+            "ALTER TABLE {} ADD COLUMN {} {}",
+            table, column_name, data_type
+        );
         self.execute_sql(&sql)?;
         Ok(())
     }
@@ -456,9 +452,11 @@ impl Database {
     /// # }
     /// ```
     pub fn rename_column(&self, table: &str, old_name: &str, new_name: &str) -> DbxResult<()> {
-        let sql = format!("ALTER TABLE {} RENAME COLUMN {} TO {}", table, old_name, new_name);
+        let sql = format!(
+            "ALTER TABLE {} RENAME COLUMN {} TO {}",
+            table, old_name, new_name
+        );
         self.execute_sql(&sql)?;
         Ok(())
     }
 }
-
