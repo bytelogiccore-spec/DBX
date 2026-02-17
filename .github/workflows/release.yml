@@ -42,38 +42,179 @@ jobs:
         run: cargo test -p dbx-core --locked
 
   # ──────────────────────────────────────────────
-  # Phase 2: C/C++ 네이티브 빌드
+  # Phase 2: C/C++ 네이티브 빌드 (멀티 플랫폼)
   # ──────────────────────────────────────────────
   build-native:
-    name: C/C++ 네이티브 빌드
-    runs-on: windows-latest
+    name: C/C++ 네이티브 빌드 (${{ matrix.platform }})
+    runs-on: ${{ matrix.os }}
     needs: build-and-test
+    strategy:
+      matrix:
+        include:
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            platform: windows-x64
+            
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            platform: linux-x64
+            
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-gnu
+            platform: linux-arm64
+            
+          - os: ubuntu-latest
+            target: armv7-unknown-linux-gnueabihf
+            platform: linux-arm32
+            
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            platform: macos-arm64
+            
     steps:
       - uses: actions/checkout@v4
 
       - name: Rust 설치
         uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+          
       - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.platform }}
+
+      # Linux ARM 크로스 컴파일 도구 설치
+      - name: ARM 크로스 컴파일 도구 설치
+        if: matrix.platform == 'linux-arm64' || matrix.platform == 'linux-arm32'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu gcc-arm-linux-gnueabihf g++-arm-linux-gnueabihf
 
       - name: Release 빌드
-        run: cargo build --release --locked -p dbx-ffi
+        run: cargo build --release --locked -p dbx-ffi --target ${{ matrix.target }}
 
-      - name: C/C++ 패키지 준비
+      - name: 패키지 준비 (Windows)
+        if: runner.os == 'Windows'
         run: |
-          New-Item -Path dbx-native -ItemType Directory -Force
-          Copy-Item target/release/dbx_ffi.dll dbx-native/
-          Copy-Item target/release/dbx_ffi.dll.lib dbx-native/ -ErrorAction SilentlyContinue
-          Copy-Item target/release/dbx_ffi.lib dbx-native/ -ErrorAction SilentlyContinue
-          Copy-Item lang/c/include/*.h dbx-native/ -ErrorAction SilentlyContinue
-          Copy-Item lang/cpp/include/*.h dbx-native/ -ErrorAction SilentlyContinue
-          Copy-Item lang/cpp/include/*.hpp dbx-native/ -ErrorAction SilentlyContinue
-          Compress-Archive -Path dbx-native/* -DestinationPath dbx-native-windows-x64.zip
+          New-Item -Path ${{ matrix.platform }} -ItemType Directory -Force
+          New-Item -Path ${{ matrix.platform }}/bin -ItemType Directory
+          New-Item -Path ${{ matrix.platform }}/lib -ItemType Directory
+          
+          Copy-Item target/${{ matrix.target }}/release/dbx_ffi.dll ${{ matrix.platform }}/bin/
+          Copy-Item target/${{ matrix.target }}/release/dbx_ffi.dll.lib ${{ matrix.platform }}/lib/ -ErrorAction SilentlyContinue
+          Copy-Item target/${{ matrix.target }}/release/dbx_ffi.lib ${{ matrix.platform }}/lib/ -ErrorAction SilentlyContinue
 
-      - name: 네이티브 에셋 업로드
+      - name: 패키지 준비 (Linux/macOS)
+        if: runner.os != 'Windows'
+        run: |
+          mkdir -p ${{ matrix.platform }}/lib
+          
+          # 동적 라이브러리 복사
+          if [ -f target/${{ matrix.target }}/release/libdbx_ffi.so ]; then
+            cp target/${{ matrix.target }}/release/libdbx_ffi.so ${{ matrix.platform }}/lib/
+          fi
+          if [ -f target/${{ matrix.target }}/release/libdbx_ffi.dylib ]; then
+            cp target/${{ matrix.target }}/release/libdbx_ffi.dylib ${{ matrix.platform }}/lib/
+          fi
+          
+          # 정적 라이브러리 복사
+          if [ -f target/${{ matrix.target }}/release/libdbx_ffi.a ]; then
+            cp target/${{ matrix.target }}/release/libdbx_ffi.a ${{ matrix.platform }}/lib/
+          fi
+
+      - name: 플랫폼별 에셋 업로드
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-${{ matrix.platform }}
+          path: ${{ matrix.platform }}
+
+  # ──────────────────────────────────────────────
+  # Phase 2.5: 통합 패키지 생성
+  # ──────────────────────────────────────────────
+  package-native:
+    name: 통합 네이티브 패키지 생성
+    runs-on: ubuntu-latest
+    needs: build-native
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 모든 플랫폼 아티팩트 다운로드
+        uses: actions/download-artifact@v4
+        with:
+          path: platforms
+          pattern: native-*
+
+      - name: 통합 패키지 구조 생성
+        run: |
+          mkdir -p dbx-native
+          
+          # 각 플랫폼 디렉토리 이동
+          mv platforms/native-windows-x64/windows-x64 dbx-native/ || true
+          mv platforms/native-linux-x64/linux-x64 dbx-native/ || true
+          mv platforms/native-linux-arm64/linux-arm64 dbx-native/ || true
+          mv platforms/native-linux-arm32/linux-arm32 dbx-native/ || true
+          mv platforms/native-macos-arm64/macos-arm64 dbx-native/ || true
+          
+          # 공통 헤더 및 예제 복사
+          mkdir -p dbx-native/include
+          mkdir -p dbx-native/examples
+          
+          cp packages/cpp/include/*.h dbx-native/include/ || true
+          cp packages/cpp/include/*.hpp dbx-native/include/ || true
+          cp packages/cpp/examples/*.cpp dbx-native/examples/ || true
+          
+          # README 생성
+          cat > dbx-native/README.md << 'EOF'
+          # DBX Native C/C++ Library
+          
+          ## Supported Platforms
+          
+          - Windows x64
+          - Linux x64
+          - Linux ARM64 (aarch64)
+          - Linux ARM32 (armv7)
+          - macOS ARM64 (Apple Silicon)
+          
+          ## Usage
+          
+          See `examples/` directory for sample code.
+          
+          ### CMake Integration
+          
+          ```cmake
+          set(DBX_ROOT "/path/to/dbx-native")
+          
+          if(WIN32)
+              set(DBX_LIB_DIR "${DBX_ROOT}/windows-x64")
+          elseif(APPLE)
+              set(DBX_LIB_DIR "${DBX_ROOT}/macos-arm64/lib")
+          else()
+              if(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64")
+                  set(DBX_LIB_DIR "${DBX_ROOT}/linux-arm64/lib")
+              elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "arm")
+                  set(DBX_LIB_DIR "${DBX_ROOT}/linux-arm32/lib")
+              else()
+                  set(DBX_LIB_DIR "${DBX_ROOT}/linux-x64/lib")
+              endif()
+          endif()
+          
+          include_directories("${DBX_ROOT}/include")
+          link_directories("${DBX_LIB_DIR}")
+          target_link_libraries(myapp dbx_ffi)
+          ```
+          EOF
+          
+          # 패키지 압축
+          tar -czf dbx-native-v${{ inputs.version }}.tar.gz -C dbx-native .
+          zip -r dbx-native-v${{ inputs.version }}.zip dbx-native
+
+      - name: 통합 패키지 업로드
         uses: actions/upload-artifact@v4
         with:
           name: native-package
-          path: dbx-native-windows-x64.zip
+          path: |
+            dbx-native-v${{ inputs.version }}.tar.gz
+            dbx-native-v${{ inputs.version }}.zip
 
   # ──────────────────────────────────────────────
   # Phase 3: GitHub Release 생성
@@ -81,7 +222,7 @@ jobs:
   github-release:
     name: GitHub 릴리스 생성
     runs-on: ubuntu-latest
-    needs: build-native
+    needs: package-native
     steps:
       - uses: actions/checkout@v4
 
@@ -108,7 +249,15 @@ jobs:
             | **C#/.NET** | `dotnet add package DBX.Dotnet` |
             | **Python** | `pip install dbx-py` |
             | **Node.js** | `npm install dbx-native` |
-            | **C/C++** | `dbx-native-windows-x64.zip` (아래 첨부) |
+            | **C/C++** | `dbx-native-v${{ inputs.version }}.zip` (아래 첨부) |
+
+            ### C/C++ 지원 플랫폼
+            
+            - ✅ Windows x64
+            - ✅ Linux x64
+            - ✅ Linux ARM64 (aarch64)
+            - ✅ Linux ARM32 (armv7)
+            - ✅ macOS ARM64 (Apple Silicon)
 
             ---
           files: release-assets/*
