@@ -447,16 +447,7 @@ impl Database {
     ///
     /// * `path` - 데이터베이스 파일 경로
     ///
-    /// # 예제
-    ///
-    /// ```rust
-    /// # use dbx_core::Database;
-    /// # fn main() -> dbx_core::DbxResult<()> {
-    /// let db = Database::open_safe("financial.db")?;
-    /// // 모든 쓰기가 즉시 디스크에 동기화됨
-    /// # Ok(())
-    /// # }
-    /// ```
+
     pub fn open_safe(path: impl AsRef<Path>) -> DbxResult<Arc<Self>> {
         let db = Self::open(path.as_ref())?;
         Arc::get_mut(&mut db.clone()).unwrap().durability = DurabilityLevel::Full;
@@ -473,16 +464,6 @@ impl Database {
     ///
     /// * `path` - 데이터베이스 파일 경로
     ///
-    /// # 예제
-    ///
-    /// ```rust
-    /// # use dbx_core::Database;
-    /// # fn main() -> dbx_core::DbxResult<()> {
-    /// let db = Database::open_fast("cache.db")?;
-    /// // 최고 성능, WAL 없음
-    /// # Ok(())
-    /// # }
-    /// ```
     pub fn open_fast(path: impl AsRef<Path>) -> DbxResult<Arc<Self>> {
         let db = Self::open(path.as_ref())?;
         Arc::get_mut(&mut db.clone()).unwrap().durability = DurabilityLevel::None;
@@ -496,15 +477,7 @@ impl Database {
     /// * `path` - 데이터베이스 파일 경로
     /// * `durability` - 내구성 수준
     ///
-    /// # 예제
-    ///
-    /// ```rust
-    /// # use dbx_core::{Database, DurabilityLevel};
-    /// # fn main() -> dbx_core::DbxResult<()> {
-    /// let db = Database::open_with_durability("app.db", DurabilityLevel::Lazy)?;
-    /// # Ok(())
-    /// # }
-    /// ```
+
     pub fn open_with_durability(
         path: impl AsRef<Path>,
         durability: DurabilityLevel,

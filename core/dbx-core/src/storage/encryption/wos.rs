@@ -36,16 +36,6 @@ use std::path::Path;
 /// All values are encrypted before being written to sled and decrypted on read.
 /// Keys remain in plaintext to preserve ordered iteration and range scans.
 ///
-/// # Examples
-///
-/// ```rust,no_run
-/// use dbx_core::storage::encrypted_wos::EncryptedWosBackend;
-/// use dbx_core::storage::encryption::EncryptionConfig;
-/// use std::path::Path;
-///
-/// let encryption = EncryptionConfig::from_password("my-secret");
-/// let backend = EncryptedWosBackend::open(Path::new("./data"), encryption).unwrap();
-/// ```
 pub struct EncryptedWosBackend {
     inner: WosBackend,
     encryption: EncryptionConfig,

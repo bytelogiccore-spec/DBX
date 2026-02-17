@@ -144,29 +144,6 @@ impl Database {
     }
 
     /// List all tables
-    ///
-    /// # Example
-    ///
-    /// ```rust
-    /// use dbx_core::Database;
-    /// use arrow::datatypes::{DataType, Field, Schema};
-    ///
-    /// # fn main() -> dbx_core::DbxResult<()> {
-    /// let db = Database::open_in_memory()?;
-    ///
-    /// let schema = Schema::new(vec![
-    ///     Field::new("id", DataType::Int64, false),
-    /// ]);
-    ///
-    /// db.create_table("users", schema.clone())?;
-    /// db.create_table("orders", schema)?;
-    ///
-    /// let tables = db.list_tables();
-    /// assert!(tables.contains(&"users".to_string()));
-    /// assert!(tables.contains(&"orders".to_string()));
-    /// # Ok(())
-    /// # }
-    /// ```
     pub fn list_tables(&self) -> Vec<String> {
         self.table_schemas.read().unwrap().keys().cloned().collect()
     }

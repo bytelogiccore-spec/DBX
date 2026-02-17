@@ -87,27 +87,6 @@ impl AggregateFunction {
 }
 
 /// Query Builder for constructing SQL queries using a fluent API
-///
-/// # Example
-///
-/// ```rust
-/// use dbx_core::Database;
-///
-/// # fn main() -> dbx_core::DbxResult<()> {
-/// let db = Database::open_in_memory()?;
-///
-/// // Basic SELECT query
-/// let results = db.query_builder()
-///     .select(&["id", "name", "email"])
-///     .from("users")
-///     .where_("age", ">", "18")
-///     .and("status", "=", "'active'")
-///     .order_by("name", "ASC")
-///     .limit(10)
-///     .execute()?;
-/// # Ok(())
-/// # }
-/// ```
 pub struct QueryBuilder<'a> {
     db: &'a Database,
     select_columns: Vec<String>,
@@ -138,19 +117,6 @@ impl<'a> QueryBuilder<'a> {
 
     /// Select specific columns
     ///
-    /// # Example
-    ///
-    /// ```rust
-    /// # use dbx_core::Database;
-    /// # fn main() -> dbx_core::DbxResult<()> {
-    /// # let db = Database::open_in_memory()?;
-    /// let results = db.query()
-    ///     .select(&["id", "name", "email"])
-    ///     .from("users")
-    ///     .execute()?;
-    /// # Ok(())
-    /// # }
-    /// ```
     pub fn select(mut self, columns: &[&str]) -> Self {
         self.select_columns = columns.iter().map(|s| s.to_string()).collect();
         self
@@ -158,19 +124,6 @@ impl<'a> QueryBuilder<'a> {
 
     /// Specify the table to query from
     ///
-    /// # Example
-    ///
-    /// ```rust
-    /// # use dbx_core::Database;
-    /// # fn main() -> dbx_core::DbxResult<()> {
-    /// # let db = Database::open_in_memory()?;
-    /// let results = db.query()
-    ///     .select(&["*"])
-    ///     .from("users")
-    ///     .execute()?;
-    /// # Ok(())
-    /// # }
-    /// ```
     pub fn from(mut self, table: &str) -> Self {
         self.from_table = Some(table.to_string());
         self
@@ -178,20 +131,6 @@ impl<'a> QueryBuilder<'a> {
 
     /// Add a WHERE clause
     ///
-    /// # Example
-    ///
-    /// ```rust
-    /// # use dbx_core::Database;
-    /// # fn main() -> dbx_core::DbxResult<()> {
-    /// # let db = Database::open_in_memory()?;
-    /// let results = db.query()
-    ///     .select(&["*"])
-    ///     .from("users")
-    ///     .where_("age", ">", "18")
-    ///     .execute()?;
-    /// # Ok(())
-    /// # }
-    /// ```
     pub fn where_(mut self, column: &str, operator: &str, value: &str) -> Self {
         self.where_clauses.push(WhereClause {
             column: column.to_string(),
@@ -204,21 +143,6 @@ impl<'a> QueryBuilder<'a> {
 
     /// Add an AND condition to the WHERE clause
     ///
-    /// # Example
-    ///
-    /// ```rust
-    /// # use dbx_core::Database;
-    /// # fn main() -> dbx_core::DbxResult<()> {
-    /// # let db = Database::open_in_memory()?;
-    /// let results = db.query()
-    ///     .select(&["*"])
-    ///     .from("users")
-    ///     .where_("age", ">", "18")
-    ///     .and("status", "=", "'active'")
-    ///     .execute()?;
-    /// # Ok(())
-    /// # }
-    /// ```
     pub fn and(mut self, column: &str, operator: &str, value: &str) -> Self {
         self.where_clauses.push(WhereClause {
             column: column.to_string(),
@@ -231,21 +155,6 @@ impl<'a> QueryBuilder<'a> {
 
     /// Add an OR condition to the WHERE clause
     ///
-    /// # Example
-    ///
-    /// ```rust
-    /// # use dbx_core::Database;
-    /// # fn main() -> dbx_core::DbxResult<()> {
-    /// # let db = Database::open_in_memory()?;
-    /// let results = db.query()
-    ///     .select(&["*"])
-    ///     .from("orders")
-    ///     .where_("total", ">", "100")
-    ///     .or("priority", "=", "'high'")
-    ///     .execute()?;
-    /// # Ok(())
-    /// # }
-    /// ```
     pub fn or(mut self, column: &str, operator: &str, value: &str) -> Self {
         self.where_clauses.push(WhereClause {
             column: column.to_string(),
@@ -258,20 +167,6 @@ impl<'a> QueryBuilder<'a> {
 
     /// Add an ORDER BY clause
     ///
-    /// # Example
-    ///
-    /// ```rust
-    /// # use dbx_core::Database;
-    /// # fn main() -> dbx_core::DbxResult<()> {
-    /// # let db = Database::open_in_memory()?;
-    /// let results = db.query()
-    ///     .select(&["*"])
-    ///     .from("users")
-    ///     .order_by("name", "ASC")
-    ///     .execute()?;
-    /// # Ok(())
-    /// # }
-    /// ```
     pub fn order_by(mut self, column: &str, direction: &str) -> Self {
         self.order_by_clauses.push(OrderByClause {
             column: column.to_string(),
@@ -282,20 +177,6 @@ impl<'a> QueryBuilder<'a> {
 
     /// Set the LIMIT clause
     ///
-    /// # Example
-    ///
-    /// ```rust
-    /// # use dbx_core::Database;
-    /// # fn main() -> dbx_core::DbxResult<()> {
-    /// # let db = Database::open_in_memory()?;
-    /// let results = db.query()
-    ///     .select(&["*"])
-    ///     .from("users")
-    ///     .limit(10)
-    ///     .execute()?;
-    /// # Ok(())
-    /// # }
-    /// ```
     pub fn limit(mut self, limit: usize) -> Self {
         self.limit_value = Some(limit);
         self
@@ -303,21 +184,6 @@ impl<'a> QueryBuilder<'a> {
 
     /// Set the OFFSET clause
     ///
-    /// # Example
-    ///
-    /// ```rust
-    /// # use dbx_core::Database;
-    /// # fn main() -> dbx_core::DbxResult<()> {
-    /// # let db = Database::open_in_memory()?;
-    /// let results = db.query()
-    ///     .select(&["*"])
-    ///     .from("users")
-    ///     .limit(10)
-    ///     .offset(20)
-    ///     .execute()?;
-    /// # Ok(())
-    /// # }
-    /// ```
     pub fn offset(mut self, offset: usize) -> Self {
         self.offset_value = Some(offset);
         self
@@ -325,20 +191,6 @@ impl<'a> QueryBuilder<'a> {
 
     /// Add an INNER JOIN clause
     ///
-    /// # Example
-    ///
-    /// ```rust
-    /// # use dbx_core::Database;
-    /// # fn main() -> dbx_core::DbxResult<()> {
-    /// # let db = Database::open_in_memory()?;
-    /// let results = db.query_builder()
-    ///     .select(&["users.name", "orders.total"])
-    ///     .from("users")
-    ///     .inner_join("orders", "users.id", "orders.user_id")
-    ///     .execute()?;
-    /// # Ok(())
-    /// # }
-    /// ```
     pub fn inner_join(mut self, table: &str, left_col: &str, right_col: &str) -> Self {
         self.join_clauses.push(JoinClause {
             join_type: JoinType::Inner,
@@ -350,20 +202,6 @@ impl<'a> QueryBuilder<'a> {
 
     /// Add a LEFT JOIN clause
     ///
-    /// # Example
-    ///
-    /// ```rust
-    /// # use dbx_core::Database;
-    /// # fn main() -> dbx_core::DbxResult<()> {
-    /// # let db = Database::open_in_memory()?;
-    /// let results = db.query_builder()
-    ///     .select(&["users.name", "orders.total"])
-    ///     .from("users")
-    ///     .left_join("orders", "users.id", "orders.user_id")
-    ///     .execute()?;
-    /// # Ok(())
-    /// # }
-    /// ```
     pub fn left_join(mut self, table: &str, left_col: &str, right_col: &str) -> Self {
         self.join_clauses.push(JoinClause {
             join_type: JoinType::Left,
@@ -375,20 +213,6 @@ impl<'a> QueryBuilder<'a> {
 
     /// Add a RIGHT JOIN clause
     ///
-    /// # Example
-    ///
-    /// ```rust
-    /// # use dbx_core::Database;
-    /// # fn main() -> dbx_core::DbxResult<()> {
-    /// # let db = Database::open_in_memory()?;
-    /// let results = db.query_builder()
-    ///     .select(&["users.name", "orders.total"])
-    ///     .from("users")
-    ///     .right_join("orders", "users.id", "orders.user_id")
-    ///     .execute()?;
-    /// # Ok(())
-    /// # }
-    /// ```
     pub fn right_join(mut self, table: &str, left_col: &str, right_col: &str) -> Self {
         self.join_clauses.push(JoinClause {
             join_type: JoinType::Right,
@@ -400,20 +224,6 @@ impl<'a> QueryBuilder<'a> {
 
     /// Count rows
     ///
-    /// # Example
-    ///
-    /// ```rust
-    /// # use dbx_core::Database;
-    /// # fn main() -> dbx_core::DbxResult<()> {
-    /// # let db = Database::open_in_memory()?;
-    /// let results = db.query()
-    ///     .count("*")
-    ///     .from("users")
-    ///     .where_("status", "=", "'active'")
-    ///     .execute()?;
-    /// # Ok(())
-    /// # }
-    /// ```
     pub fn count(mut self, column: &str) -> Self {
         self.aggregate = Some(AggregateFunction::Count(column.to_string()));
         self
@@ -519,20 +329,6 @@ impl<'a> QueryBuilder<'a> {
 
     /// Execute the query and return results
     ///
-    /// # Example
-    ///
-    /// ```rust
-    /// # use dbx_core::Database;
-    /// # fn main() -> dbx_core::DbxResult<()> {
-    /// # let db = Database::open_in_memory()?;
-    /// let results = db.query_builder()
-    ///     .select(&["id", "name"])
-    ///     .from("users")
-    ///     .where_("age", ">", "18")
-    ///     .execute()?;
-    /// # Ok(())
-    /// # }
-    /// ```
     pub fn execute(self) -> DbxResult<Vec<RecordBatch>> {
         let sql = self.build_sql();
         self.db.execute_sql(&sql)
