@@ -98,5 +98,5 @@ pub mod simd;
 pub mod logging;
 
 // Re-export commonly used types
-pub use engine::{Database, DurabilityLevel};
+pub use engine::{Database, DurabilityLevel, SchemaBuilder};
 pub use error::{DbxError, DbxResult};
