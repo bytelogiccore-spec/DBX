@@ -79,3 +79,5 @@ test_*.log
 .plan/
 GEMINI.md
 scripts/node_modules/
+packages/
+
