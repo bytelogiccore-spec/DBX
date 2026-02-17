@@ -90,6 +90,25 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu gcc-arm-linux-gnueabihf g++-arm-linux-gnueabihf
 
+      # ARM 크로스 컴파일 링커 설정
+      - name: ARM 링커 설정
+        if: matrix.platform == 'linux-arm64'
+        run: |
+          mkdir -p .cargo
+          cat >> .cargo/config.toml << EOF
+          [target.aarch64-unknown-linux-gnu]
+          linker = "aarch64-linux-gnu-gcc"
+          EOF
+          
+      - name: ARM32 링커 설정
+        if: matrix.platform == 'linux-arm32'
+        run: |
+          mkdir -p .cargo
+          cat >> .cargo/config.toml << EOF
+          [target.armv7-unknown-linux-gnueabihf]
+          linker = "arm-linux-gnueabihf-gcc"
+          EOF
+
       - name: Release 빌드
         run: cargo build --release --locked -p dbx-ffi --target ${{ matrix.target }}
 
