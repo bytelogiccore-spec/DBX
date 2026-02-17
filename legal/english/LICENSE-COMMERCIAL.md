@@ -20,6 +20,16 @@ You need a Commercial License if your organization meets **ANY** of the followin
 
 If you do not meet any of these criteria, you may use DBX under the open-source MIT License.
 
+### 2.1 Commercial License Exceptions
+
+The following use cases are **exempt from commercial licensing requirements** regardless of organization size:
+
+- **Non-profit Open Source Projects**: Projects distributed under an OSI (Open Source Initiative) approved open source license
+- **Educational and Research Institutions**: Non-commercial academic research and educational purposes
+- **Individual Developers**: Non-commercial personal projects or portfolio purposes
+
+**Important**: These exceptions apply only to non-profit use. If the project generates commercial revenue, a commercial license is required.
+
 ## 3. License Terms
 
 ### 3.1 Permitted Use

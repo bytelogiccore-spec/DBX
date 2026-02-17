@@ -9,6 +9,18 @@ DBX is available under a **dual-license model**:
 - Your annual revenue is **less than $5,000,000 USD**, AND
 - Your external funding is **less than $10,000,000 USD**
 
+### 🎓 Commercial License Exceptions
+
+The following use cases are **exempt from commercial licensing requirements** regardless of organization size:
+
+- **Non-profit Open Source Projects**: Projects distributed under an OSI (Open Source Initiative) approved open source license
+- **Educational and Research Institutions**: Non-commercial academic research and educational purposes
+- **Individual Developers**: Non-commercial personal projects or portfolio purposes
+
+**Important**: These exceptions apply only to non-profit use. If the project generates commercial revenue, a commercial license is required.
+
+---
+
 See the MIT License terms below.
 
 ## 💼 Commercial License - For Larger Organizations
