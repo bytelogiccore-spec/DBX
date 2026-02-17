@@ -952,14 +952,26 @@ impl Database {
                     cached_results
                 {
                     if cached_batches.is_empty() {
-                        return Err(DbxError::TableNotFound(table.clone()));
+                        // Table exists but is empty in cache.
+                        // We need the schema to return an empty scan.
+                        let schema = {
+                            let schemas = self.table_schemas.read().unwrap();
+                            schemas.get(table)
+                                .or_else(|| {
+                                    let table_lower = table.to_lowercase();
+                                    schemas.iter()
+                                        .find(|(k, _)| k.to_lowercase() == table_lower)
+                                        .map(|(_, v)| v)
+                                })
+                                .cloned()
+                        }.ok_or_else(|| DbxError::TableNotFound(table.clone()))?;
+                        (vec![], schema, projection.clone())
+                    } else {
+                        let schema = cached_batches[0].schema();
+                        (cached_batches, schema, vec![])
                     }
-                    // Cache hit! Batches are already projected (and filtered if pushed down).
-                    let schema = cached_batches[0].schema();
-                    // Projection is already applied, so pass empty projection to operator.
-                    (cached_batches, schema, vec![])
                 } else {
-                    // Try cache again (it should have been synced at the start of execute_select_plan)
+                    // Try cache again
                     let cached_after_sync = columnar_cache.get_batches(
                         table,
                         if projection.is_empty() {
@@ -974,47 +986,52 @@ impl Database {
                             let schema = batches[0].schema();
                             (batches, schema, vec![])
                         } else {
-                            return Err(DbxError::TableNotFound(table.clone()));
+                            // Table exists but is empty
+                            let schema = {
+                                let schemas = self.table_schemas.read().unwrap();
+                                schemas.get(table)
+                                    .or_else(|| {
+                                        let table_lower = table.to_lowercase();
+                                        schemas.iter()
+                                            .find(|(k, _)| k.to_lowercase() == table_lower)
+                                            .map(|(_, v)| v)
+                                    })
+                                    .cloned()
+                            }.ok_or_else(|| DbxError::TableNotFound(table.clone()))?;
+                            (vec![], schema, projection.clone())
                         }
                     } else {
-                        // Still not in cache, fallback to HashMap
-                        eprintln!(
-                            "[execute_physical_plan] Looking for table '{}' in tables HashMap",
-                            table
-                        );
-
-                        // Try case-insensitive table lookup
-                        let batches = tables.get(table).or_else(|| {
-                                eprintln!("[execute_physical_plan] Exact match failed, trying case-insensitive...");
+                        // Not in cache, check HashMap fallback
+                        let batches_opt = tables.get(table).or_else(|| {
                                 let table_lower = table.to_lowercase();
                                 tables
                                     .iter()
-                                    .find(|(k, _)| {
-                                        let matches = k.to_lowercase() == table_lower;
-                                        eprintln!("[execute_physical_plan] Comparing '{}' with '{}': {}", k, table, matches);
-                                        matches
-                                    })
+                                    .find(|(k, _)| k.to_lowercase() == table_lower)
                                     .map(|(_, v)| v)
-                            }).ok_or_else(|| {
-                                eprintln!("[execute_physical_plan] ❌ TableNotFound: '{}'", table);
-                                DbxError::TableNotFound(table.clone())
-                            })?;
+                            });
 
-                        if batches.is_empty() {
-                            eprintln!(
-                                "[execute_physical_plan] ❌ Table '{}' has no batches",
-                                table
-                            );
+                        if let Some(batches) = batches_opt {
+                            if batches.is_empty() {
+                                let schema = {
+                                    let schemas = self.table_schemas.read().unwrap();
+                                    schemas.get(table)
+                                        .or_else(|| {
+                                            let table_lower = table.to_lowercase();
+                                            schemas.iter()
+                                                .find(|(k, _)| k.to_lowercase() == table_lower)
+                                                .map(|(_, v)| v)
+                                        })
+                                        .cloned()
+                                }.ok_or_else(|| DbxError::TableNotFound(table.clone()))?;
+                                (vec![], schema, projection.clone())
+                            } else {
+                                let schema = batches[0].schema();
+                                (batches.clone(), schema, projection.clone())
+                            }
+                        } else {
+                            // Truly not found anywhere
                             return Err(DbxError::TableNotFound(table.clone()));
                         }
-
-                        eprintln!(
-                            "[execute_physical_plan] ✅ Found {} batches for table '{}'",
-                            batches.len(),
-                            table
-                        );
-                        let schema = batches[0].schema();
-                        (batches.clone(), schema, projection.clone())
                     }
                 };
 
@@ -1089,8 +1106,25 @@ impl Database {
                 aggregates,
             } => {
                 let input_op = self.build_operator(input, tables, columnar_cache)?;
-                // Build output schema for aggregate (simplified: use input schema)
-                let agg_schema = Arc::new(input_op.schema().clone());
+                let input_schema = input_op.schema();
+                let mut fields = Vec::new();
+                
+                for &idx in group_by {
+                    fields.push(input_schema.field(idx).clone());
+                }
+                
+                for agg in aggregates {
+                    use arrow::datatypes::DataType;
+                    let data_type = if matches!(agg.function, crate::sql::planner::AggregateFunction::Count) {
+                        DataType::Int64
+                    } else {
+                        input_schema.field(agg.input).data_type().clone()
+                    };
+                    let name = agg.alias.clone().unwrap_or_else(|| format!("agg_{:?}", agg.function));
+                    fields.push(arrow::datatypes::Field::new(&name, data_type, true));
+                }
+                
+                let agg_schema = Arc::new(arrow::datatypes::Schema::new(fields));
                 Ok(Box::new(
                     HashAggregateOperator::new(
                         input_op,

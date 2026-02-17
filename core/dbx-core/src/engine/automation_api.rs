@@ -98,7 +98,7 @@ impl Database {
     ///
     /// ```rust
     /// use dbx_core::Database;
-    /// use dbx_core::automation::{Trigger, TriggerEventType, TriggerCondition, TriggerAction};
+    /// use dbx_core::automation::{EventHook, EventHookEventType, EventHookCondition, EventHookAction};
     ///
     /// # fn main() -> dbx_core::DbxResult<()> {
     /// let db = Database::open_in_memory()?;

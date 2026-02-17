@@ -448,44 +448,28 @@ impl Database {
     /// If the table has a schema in table_schemas, it will be synced as typed data.
     /// Otherwise, it will be synced as raw Binary data.
     pub fn sync_columnar_cache(&self, table: &str) -> DbxResult<usize> {
-        eprintln!("[sync_columnar_cache] Syncing table: '{}'", table);
-
         // Check if table has a schema (SQL table) - case-insensitive
         let schemas = self.table_schemas.read().unwrap();
         let table_schema = schemas
             .get(table)
             .or_else(|| {
-                eprintln!("[sync_columnar_cache] Exact match failed, trying case-insensitive...");
                 let table_lower = table.to_lowercase();
                 schemas
                     .iter()
-                    .find(|(k, _)| {
-                        let matches = k.to_lowercase() == table_lower;
-                        eprintln!(
-                            "[sync_columnar_cache] Comparing '{}' with '{}': {}",
-                            k, table, matches
-                        );
-                        matches
-                    })
+                    .find(|(k, _)| k.to_lowercase() == table_lower)
                     .map(|(_, v)| v)
             })
             .cloned();
         drop(schemas);
 
-        if table_schema.is_some() {
-            eprintln!(
-                "[sync_columnar_cache] ✅ Found schema for table '{}'",
-                table
-            );
-        } else {
-            eprintln!(
-                "[sync_columnar_cache] ⚠️ No schema found for table '{}', treating as Raw",
-                table
-            );
-        }
+        // Scan from both Tier 1 (Delta) and Tier 3 (WOS)
+        let table_lower = table.to_lowercase();
+        let mut rows = self.delta.scan(&table_lower, ..)?;
+        let mut wos_rows = self.wos.scan(&table_lower, ..)?;
+        rows.append(&mut wos_rows);
 
         self.columnar_cache
-            .sync_from_delta(&self.delta, table, table_schema)
+            .sync_from_storage(table, rows, table_schema)
     }
 
     /// Sync data from multiple tiers (Delta and ROS) to GPU for merge operations.

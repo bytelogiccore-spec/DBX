@@ -4,7 +4,6 @@
 //! Automatically syncs from Row-based Delta Store and supports SIMD-accelerated operations.
 
 use crate::error::{DbxError, DbxResult};
-use crate::storage::StorageBackend;
 
 use arrow::array::{ArrayRef, RecordBatch};
 
@@ -284,28 +283,22 @@ impl ColumnarCache {
         Ok(())
     }
 
-    /// Sync data from Delta Store (Tier 1) to Columnar Cache (Tier 2).
+    /// Sync data from storage tiers to Columnar Cache.
     ///
     /// If table_schema is provided, converts data to typed format (SQL table).
     /// Otherwise, stores as raw Binary format (CRUD data).
-    pub fn sync_from_delta<S: StorageBackend + ?Sized>(
+    pub fn sync_from_storage(
         &self,
-        delta: &S,
         table: &str,
+        rows: Vec<(Vec<u8>, Vec<u8>)>,
         table_schema: Option<SchemaRef>,
     ) -> DbxResult<usize> {
-        // 1. Normalize table name to lowercase for Delta Store lookup
-        let table_lower = table.to_lowercase();
-
-        // 2. Scan from Delta Store
-        let rows = delta.scan(&table_lower, ..)?;
-
         if rows.is_empty() {
             self.clear_table(table)?;
             return Ok(0);
         }
 
-        // 3. Branch: Typed (SQL) vs Raw (CRUD)
+        // Branch: Typed (SQL) vs Raw (CRUD)
         if let Some(schema) = table_schema {
             self.sync_typed(table, rows, schema)
         } else {
@@ -341,10 +334,12 @@ impl ColumnarCache {
             batches.push(batch);
         }
 
-        // Clear table and insert all batches
+        // Clear table and insert consolidated batch
         self.clear_table(table)?;
-        for batch in batches {
-            self.insert_typed_batch(table, schema.clone(), batch)?;
+        if !batches.is_empty() {
+            let consolidated = arrow::compute::concat_batches(&schema, &batches)
+                .map_err(|e| DbxError::Storage(format!("Failed to consolidate batches: {}", e)))?;
+            self.insert_typed_batch(table, schema, consolidated)?;
         }
 
         Ok(rows.len())
@@ -401,12 +396,6 @@ impl ColumnarCache {
         schema: SchemaRef,
         batch: RecordBatch,
     ) -> DbxResult<()> {
-        eprintln!(
-            "[insert_typed_batch] Inserting batch for table: '{}'",
-            table
-        );
-        eprintln!("[insert_typed_batch] Batch has {} rows", batch.num_rows());
-
         let memory_size = estimate_batch_memory(&batch);
 
         // Check memory limit (same as insert_batch)
@@ -428,18 +417,10 @@ impl ColumnarCache {
         }
 
         // Get or create table cache with Typed data
-        eprintln!(
-            "[insert_typed_batch] Getting or creating table cache for '{}'",
-            table
-        );
         let table_cache = {
             self.tables
                 .entry(table.to_string())
                 .or_insert_with(|| {
-                    eprintln!(
-                        "[insert_typed_batch] Creating new table cache for '{}'",
-                        table
-                    );
                     Arc::new(TableCache {
                         data: parking_lot::RwLock::new(CachedData::Typed {
                             schema: schema.clone(),
@@ -548,15 +529,6 @@ impl ColumnarCache {
         table: &str,
         projection: Option<&[usize]>,
     ) -> DbxResult<Option<Vec<RecordBatch>>> {
-        eprintln!("[get_batches] Looking for table: '{}'", table);
-        eprintln!(
-            "[get_batches] Available tables: {:?}",
-            self.tables
-                .iter()
-                .map(|e| e.key().clone())
-                .collect::<Vec<_>>()
-        );
-
         // Try case-insensitive lookup
         let table_key = self
             .tables
@@ -565,14 +537,10 @@ impl ColumnarCache {
             .map(|entry| entry.key().clone());
 
         let lookup_key = table_key.as_deref().unwrap_or(table);
-        eprintln!("[get_batches] Using lookup key: '{}'", lookup_key);
 
         let Some(table_cache) = self.tables.get(lookup_key) else {
-            eprintln!("[get_batches] ❌ Table '{}' not found in cache", table);
             return Ok(None);
         };
-
-        eprintln!("[get_batches] ✅ Found table in cache");
 
         // Update LRU on access
         let current_access = self.access_counter.fetch_add(1, Ordering::Relaxed);
@@ -857,7 +825,9 @@ mod tests {
         delta.insert("t1", b"k2", b"v2").unwrap();
 
         let cache = ColumnarCache::new();
-        let count = cache.sync_from_delta(&delta, "t1", None).unwrap();
+        let table_lower = "t1".to_lowercase();
+        let rows = delta.scan(&table_lower, ..).unwrap();
+        let count = cache.sync_from_storage("t1", rows, None).unwrap();
 
         assert_eq!(count, 2);
 

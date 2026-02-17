@@ -37,13 +37,24 @@ impl LogicalPlanner {
             };
         }
 
-        // LIMIT
-        if let Some(limit_expr) = &query.limit {
-            let limit = super::helpers::extract_usize(limit_expr)?;
+        // LIMIT and OFFSET
+        if query.limit.is_some() || query.offset.is_some() {
+            let limit = if let Some(limit_expr) = &query.limit {
+                super::helpers::extract_usize(limit_expr)?
+            } else {
+                usize::MAX
+            };
+
+            let offset = if let Some(offset_struct) = &query.offset {
+                super::helpers::extract_usize(&offset_struct.value)?
+            } else {
+                0
+            };
+
             plan = LogicalPlan::Limit {
                 input: Box::new(plan),
                 count: limit,
-                offset: 0,
+                offset,
             };
         }
 
@@ -89,8 +100,18 @@ impl LogicalPlanner {
 
         // Extract aggregate functions from SELECT items
         let aggregates = self.extract_aggregates(&select.projection)?;
+        let has_aggregates = !group_by_exprs.is_empty() || !aggregates.is_empty();
 
-        if !group_by_exprs.is_empty() || !aggregates.is_empty() {
+        // 4. SELECT 절 → Project
+        let projections = self.plan_projection(&select.projection)?;
+        
+        // Skip Project node if it's a simple aggregate query (check before move)
+        let is_simple_agg = !aggregates.is_empty() 
+                && group_by_exprs.is_empty() 
+                && projections.len() == aggregates.len()
+                && projections.iter().all(|(e, _)| matches!(e, Expr::Function { .. }));
+
+        if has_aggregates {
             plan = LogicalPlan::Aggregate {
                 input: Box::new(plan),
                 group_by: group_by_exprs,
@@ -98,9 +119,7 @@ impl LogicalPlanner {
             };
         }
 
-        // 4. SELECT 절 → Project
-        let projections = self.plan_projection(&select.projection)?;
-        if !projections.is_empty() {
+        if !projections.is_empty() && !is_simple_agg {
             plan = LogicalPlan::Project {
                 input: Box::new(plan),
                 projections,
@@ -341,7 +360,13 @@ impl LogicalPlanner {
                     // SELECT * -> empty projections means all columns
                 }
                 SelectItem::UnnamedExpr(expr) => {
-                    projections.push((self.plan_expr(expr)?, None));
+                    let planned = self.plan_expr(expr)?;
+                    let alias = if let Expr::Column(name) = &planned {
+                        Some(name.clone())
+                    } else {
+                        None
+                    };
+                    projections.push((planned, alias));
                 }
                 SelectItem::ExprWithAlias { expr, alias } => {
                     projections.push((self.plan_expr(expr)?, Some(alias.value.clone())));

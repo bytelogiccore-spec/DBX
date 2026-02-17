@@ -26,48 +26,19 @@ impl PhysicalPlanner {
                 columns: _,
                 filter,
             } => {
-                eprintln!("[PhysicalPlanner] Looking for table: '{}'", table);
                 let schemas = self.table_schemas.read().unwrap();
-                eprintln!(
-                    "[PhysicalPlanner] Available tables: {:?}",
-                    schemas.keys().collect::<Vec<_>>()
-                );
-
-                // Try case-insensitive table lookup
                 let schema = schemas
                     .get(table)
                     .or_else(|| {
-                        eprintln!(
-                            "[PhysicalPlanner] Exact match failed, trying case-insensitive..."
-                        );
                         let table_lower = table.to_lowercase();
-                        let result = schemas
+                        schemas
                             .iter()
-                            .find(|(k, _)| {
-                                let matches = k.to_lowercase() == table_lower;
-                                eprintln!(
-                                    "[PhysicalPlanner] Comparing '{}' (lower: '{}') with '{}': {}",
-                                    k,
-                                    k.to_lowercase(),
-                                    table_lower,
-                                    matches
-                                );
-                                matches
-                            })
-                            .map(|(_, v)| v);
-                        if result.is_some() {
-                            eprintln!("[PhysicalPlanner] ✅ Case-insensitive match found!");
-                        } else {
-                            eprintln!("[PhysicalPlanner] ❌ No case-insensitive match found");
-                        }
-                        result
+                            .find(|(k, _)| k.to_lowercase() == table_lower)
+                            .map(|(_, v)| v)
                     })
-                    .ok_or_else(|| {
-                        eprintln!("[PhysicalPlanner] ❌ TableNotFound: '{}'", table);
-                        DbxError::TableNotFound(table.clone())
-                    })?;
+                    .cloned()
+                    .ok_or_else(|| DbxError::TableNotFound(table.clone()))?;
 
-                eprintln!("[PhysicalPlanner] ✅ Schema found for table '{}'", table);
                 let column_names: Vec<String> =
                     schema.fields().iter().map(|f| f.name().clone()).collect();
                 drop(schemas);
@@ -475,7 +446,25 @@ impl PhysicalPlanner {
                     }
                 })
                 .collect(),
-            PhysicalPlan::HashAggregate { input, .. } => self.extract_schema(input),
+            PhysicalPlan::HashAggregate {
+                input,
+                group_by,
+                aggregates,
+            } => {
+                let input_schema = self.extract_schema(input);
+                let mut fields = Vec::new();
+                for &idx in group_by {
+                    fields.push(input_schema.get(idx).cloned().unwrap_or_else(|| format!("col_{}", idx)));
+                }
+                for agg in aggregates {
+                    fields.push(
+                        agg.alias
+                            .clone()
+                            .unwrap_or_else(|| format!("agg_{:?}", agg.function)),
+                    );
+                }
+                fields
+            }
             PhysicalPlan::SortMerge { input, .. } => self.extract_schema(input),
             PhysicalPlan::Limit { input, .. } => self.extract_schema(input),
             PhysicalPlan::HashJoin { left, right, .. } => {
@@ -621,10 +610,6 @@ impl PhysicalPlanner {
             "user_id" => Ok(1),
             "name" => Ok(1),
             _ => {
-                eprintln!(
-                    "WARNING: Column '{}' not found in schema, using index 0",
-                    col_name
-                );
                 Ok(0)
             }
         }
@@ -647,8 +632,10 @@ mod tests {
         let parser = SqlParser::new();
         let statements = parser.parse("SELECT * FROM users").unwrap();
 
-        let logical_planner = LogicalPlanner::new();
-        let logical_plan = logical_planner.plan(&statements[0]).unwrap();
+        // Step 2: Logical Plan
+        let planner = LogicalPlanner::new();
+        let logical_plan = planner.plan(&statements[0]).unwrap();
+        println!("🔍 execute_sql: Logical Plan created: {:?}", logical_plan);
 
         // Inject schema for 'users'
         let table_schemas = Arc::new(RwLock::new(HashMap::new()));

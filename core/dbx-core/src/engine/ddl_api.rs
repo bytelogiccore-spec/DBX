@@ -32,18 +32,13 @@ impl Database {
     /// # }
     /// ```
     pub fn create_table(&self, name: &str, schema: Schema) -> DbxResult<()> {
-        eprintln!("[create_table] Creating table: '{}'", name);
-
         let schema_arc = Arc::new(schema);
 
         // Generate CREATE TABLE SQL from Arrow Schema
         let sql = self.generate_create_table_sql(name, &schema_arc);
-        eprintln!("[create_table] Generated SQL: {}", sql);
 
         // Execute SQL FIRST (this will check if table exists)
-        eprintln!("[create_table] Executing SQL...");
         self.execute_sql(&sql)?;
-        eprintln!("[create_table] ✅ SQL executed successfully");
 
         // THEN store schema (after SQL succeeds)
         self.table_schemas
@@ -51,13 +46,6 @@ impl Database {
             .unwrap()
             .insert(name.to_string(), Arc::clone(&schema_arc));
 
-        eprintln!("[create_table] ✅ Schema stored for table '{}'", name);
-        let stored_tables = self.table_schemas.read().unwrap();
-        eprintln!(
-            "[create_table] All tables after insert: {:?}",
-            stored_tables.keys().collect::<Vec<_>>()
-        );
-        drop(stored_tables);
 
         // Initialize empty table data
         self.tables
