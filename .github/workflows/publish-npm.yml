@@ -24,23 +24,23 @@ jobs:
 
       - name: npm 의존성 설치
         run: |
-          cd packages/nodejs
+          cd packages\nodejs
           npm install
 
       - name: npm 패키지 생성
         run: |
-          cd packages/nodejs
+          cd packages\nodejs
           npm pack
 
       - name: npm 배포
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          cd packages/nodejs
+          cd packages\nodejs
           npm publish --access public --ignore-scripts
 
       - name: 에셋 업로드
         uses: actions/upload-artifact@v4
         with:
           name: npm-package
-          path: packages/nodejs/*.tgz
+          path: packages\nodejs\*.tgz

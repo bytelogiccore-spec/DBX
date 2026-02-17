@@ -26,7 +26,7 @@ jobs:
 
       - name: 패키지 빌드
         run: |
-          cd packages/python
+          cd packages\python
           python setup.py sdist bdist_wheel
 
       - name: PyPI 배포
@@ -34,11 +34,11 @@ jobs:
           TWINE_USERNAME: __token__
           TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
         run: |
-          cd packages/python
+          cd packages\python
           twine upload dist/* --skip-existing
 
       - name: 에셋 업로드
         uses: actions/upload-artifact@v4
         with:
           name: python-package
-          path: packages/python/dist/*
+          path: packages\python\dist\*
