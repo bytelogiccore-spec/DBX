@@ -79,5 +79,12 @@ test_*.log
 .plan/
 GEMINI.md
 scripts/node_modules/
-packages/
+
+# Package build artifacts (not the source)
+packages/**/node_modules/
+packages/**/dist/
+packages/**/build/
+packages/**/*.tgz
+packages/**/*.whl
+packages/**/*.nupkg
 

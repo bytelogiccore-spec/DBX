@@ -1,0 +1,13 @@
+D:\ByteLogicCore\DBX\packages\dotnet\DBX.Dotnet\bin\Debug\net6.0\dbx_csharp.dll
+D:\ByteLogicCore\DBX\packages\dotnet\DBX.Dotnet\obj\Debug\net6.0\DBX.Dotnet.GeneratedMSBuildEditorConfig.editorconfig
+D:\ByteLogicCore\DBX\packages\dotnet\DBX.Dotnet\obj\Debug\net6.0\DBX.Dotnet.AssemblyInfoInputs.cache
+D:\ByteLogicCore\DBX\packages\dotnet\DBX.Dotnet\obj\Debug\net6.0\DBX.Dotnet.AssemblyInfo.cs
+D:\ByteLogicCore\DBX\packages\dotnet\DBX.Dotnet\obj\Debug\net6.0\DBX.Dotnet.csproj.CoreCompileInputs.cache
+D:\ByteLogicCore\DBX\packages\dotnet\DBX.Dotnet\obj\Debug\net6.0\DBX.Dotnet.sourcelink.json
+D:\ByteLogicCore\DBX\packages\dotnet\DBX.Dotnet\obj\Debug\net6.0\DBX.Dotnet.dll
+D:\ByteLogicCore\DBX\packages\dotnet\DBX.Dotnet\obj\Debug\net6.0\refint\DBX.Dotnet.dll
+D:\ByteLogicCore\DBX\packages\dotnet\DBX.Dotnet\obj\Debug\net6.0\DBX.Dotnet.pdb
+D:\ByteLogicCore\DBX\packages\dotnet\DBX.Dotnet\bin\Debug\net6.0\DBX.Dotnet.deps.json
+D:\ByteLogicCore\DBX\packages\dotnet\DBX.Dotnet\bin\Debug\net6.0\DBX.Dotnet.dll
+D:\ByteLogicCore\DBX\packages\dotnet\DBX.Dotnet\bin\Debug\net6.0\DBX.Dotnet.pdb
+D:\ByteLogicCore\DBX\packages\dotnet\DBX.Dotnet\obj\Debug\net6.0\ref\DBX.Dotnet.dll

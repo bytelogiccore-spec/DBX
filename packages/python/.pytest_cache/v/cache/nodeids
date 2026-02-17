@@ -1,0 +1,5 @@
+[
+  "benchmarks/test_ffi_benchmark.py::test_get_10k",
+  "benchmarks/test_ffi_benchmark.py::test_insert_10k",
+  "benchmarks/test_ffi_benchmark.py::test_scan_10k"
+]
