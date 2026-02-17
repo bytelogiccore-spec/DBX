@@ -454,7 +454,12 @@ impl PhysicalPlanner {
                 let input_schema = self.extract_schema(input);
                 let mut fields = Vec::new();
                 for &idx in group_by {
-                    fields.push(input_schema.get(idx).cloned().unwrap_or_else(|| format!("col_{}", idx)));
+                    fields.push(
+                        input_schema
+                            .get(idx)
+                            .cloned()
+                            .unwrap_or_else(|| format!("col_{}", idx)),
+                    );
                 }
                 for agg in aggregates {
                     fields.push(
@@ -609,9 +614,7 @@ impl PhysicalPlanner {
             "id" => Ok(0),
             "user_id" => Ok(1),
             "name" => Ok(1),
-            _ => {
-                Ok(0)
-            }
+            _ => Ok(0),
         }
     }
 }

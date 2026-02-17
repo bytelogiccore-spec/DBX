@@ -104,12 +104,14 @@ impl LogicalPlanner {
 
         // 4. SELECT 절 → Project
         let projections = self.plan_projection(&select.projection)?;
-        
+
         // Skip Project node if it's a simple aggregate query (check before move)
-        let is_simple_agg = !aggregates.is_empty() 
-                && group_by_exprs.is_empty() 
-                && projections.len() == aggregates.len()
-                && projections.iter().all(|(e, _)| matches!(e, Expr::Function { .. }));
+        let is_simple_agg = !aggregates.is_empty()
+            && group_by_exprs.is_empty()
+            && projections.len() == aggregates.len()
+            && projections
+                .iter()
+                .all(|(e, _)| matches!(e, Expr::Function { .. }));
 
         if has_aggregates {
             plan = LogicalPlan::Aggregate {

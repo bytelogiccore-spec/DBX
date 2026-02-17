@@ -82,8 +82,12 @@ fn test_and_or_conditions() -> dbx_core::DbxResult<()> {
     db.create_table("users_and_or", schema)?;
 
     // Insert test data
-    db.execute_sql("INSERT INTO users_and_or (id, name, age, status) VALUES (1, 'Alice', 25, 'active')")?;
-    db.execute_sql("INSERT INTO users_and_or (id, name, age, status) VALUES (2, 'Bob', 30, 'inactive')")?;
+    db.execute_sql(
+        "INSERT INTO users_and_or (id, name, age, status) VALUES (1, 'Alice', 25, 'active')",
+    )?;
+    db.execute_sql(
+        "INSERT INTO users_and_or (id, name, age, status) VALUES (2, 'Bob', 30, 'inactive')",
+    )?;
     db.execute_sql(
         "INSERT INTO users_and_or (id, name, age, status) VALUES (3, 'Charlie', 35, 'active')",
     )?;
@@ -252,13 +256,21 @@ fn test_complex_query() -> dbx_core::DbxResult<()> {
     db.create_table("users_complex", schema)?;
 
     // Insert test data
-    db.execute_sql("INSERT INTO users_complex (id, name, age, status) VALUES (1, 'Alice', 25, 'active')")?;
-    db.execute_sql("INSERT INTO users_complex (id, name, age, status) VALUES (2, 'Bob', 30, 'active')")?;
+    db.execute_sql(
+        "INSERT INTO users_complex (id, name, age, status) VALUES (1, 'Alice', 25, 'active')",
+    )?;
+    db.execute_sql(
+        "INSERT INTO users_complex (id, name, age, status) VALUES (2, 'Bob', 30, 'active')",
+    )?;
     db.execute_sql(
         "INSERT INTO users_complex (id, name, age, status) VALUES (3, 'Charlie', 35, 'inactive')",
     )?;
-    db.execute_sql("INSERT INTO users_complex (id, name, age, status) VALUES (4, 'David', 28, 'active')")?;
-    db.execute_sql("INSERT INTO users_complex (id, name, age, status) VALUES (5, 'Eve', 32, 'active')")?;
+    db.execute_sql(
+        "INSERT INTO users_complex (id, name, age, status) VALUES (4, 'David', 28, 'active')",
+    )?;
+    db.execute_sql(
+        "INSERT INTO users_complex (id, name, age, status) VALUES (5, 'Eve', 32, 'active')",
+    )?;
 
     // Complex query: active users over 27, ordered by age, limit 2
     let results = db

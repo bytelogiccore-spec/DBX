@@ -46,7 +46,6 @@ impl Database {
             .unwrap()
             .insert(name.to_string(), Arc::clone(&schema_arc));
 
-
         // Initialize empty table data
         self.tables
             .write()
