@@ -1000,3 +1000,67 @@ pub unsafe extern "C" fn dbx_transaction_rollback(tx: *mut DbxTransaction) {
         let _ = Box::from_raw(tx);
     }
 }
+
+// ═══════════════════════════════════════════════════════════════
+// DDL API Operations
+// ═══════════════════════════════════════════════════════════════
+
+/// Drop a table
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn dbx_drop_table(
+    handle: *mut DbxHandle,
+    table: *const c_char,
+) -> c_int {
+    if handle.is_null() || table.is_null() {
+        return DBX_ERR_NULL_PTR;
+    }
+
+    let handle = &*handle;
+
+    let table_str = match CStr::from_ptr(table).to_str() {
+        Ok(s) => s,
+        Err(_) => return DBX_ERR_INVALID_UTF8,
+    };
+
+    match handle.db.drop_table(table_str) {
+        Ok(_) => DBX_OK,
+        Err(_) => DBX_ERR_DATABASE,
+    }
+}
+
+/// Check if a table exists. Returns 1 if exists, 0 if not.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn dbx_table_exists(
+    handle: *mut DbxHandle,
+    table: *const c_char,
+) -> c_int {
+    if handle.is_null() || table.is_null() {
+        return 0;
+    }
+
+    let handle = &*handle;
+
+    let table_str = match CStr::from_ptr(table).to_str() {
+        Ok(s) => s,
+        Err(_) => return 0,
+    };
+
+    if handle.db.table_exists(table_str) { 1 } else { 0 }
+}
+
+/// List all tables. Returns an opaque DbxStringList handle.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn dbx_list_tables(
+    handle: *mut DbxHandle,
+    out_list: *mut *mut DbxStringList,
+) -> c_int {
+    if handle.is_null() || out_list.is_null() {
+        return DBX_ERR_NULL_PTR;
+    }
+
+    let handle = &*handle;
+
+    let names = handle.db.list_tables();
+    *out_list = Box::into_raw(Box::new(DbxStringList { names }));
+    DBX_OK
+}

@@ -4,7 +4,51 @@ This document follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) f
 
 ---
 
-## [0.0.6-beta] - 2026-02-16
+## [0.0.6-beta] - 2026-02-17
+
+### Added
+
+**DDL API**:
+- `drop_table(table_name)` - Drop an existing table
+- `table_exists(table_name)` - Check if a table exists
+- `list_tables()` - List all tables in the database
+
+**Multi-Language Support**:
+
+All DDL APIs are now available in C/C++, C#, Node.js, and Python:
+
+```csharp
+// C#
+db.DropTable("users");
+bool exists = db.TableExists("users");
+var tables = db.ListTables();
+```
+
+```javascript
+// Node.js
+db.dropTable('users');
+const exists = db.tableExists('users');
+const tables = db.listTables();
+```
+
+```python
+# Python
+db.drop_table('users')
+exists = db.table_exists('users')
+tables = db.list_tables()
+```
+
+**FFI Architecture**:
+- **dbx-ffi**: C/C++ FFI layer
+- **dbx-csharp**: C# native bindings (csbindgen)
+- **dbx-node**: Node.js native bindings (N-API)
+- **dbx-py**: Python native bindings (PyO3)
+
+### Changed
+
+**GitHub Actions**:
+- Updated CI to build all FFI layers (dbx-ffi, dbx-csharp, dbx-node, dbx-py)
+- Updated publish workflows to use native bindings instead of shared FFI
 
 ### Performance Improvements
 

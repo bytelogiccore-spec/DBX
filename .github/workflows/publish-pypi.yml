@@ -16,13 +16,10 @@ jobs:
         with:
           python-version: '3.10'
 
-      - name: Rust FFI 빌드
+      - name: Rust Python 바인딩 빌드
         uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - run: cargo build --release --locked -p dbx-ffi
-
-      - name: FFI DLL 복사
-        run: Copy-Item target/release/dbx_ffi.dll lang/python/dbx_py/dbx_ffi.dll -Force
+      - run: cargo build --release --locked -p dbx-py
 
       - name: 빌드 도구 설치
         run: pip install setuptools wheel twine

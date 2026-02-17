@@ -30,3 +30,20 @@ jobs:
 
       - name: 테스트 (dbx-core)
         run: cargo test -p dbx-core --locked
+
+      - name: 빌드 (dbx-ffi)
+        run: cargo build -p dbx-ffi --locked
+
+      - name: 빌드 (dbx-csharp)
+        run: cargo build -p dbx-csharp --locked
+
+      - name: 빌드 (dbx-node)
+        run: cargo build -p dbx-node --locked
+
+      - name: Python 설치
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: 빌드 (dbx-py)
+        run: cargo build -p dbx-py --locked

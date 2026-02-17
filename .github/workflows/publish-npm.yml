@@ -17,10 +17,10 @@ jobs:
           node-version: 20
           registry-url: https://registry.npmjs.org/
 
-      - name: Rust FFI 빌드
+      - name: Rust Node.js 바인딩 빌드
         uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - run: cargo build --release --locked -p dbx-ffi
+      - run: cargo build --release --locked -p dbx-node
 
       - name: npm 의존성 설치
         working-directory: lang/nodejs

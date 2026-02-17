@@ -185,6 +185,30 @@ impl Database {
     }
 
     // ═══════════════════════════════════════════════════════
+    // DDL API Operations
+    // ═══════════════════════════════════════════════════════
+
+    /// Drop a table
+    #[napi]
+    pub fn drop_table(&self, table_name: String) -> Result<()> {
+        self.db
+            .drop_table(&table_name)
+            .map_err(|e| Error::from_reason(format!("Drop table failed: {e}")))
+    }
+
+    /// Check if a table exists
+    #[napi]
+    pub fn table_exists(&self, table_name: String) -> bool {
+        self.db.table_exists(&table_name)
+    }
+
+    /// List all tables
+    #[napi]
+    pub fn list_tables(&self) -> Vec<String> {
+        self.db.list_tables()
+    }
+
+    // ═══════════════════════════════════════════════════════
     // Index Operations
     // ═══════════════════════════════════════════════════════
 

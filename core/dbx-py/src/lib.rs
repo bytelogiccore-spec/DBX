@@ -174,6 +174,27 @@ impl Database {
     }
 
     // ═══════════════════════════════════════════════════════
+    // DDL API Operations
+    // ═══════════════════════════════════════════════════════
+
+    /// Drop a table
+    fn drop_table(&self, table_name: &str) -> PyResult<()> {
+        self.db
+            .drop_table(table_name)
+            .map_err(|e| PyRuntimeError::new_err(format!("Drop table failed: {e}")))
+    }
+
+    /// Check if a table exists
+    fn table_exists(&self, table_name: &str) -> bool {
+        self.db.table_exists(table_name)
+    }
+
+    /// List all tables
+    fn list_tables(&self) -> Vec<String> {
+        self.db.list_tables()
+    }
+
+    // ═══════════════════════════════════════════════════════
     // Index Operations
     // ═══════════════════════════════════════════════════════
 
