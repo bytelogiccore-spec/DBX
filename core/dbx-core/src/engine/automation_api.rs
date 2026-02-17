@@ -269,7 +269,7 @@ mod tests {
             EventHookCondition::Always,
             EventHookAction::Custom(Box::new(move |ctx, event| {
                 if let Some(value) = event.data.get("id") {
-                    let doubled = ctx.dbx.call_udf("double", &[value.clone()])?;
+                    let doubled = ctx.dbx.call_udf("double", std::slice::from_ref(value))?;
                     *result_clone.lock().unwrap() = doubled.as_i64()?;
                 }
                 Ok(())
@@ -286,7 +286,7 @@ mod tests {
 
         // 트리거와 UDF가 모두 automation_engine에 등록됨
         let callables = db.list_triggers().unwrap();
-        assert!(callables.len() >= 1); // 최소 트리거 1개
+        assert!(!callables.is_empty()); // 최소 트리거 1개
         assert!(callables.contains(&"double_trigger".to_string()));
     }
 

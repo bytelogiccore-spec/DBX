@@ -6,7 +6,7 @@
 //! 실행: cargo run --release --example quick_db_compare
 
 use dbx_core::Database;
-use redb::{Database as RedbDatabase, ReadableTable, TableDefinition};
+use redb::{Database as RedbDatabase, TableDefinition};
 use rusqlite::Connection;
 use std::time::Instant;
 use tempfile::TempDir;

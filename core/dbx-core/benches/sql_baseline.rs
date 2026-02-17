@@ -57,7 +57,8 @@ fn bench_sql_select(c: &mut Criterion) {
                 .unwrap();
             db.execute_sql("INSERT INTO users VALUES (2, 'Bob')")
                 .unwrap();
-            black_box(db.execute_sql("SELECT * FROM users").unwrap());
+            db.execute_sql("SELECT * FROM users").unwrap();
+            black_box(());
             // Note: No DROP TABLE needed, db is dropped at end of iteration
         });
     });
@@ -67,6 +68,7 @@ criterion_group!(
     sql_baseline,
     bench_sql_create_table,
     bench_sql_create_index,
-    bench_sql_drop_table
+    bench_sql_drop_table,
+    bench_sql_select
 );
 criterion_main!(sql_baseline);

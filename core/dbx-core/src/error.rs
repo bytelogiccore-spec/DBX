@@ -183,6 +183,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(clippy::unnecessary_literal_unwrap)]
     fn dbx_result_ok() {
         let result: DbxResult<i32> = Ok(42);
         assert_eq!(result.unwrap(), 42);

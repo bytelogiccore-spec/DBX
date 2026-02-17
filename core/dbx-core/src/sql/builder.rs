@@ -472,6 +472,16 @@ impl Database {
     }
 }
 
+
+// ════════════════════════════════════════════
+// DatabaseQuery Trait Implementation
+// ════════════════════════════════════════════
+
+impl crate::traits::DatabaseQuery for Database {
+    // Query Builder methods are already implemented in impl Database block above
+    // No additional implementation needed - Trait is satisfied by existing methods
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -481,7 +491,7 @@ mod tests {
         assert_eq!(ScalarValue::Null.to_sql_literal(), "NULL");
         assert_eq!(ScalarValue::Int32(42).to_sql_literal(), "42");
         assert_eq!(ScalarValue::Int64(100).to_sql_literal(), "100");
-        assert_eq!(ScalarValue::Float64(3.14).to_sql_literal(), "3.14");
+        assert_eq!(ScalarValue::Float64(3.1).to_sql_literal(), "3.1");
         assert_eq!(
             ScalarValue::Utf8("hello".into()).to_sql_literal(),
             "'hello'"
@@ -607,17 +617,17 @@ mod tests {
         let params = vec![
             ScalarValue::Int32(1),
             ScalarValue::Utf8("test".into()),
-            ScalarValue::Float64(3.14),
+            ScalarValue::Float64(3.1),
         ];
         let result = apply_params(sql, &params, &[]).unwrap();
-        assert_eq!(result, "INSERT INTO t VALUES (1, 'test', 3.14)");
+        assert_eq!(result, "INSERT INTO t VALUES (1, 'test', 3.1)");
     }
 
     #[test]
     fn test_into_param_trait() {
         assert!(matches!(42i32.into_scalar(), ScalarValue::Int32(42)));
         assert!(matches!(100i64.into_scalar(), ScalarValue::Int64(100)));
-        assert!(matches!(3.14f64.into_scalar(), ScalarValue::Float64(_)));
+        assert!(matches!(3.1f64.into_scalar(), ScalarValue::Float64(_)));
         assert!(matches!("hello".into_scalar(), ScalarValue::Utf8(_)));
         assert!(matches!(true.into_scalar(), ScalarValue::Boolean(true)));
         assert!(matches!(
@@ -626,14 +636,5 @@ mod tests {
         ));
         assert!(matches!(Some(10i32).into_scalar(), ScalarValue::Int32(10)));
     }
-}
-
-// ════════════════════════════════════════════
-// DatabaseQuery Trait Implementation
-// ════════════════════════════════════════════
-
-impl crate::traits::DatabaseQuery for Database {
-    // Query Builder methods are already implemented in impl Database block above
-    // No additional implementation needed - Trait is satisfied by existing methods
 }
 

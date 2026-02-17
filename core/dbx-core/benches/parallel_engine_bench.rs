@@ -1,5 +1,5 @@
 use criterion::{BenchmarkId, Criterion, Throughput, black_box, criterion_group, criterion_main};
-use dbx_core::engine::{ParallelExecutionEngine, ParallelizationPolicy};
+use dbx_core::engine::ParallelExecutionEngine;
 use dbx_core::sql::ParallelSqlParser;
 use rayon::prelude::*;
 use std::sync::Arc;

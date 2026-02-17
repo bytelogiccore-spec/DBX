@@ -2,7 +2,7 @@
 //
 // 1단계: 복잡한 쿼리 테스트
 
-use criterion::{BenchmarkId, Criterion, black_box, criterion_group, criterion_main};
+use criterion::{Criterion, black_box, criterion_group, criterion_main};
 use dbx_core::sql::ParallelSqlParser;
 
 // ═══════════════════════════════════════════════════════════════════════════

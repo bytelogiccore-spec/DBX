@@ -36,7 +36,7 @@ fn main() -> DbxResult<()> {
 }
 
 fn demo_gpu_check(db: &Database) -> DbxResult<()> {
-    if let Some(gpu) = db.gpu_manager() {
+    if let Some(_gpu) = db.gpu_manager() {
         println!("✓ GPU Manager initialized");
         println!("✓ GPU is ready for acceleration");
 

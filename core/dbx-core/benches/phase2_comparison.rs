@@ -7,7 +7,7 @@
 // 3. WAL 쓰기: 단일 파일 append vs PartitionedWalWriter
 // 4. 스키마 조회: HashMap 직접 조회 vs SchemaVersionManager (MVCC 포함)
 
-use criterion::{BenchmarkId, Criterion, black_box, criterion_group, criterion_main};
+use criterion::{Criterion, black_box, criterion_group, criterion_main};
 use dbx_core::engine::plan::PlanCache;
 use dbx_core::engine::schema_versioning::SchemaVersionManager;
 use dbx_core::sql::executor::parallel_query::{AggregateType, ParallelQueryExecutor};

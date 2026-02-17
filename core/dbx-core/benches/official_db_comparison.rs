@@ -47,7 +47,8 @@ fn bench_dbx_insert(c: &mut Criterion) {
         b.iter(|| {
             let db = Database::open_in_memory().unwrap();
             for (key, value) in &data {
-                black_box(db.insert("bench", key, value).unwrap());
+                db.insert("bench", key, value).unwrap();
+                black_box(());
             }
         });
     });

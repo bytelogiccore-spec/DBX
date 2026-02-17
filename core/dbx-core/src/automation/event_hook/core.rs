@@ -243,12 +243,12 @@ mod tests {
 
         // 매칭되는 이벤트
         let event = EventHookEvent::new(EventHookEventType::AfterInsert, "users");
-        assert_eq!(hook.fire(&ctx, &event).unwrap(), true);
+        assert!(hook.fire(&ctx, &event).unwrap());
         assert!(*executed.lock().unwrap());
 
         // 매칭 안 되는 이벤트
         let event2 = EventHookEvent::new(EventHookEventType::AfterDelete, "posts");
-        assert_eq!(hook.fire(&ctx, &event2).unwrap(), false);
+        assert!(!hook.fire(&ctx, &event2).unwrap());
     }
 
     #[test]

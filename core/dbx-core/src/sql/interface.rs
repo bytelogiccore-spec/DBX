@@ -135,7 +135,7 @@ fn serialize_to_arrow_ipc(
     // Serialize to Arrow IPC Stream format
     let mut buffer = Vec::new();
     {
-        let mut writer = StreamWriter::try_new(&mut buffer, &schema)
+        let mut writer = StreamWriter::try_new(&mut buffer, schema)
             .map_err(|e| DbxError::Serialization(e.to_string()))?;
         writer.write(&batch)
             .map_err(|e| DbxError::Serialization(e.to_string()))?;
@@ -366,12 +366,12 @@ impl Database {
                         schemas.get(table.as_str()).cloned()
                     }.unwrap_or_else(|| {
                         // No registered schema: infer from row values
-                        Arc::new(infer_schema_from_values(&row_values)
+                        Arc::new(infer_schema_from_values(row_values)
                             .expect("Failed to infer schema from values"))
                     });
 
                     // Always use Arrow IPC serialization
-                    let value_bytes = serialize_to_arrow_ipc(&schema, &row_values)?;
+                    let value_bytes = serialize_to_arrow_ipc(&schema, row_values)?;
 
                     // Insert into Delta Store
                     self.insert(table, &key, &value_bytes)?;

@@ -20,7 +20,8 @@ fn bench_api_create_table(c: &mut Criterion) {
                 Field::new("name", DataType::Utf8, true),
                 Field::new("age", DataType::Int32, true),
             ]);
-            black_box(db.create_table("users", schema).unwrap());
+            db.create_table("users", schema).unwrap();
+            black_box(());
         });
     });
 }
@@ -31,7 +32,8 @@ fn bench_api_drop_table(c: &mut Criterion) {
             let db = Database::open_in_memory().unwrap();
             let schema = Schema::new(vec![Field::new("id", DataType::Int64, false)]);
             db.create_table("temp", schema).unwrap();
-            black_box(db.drop_table("temp").unwrap());
+            db.drop_table("temp").unwrap();
+            black_box(());
         });
     });
 }
@@ -74,7 +76,8 @@ fn bench_api_create_sql_index(c: &mut Criterion) {
                 Field::new("email", DataType::Utf8, true),
             ]);
             db.create_table("users", schema).unwrap();
-            black_box(db.create_sql_index("users", "idx_email", vec!["email".to_string()]).unwrap());
+            db.create_sql_index("users", "idx_email", vec!["email".to_string()]).unwrap();
+            black_box(());
         });
     });
 }
@@ -89,7 +92,8 @@ fn bench_api_drop_sql_index(c: &mut Criterion) {
             ]);
             db.create_table("users", schema).unwrap();
             db.create_sql_index("users", "idx_email", vec!["email".to_string()]).unwrap();
-            black_box(db.drop_sql_index("users", "idx_email").unwrap());
+            db.drop_sql_index("users", "idx_email").unwrap();
+            black_box(());
         });
     });
 }
@@ -141,7 +145,8 @@ fn bench_api_add_column(c: &mut Criterion) {
                 Field::new("name", DataType::Utf8, true),
             ]);
             db.create_table("users", schema).unwrap();
-            black_box(db.add_column("users", "email", "TEXT").unwrap());
+            db.add_column("users", "email", "TEXT").unwrap();
+            black_box(());
         });
     });
 }
@@ -156,7 +161,8 @@ fn bench_api_drop_column(c: &mut Criterion) {
                 Field::new("email", DataType::Utf8, true),
             ]);
             db.create_table("users", schema).unwrap();
-            black_box(db.drop_column("users", "email").unwrap());
+            db.drop_column("users", "email").unwrap();
+            black_box(());
         });
     });
 }
@@ -170,7 +176,8 @@ fn bench_api_rename_column(c: &mut Criterion) {
                 Field::new("user_name", DataType::Utf8, true),
             ]);
             db.create_table("users", schema).unwrap();
-            black_box(db.rename_column("users", "user_name", "name").unwrap());
+            db.rename_column("users", "user_name", "name").unwrap();
+            black_box(());
         });
     });
 }

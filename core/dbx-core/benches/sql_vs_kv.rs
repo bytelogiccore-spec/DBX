@@ -4,7 +4,6 @@
 
 use criterion::{BenchmarkId, Criterion, black_box, criterion_group, criterion_main};
 use dbx_core::Database;
-use tempfile::tempdir;
 
 /// 테스트용 데이터베이스 생성 및 초기 데이터 삽입
 fn setup_db_with_data(num_rows: usize) -> Database {

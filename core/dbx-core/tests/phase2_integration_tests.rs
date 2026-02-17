@@ -96,7 +96,7 @@ fn test_query_plan_cache_integration() -> DbxResult<()> {
         stats.hit_rate() * 100.0,
         cache.len()
     );
-    drop(stats);
+    let _ = stats;
     Ok(())
 }
 
@@ -469,7 +469,7 @@ fn test_rollback_on_regression() -> DbxResult<()> {
 /// 테스트 10: Feature Flag 토글
 #[test]
 fn test_feature_flag_toggle() {
-    let mut flags = FeatureFlags::default();
+    let flags = FeatureFlags::default();
 
     // 기본: 비활성화
     assert!(!flags.is_enabled(Feature::BinarySerialization));

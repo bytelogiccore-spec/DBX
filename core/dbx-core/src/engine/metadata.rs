@@ -370,6 +370,67 @@ pub fn load_all_udfs(wos: &WosBackend) -> DbxResult<Vec<crate::automation::UdfMe
     Ok(udfs)
 }
 
+
+// ════════════════════════════════════════════
+// Schedule Metadata Persistence
+// ════════════════════════════════════════════
+
+/// Save schedule metadata
+pub fn save_schedule(wos: &WosBackend, schedule: &crate::automation::Schedule) -> DbxResult<()> {
+    let json = schedule.to_json()?;
+    wos.insert(
+        "__meta__/schedules",
+        schedule.name.as_bytes(),
+        json.as_bytes(),
+    )?;
+    Ok(())
+}
+
+/// Load schedule metadata by name
+pub fn load_schedule(
+    wos: &WosBackend,
+    name: &str,
+) -> DbxResult<Option<crate::automation::Schedule>> {
+    match wos.get("__meta__/schedules", name.as_bytes())? {
+        Some(bytes) => {
+            let json = String::from_utf8(bytes.to_vec()).map_err(|e| {
+                DbxError::Serialization(format!("Failed to decode schedule JSON: {}", e))
+            })?;
+            let schedule = crate::automation::Schedule::from_json(&json)?;
+            Ok(Some(schedule))
+        }
+        None => Ok(None),
+    }
+}
+
+/// Delete schedule metadata
+pub fn delete_schedule(wos: &WosBackend, name: &str) -> DbxResult<()> {
+    wos.delete("__meta__/schedules", name.as_bytes())?;
+    Ok(())
+}
+
+/// Load all schedules
+pub fn load_all_schedules(
+    wos: &WosBackend,
+) -> DbxResult<HashMap<String, crate::automation::Schedule>> {
+    let mut schedules = HashMap::new();
+    let all_records = wos.scan("__meta__/schedules", ..)?;
+
+    for (key_vec, value_vec) in all_records {
+        let name =
+            String::from_utf8(key_vec).map_err(|e| DbxError::Serialization(e.to_string()))?;
+
+        let json = String::from_utf8(value_vec).map_err(|e| {
+            DbxError::Serialization(format!("Failed to decode schedule JSON: {}", e))
+        })?;
+
+        let schedule = crate::automation::Schedule::from_json(&json)?;
+        schedules.insert(name, schedule);
+    }
+
+    Ok(schedules)
+}
+
 // ════════════════════════════════════════════
 // Tests
 // ════════════════════════════════════════════
@@ -462,64 +523,4 @@ mod tests {
         let deleted = load_all_indexes(&wos).unwrap();
         assert!(deleted.is_empty());
     }
-}
-
-// ════════════════════════════════════════════
-// Schedule Metadata Persistence
-// ════════════════════════════════════════════
-
-/// Save schedule metadata
-pub fn save_schedule(wos: &WosBackend, schedule: &crate::automation::Schedule) -> DbxResult<()> {
-    let json = schedule.to_json()?;
-    wos.insert(
-        "__meta__/schedules",
-        schedule.name.as_bytes(),
-        json.as_bytes(),
-    )?;
-    Ok(())
-}
-
-/// Load schedule metadata by name
-pub fn load_schedule(
-    wos: &WosBackend,
-    name: &str,
-) -> DbxResult<Option<crate::automation::Schedule>> {
-    match wos.get("__meta__/schedules", name.as_bytes())? {
-        Some(bytes) => {
-            let json = String::from_utf8(bytes.to_vec()).map_err(|e| {
-                DbxError::Serialization(format!("Failed to decode schedule JSON: {}", e))
-            })?;
-            let schedule = crate::automation::Schedule::from_json(&json)?;
-            Ok(Some(schedule))
-        }
-        None => Ok(None),
-    }
-}
-
-/// Delete schedule metadata
-pub fn delete_schedule(wos: &WosBackend, name: &str) -> DbxResult<()> {
-    wos.delete("__meta__/schedules", name.as_bytes())?;
-    Ok(())
-}
-
-/// Load all schedules
-pub fn load_all_schedules(
-    wos: &WosBackend,
-) -> DbxResult<HashMap<String, crate::automation::Schedule>> {
-    let mut schedules = HashMap::new();
-    let all_records = wos.scan("__meta__/schedules", ..)?;
-
-    for (key_vec, value_vec) in all_records {
-        let name =
-            String::from_utf8(key_vec).map_err(|e| DbxError::Serialization(e.to_string()))?;
-
-        let json = String::from_utf8(value_vec).map_err(|e| {
-            DbxError::Serialization(format!("Failed to decode schedule JSON: {}", e))
-        })?;
-
-        let schedule = crate::automation::Schedule::from_json(&json)?;
-        schedules.insert(name, schedule);
-    }
-
-    Ok(schedules)
 }

@@ -6,7 +6,7 @@
 use crate::error::{DbxError, DbxResult};
 use crate::storage::StorageBackend;
 
-use arrow::array::{ArrayRef, BinaryBuilder, RecordBatch};
+use arrow::array::{ArrayRef, RecordBatch};
 
 use arrow::datatypes::{DataType, Field, Schema, SchemaRef};
 use arrow::ipc::reader::StreamReader;
@@ -380,7 +380,6 @@ impl ColumnarCache {
     ) -> DbxResult<usize> {
         eprintln!("[sync_raw] Syncing {} rows for table '{}'", rows.len(), table);
         // 2. Convert to RecordBatch (Schema: key[Binary], value[Binary])
-        use arrow::array::{ArrayRef, BinaryArray};
         use arrow::array::builder::BinaryBuilder;
         let schema = Arc::new(Schema::new(vec![
             Field::new("key", DataType::Binary, false),

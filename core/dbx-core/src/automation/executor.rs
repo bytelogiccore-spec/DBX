@@ -192,7 +192,7 @@ mod tests {
     impl Callable for TestCallable {
         fn call(&self, _ctx: &ExecutionContext, args: &[Value]) -> DbxResult<Value> {
             // 단순히 첫 번째 인자를 반환
-            Ok(args.get(0).cloned().unwrap_or(Value::Null))
+            Ok(args.first().cloned().unwrap_or(Value::Null))
         }
 
         fn name(&self) -> &str {

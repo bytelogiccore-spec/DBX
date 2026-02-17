@@ -5,7 +5,7 @@
 // Section 3: MVCC 버전 관리 (add_version, get_at_snapshot 성능)
 
 use criterion::{Criterion, black_box, criterion_group, criterion_main};
-use dbx_core::engine::{ParallelExecutionEngine, TwoLevelCache};
+use dbx_core::engine::TwoLevelCache;
 use dbx_core::sql::ParallelSqlParser;
 use dbx_core::transaction::{TimestampOracle, VersionManager};
 use std::path::PathBuf;
@@ -132,7 +132,7 @@ fn bench_version_manager(c: &mut Criterion) {
             let key = format!("key_{}", counter % 100).into_bytes();
             let value = format!("value_{}", counter);
             let ts = oracle.as_ref().next();
-            manager.add_version(black_box(key), black_box(value), black_box(ts));
+            let _ = manager.add_version(black_box(key), black_box(value), black_box(ts));
             counter += 1;
         })
     });
@@ -142,7 +142,7 @@ fn bench_version_manager(c: &mut Criterion) {
         let key = format!("key_{}", i % 100).into_bytes();
         let value = format!("value_{}", i);
         let ts = oracle.as_ref().next();
-        manager.add_version(key, value, ts);
+        let _ = manager.add_version(key, value, ts);
     }
 
     // get_at_snapshot 벤치마크

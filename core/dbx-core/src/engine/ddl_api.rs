@@ -1,8 +1,8 @@
 //! DDL API implementation - Schema management convenience methods
 
 use crate::engine::Database;
-use crate::error::{DbxError, DbxResult};
-use arrow::datatypes::{DataType, Field, Schema};
+use crate::error::DbxResult;
+use arrow::datatypes::{DataType, Schema};
 use std::sync::Arc;
 
 impl Database {

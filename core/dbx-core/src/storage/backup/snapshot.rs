@@ -182,6 +182,23 @@ impl Database {
     }
 }
 
+
+// ════════════════════════════════════════════
+// DatabaseSnapshot Trait Implementation
+// ════════════════════════════════════════════
+
+impl crate::traits::DatabaseSnapshot for Database {
+    fn save_to_file(&self, path: &str) -> DbxResult<()> {
+        // Reuse existing implementation
+        Database::save_to_file(self, path)
+    }
+
+    fn load_from_file(path: &str) -> DbxResult<Self> {
+        // Reuse existing implementation
+        Database::load_from_file(path)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -202,22 +219,6 @@ mod tests {
 
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("in-memory"));
-    }
-}
-
-// ════════════════════════════════════════════
-// DatabaseSnapshot Trait Implementation
-// ════════════════════════════════════════════
-
-impl crate::traits::DatabaseSnapshot for Database {
-    fn save_to_file(&self, path: &str) -> DbxResult<()> {
-        // Reuse existing implementation
-        Database::save_to_file(self, path)
-    }
-
-    fn load_from_file(path: &str) -> DbxResult<Self> {
-        // Reuse existing implementation
-        Database::load_from_file(path)
     }
 }
 

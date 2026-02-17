@@ -84,7 +84,7 @@ mod tests {
         // All unique
         let keys: Vec<i32> = (0..1000).collect();
         let est = estimate_cardinality_i32(&keys);
-        assert!(est >= 900 && est <= 1100, "Estimated: {}", est);
+        assert!((900..=1100).contains(&est), "Estimated: {}", est);
 
         // All same
         let keys = vec![42; 1000];

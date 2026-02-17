@@ -249,6 +249,18 @@ impl<'a> Transaction<'a, RolledBack> {
     }
 }
 
+
+// ════════════════════════════════════════════
+// DatabaseTransaction Trait Implementation
+// ════════════════════════════════════════════
+
+impl crate::traits::DatabaseTransaction for Database {
+    fn begin(&self) -> DbxResult<Transaction<'_, Active>> {
+        // Reuse existing implementation
+        Database::begin(self)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::engine::Database;
@@ -366,17 +378,6 @@ mod tests {
         let tx = db.begin().unwrap();
         let rolled_back = tx.rollback().unwrap();
         assert!(rolled_back.is_rolled_back());
-    }
-}
-
-// ════════════════════════════════════════════
-// DatabaseTransaction Trait Implementation
-// ════════════════════════════════════════════
-
-impl crate::traits::DatabaseTransaction for Database {
-    fn begin(&self) -> DbxResult<Transaction<'_, Active>> {
-        // Reuse existing implementation
-        Database::begin(self)
     }
 }
 

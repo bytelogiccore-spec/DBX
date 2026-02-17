@@ -3,7 +3,6 @@
 use crate::engine::Database;
 use crate::engine::schema_builder::SchemaBuilder;
 use crate::DbxResult;
-use arrow::datatypes::Schema;
 
 impl Database {
     /// Create a table using SchemaBuilder
