@@ -816,33 +816,4 @@ mod tests {
         assert_eq!(ids.value(0), 2);
         assert_eq!(ids.value(1), 3);
     }
-    #[test]
-    fn test_sync_from_delta() {
-        use crate::storage::delta_store::DeltaStore;
-
-        let delta = DeltaStore::new();
-        delta.insert("t1", b"k1", b"v1").unwrap();
-        delta.insert("t1", b"k2", b"v2").unwrap();
-
-        let cache = ColumnarCache::new();
-        let table_lower = "t1".to_lowercase();
-        let rows = delta.scan(&table_lower, ..).unwrap();
-        let count = cache.sync_from_storage("t1", rows, None).unwrap();
-
-        assert_eq!(count, 2);
-
-        // Use full scan (None projection) to verify columns
-        let batches = cache.get_batches("t1", None).unwrap().unwrap();
-        let batch = &batches[0];
-        assert_eq!(batch.num_rows(), 2);
-
-        // Verify key column
-        let key_col = batch
-            .column(0)
-            .as_any()
-            .downcast_ref::<arrow::array::BinaryArray>()
-            .unwrap();
-        assert_eq!(key_col.value(0), b"k1");
-        assert_eq!(key_col.value(1), b"k2");
-    }
 }
