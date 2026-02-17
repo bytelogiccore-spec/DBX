@@ -26,6 +26,8 @@ pub struct DeltaStore {
     tables: DashMap<String, Arc<SkipMap<VersionedKey, Arc<Vec<u8>>>>>,
     /// Threshold to trigger flush
     flush_threshold: usize,
+    /// Atomic entry count across all tables
+    entry_count: std::sync::atomic::AtomicUsize,
 }
 
 impl DeltaStore {
@@ -39,6 +41,7 @@ impl DeltaStore {
         Self {
             tables: DashMap::new(),
             flush_threshold: threshold,
+            entry_count: std::sync::atomic::AtomicUsize::new(0),
         }
     }
 
@@ -49,7 +52,7 @@ impl DeltaStore {
 
     /// Get the current entry count across all tables.
     pub fn entry_count(&self) -> usize {
-        self.tables.iter().map(|e| e.value().len()).sum()
+        self.entry_count.load(std::sync::atomic::Ordering::Relaxed)
     }
 
     /// Drain all data from the store, returning table→entries mapping.
@@ -73,6 +76,10 @@ impl DeltaStore {
                 result.push((table_name, entries));
             }
         }
+
+        // Reset entry count
+        self.entry_count
+            .store(0, std::sync::atomic::Ordering::Relaxed);
 
         result
     }
@@ -153,6 +160,8 @@ impl StorageBackend for DeltaStore {
         // If it's encoded, decode() will find the correct TS.
         let vk = Self::to_versioned_key(key, 0);
         table_map.insert(vk, Arc::new(value.to_vec()));
+        self.entry_count
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 
         Ok(())
     }
@@ -163,6 +172,8 @@ impl StorageBackend for DeltaStore {
         for (key, value) in rows {
             let vk = Self::to_versioned_key(&key, 0);
             table_map.insert(vk, Arc::new(value));
+            self.entry_count
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         }
 
         Ok(())
@@ -183,7 +194,13 @@ impl StorageBackend for DeltaStore {
         };
 
         let vk = Self::to_versioned_key(key, 0);
-        Ok(table_map.remove(&vk).is_some())
+        if table_map.remove(&vk).is_some() {
+            self.entry_count
+                .fetch_sub(1, std::sync::atomic::Ordering::Relaxed);
+            Ok(true)
+        } else {
+            Ok(false)
+        }
     }
 
     fn scan<R: RangeBounds<Vec<u8>> + Clone>(

@@ -418,7 +418,7 @@ impl PhysicalPlan {
 
     /// Returns a list of all tables involved in this plan.
     pub fn tables(&self) -> Vec<String> {
-        match self {
+        let mut v = match self {
             PhysicalPlan::TableScan { table, .. } => vec![table.clone()],
             PhysicalPlan::HashJoin { left, right, .. } => {
                 let mut v = left.tables();
@@ -443,7 +443,10 @@ impl PhysicalPlan {
             PhysicalPlan::DropFunction { .. } => vec![],
             PhysicalPlan::DropTrigger { .. } => vec![],
             PhysicalPlan::DropJob { .. } => vec![],
-        }
+        };
+        v.sort();
+        v.dedup();
+        v
     }
 }
 

@@ -294,34 +294,21 @@ impl ColumnarCache {
         table: &str,
         table_schema: Option<SchemaRef>,
     ) -> DbxResult<usize> {
-        eprintln!("[sync_from_delta] Syncing table: '{}'", table);
-
         // 1. Normalize table name to lowercase for Delta Store lookup
         let table_lower = table.to_lowercase();
-        eprintln!(
-            "[sync_from_delta] Using lowercase table name: '{}'",
-            table_lower
-        );
 
         // 2. Scan from Delta Store
         let rows = delta.scan(&table_lower, ..)?;
-        eprintln!(
-            "[sync_from_delta] Scanned {} rows from Delta Store",
-            rows.len()
-        );
 
         if rows.is_empty() {
-            eprintln!("[sync_from_delta] No rows found, clearing table");
             self.clear_table(table)?;
             return Ok(0);
         }
 
         // 3. Branch: Typed (SQL) vs Raw (CRUD)
         if let Some(schema) = table_schema {
-            eprintln!("[sync_from_delta] Using Typed mode (SQL table)");
             self.sync_typed(table, rows, schema)
         } else {
-            eprintln!("[sync_from_delta] Using Raw mode (CRUD table)");
             self.sync_raw(table, rows)
         }
     }
@@ -346,42 +333,13 @@ impl ColumnarCache {
         rows: Vec<(Vec<u8>, Vec<u8>)>,
         schema: SchemaRef,
     ) -> DbxResult<usize> {
-        eprintln!(
-            "[sync_typed] Syncing {} rows for table '{}'",
-            rows.len(),
-            table
-        );
-        eprintln!("[sync_typed] Schema: {:?}", schema);
-
         // Deserialize Arrow IPC and collect batches
         let mut batches = Vec::new();
 
-        for (idx, (_key, value)) in rows.iter().enumerate() {
-            eprintln!(
-                "[sync_typed] Deserializing row {} (Arrow IPC, {} bytes)",
-                idx,
-                value.len()
-            );
-
-            let batch = Self::deserialize_arrow_ipc(value).map_err(|e| {
-                eprintln!(
-                    "[sync_typed] ❌ Arrow IPC deserialization error for row {}: {}",
-                    idx, e
-                );
-                e
-            })?;
-
-            eprintln!(
-                "[sync_typed] ✅ Deserialized batch with {} rows",
-                batch.num_rows()
-            );
+        for (_key, value) in rows.iter() {
+            let batch = Self::deserialize_arrow_ipc(value)?;
             batches.push(batch);
         }
-
-        eprintln!(
-            "[sync_typed] Clearing table and inserting {} batches",
-            batches.len()
-        );
 
         // Clear table and insert all batches
         self.clear_table(table)?;
@@ -389,21 +347,11 @@ impl ColumnarCache {
             self.insert_typed_batch(table, schema.clone(), batch)?;
         }
 
-        let total_rows = rows.len();
-        eprintln!(
-            "[sync_typed] ✅ Successfully synced {} rows for table '{}'",
-            total_rows, table
-        );
-        Ok(total_rows)
+        Ok(rows.len())
     }
 
     /// Sync as raw Binary data (CRUD tables without schema)
     fn sync_raw(&self, table: &str, rows: Vec<(Vec<u8>, Vec<u8>)>) -> DbxResult<usize> {
-        eprintln!(
-            "[sync_raw] Syncing {} rows for table '{}'",
-            rows.len(),
-            table
-        );
         // 2. Convert to RecordBatch (Schema: key[Binary], value[Binary])
         use arrow::array::builder::BinaryBuilder;
         let schema = Arc::new(Schema::new(vec![
@@ -484,21 +432,28 @@ impl ColumnarCache {
             "[insert_typed_batch] Getting or creating table cache for '{}'",
             table
         );
-        let table_cache = self.tables.entry(table.to_string()).or_insert_with(|| {
-            eprintln!(
-                "[insert_typed_batch] Creating new table cache for '{}'",
-                table
-            );
-            Arc::new(TableCache {
-                data: parking_lot::RwLock::new(CachedData::Typed {
-                    schema: schema.clone(),
-                    batches: Vec::new(),
-                }),
-                _last_sync_ts: AtomicU64::new(0),
-                last_access: AtomicU64::new(self.access_counter.fetch_add(1, Ordering::Relaxed)),
-                memory_usage: AtomicUsize::new(0),
-            })
-        });
+        let table_cache = {
+            self.tables
+                .entry(table.to_string())
+                .or_insert_with(|| {
+                    eprintln!(
+                        "[insert_typed_batch] Creating new table cache for '{}'",
+                        table
+                    );
+                    Arc::new(TableCache {
+                        data: parking_lot::RwLock::new(CachedData::Typed {
+                            schema: schema.clone(),
+                            batches: Vec::new(),
+                        }),
+                        _last_sync_ts: AtomicU64::new(0),
+                        last_access: AtomicU64::new(
+                            self.access_counter.fetch_add(1, Ordering::Relaxed),
+                        ),
+                        memory_usage: AtomicUsize::new(0),
+                    })
+                })
+                .clone()
+        };
 
         // Update access time
         table_cache.last_access.store(
@@ -507,38 +462,19 @@ impl ColumnarCache {
         );
 
         // Insert batch
-        eprintln!("[insert_typed_batch] Inserting batch into table cache");
         let mut data = table_cache.data.write();
         match &mut *data {
             CachedData::Typed { batches, .. } => {
-                eprintln!(
-                    "[insert_typed_batch] Appending to existing Typed batches (current count: {})",
-                    batches.len()
-                );
                 batches.push(batch);
-                eprintln!(
-                    "[insert_typed_batch] ✅ Batch appended (new count: {})",
-                    batches.len()
-                );
             }
             CachedData::Raw { .. } => {
-                eprintln!("[insert_typed_batch] Replacing Raw with Typed");
                 *data = CachedData::Typed {
                     schema,
                     batches: vec![batch],
                 };
-                eprintln!("[insert_typed_batch] ✅ Replaced with Typed batch");
             }
         }
         drop(data);
-
-        eprintln!(
-            "[insert_typed_batch] Current tables in cache: {:?}",
-            self.tables
-                .iter()
-                .map(|e| e.key().clone())
-                .collect::<Vec<_>>()
-        );
 
         table_cache
             .memory_usage
@@ -546,10 +482,6 @@ impl ColumnarCache {
         self.current_memory
             .fetch_add(memory_size, Ordering::Relaxed);
 
-        eprintln!(
-            "[insert_typed_batch] ✅ Successfully inserted batch for table '{}'",
-            table
-        );
         Ok(())
     }
 
