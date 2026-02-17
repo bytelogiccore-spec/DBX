@@ -99,6 +99,14 @@ name = "parallel_engine_bench"
 harness = false
 
 [[bench]]
+name = "sql_baseline"
+harness = false
+
+[[bench]]
+name = "ddl_api_benchmark"
+harness = false
+
+[[bench]]
 name = "phase1_benchmarks"
 harness = false
 

@@ -26,10 +26,34 @@ impl PhysicalPlanner {
                 columns: _,
                 filter,
             } => {
+                eprintln!("[PhysicalPlanner] Looking for table: '{}'", table);
                 let schemas = self.table_schemas.read().unwrap();
-                let schema = schemas
-                    .get(table)
-                    .ok_or_else(|| DbxError::TableNotFound(table.clone()))?;
+                eprintln!("[PhysicalPlanner] Available tables: {:?}", schemas.keys().collect::<Vec<_>>());
+                
+                // Try case-insensitive table lookup
+                let schema = schemas.get(table).or_else(|| {
+                    eprintln!("[PhysicalPlanner] Exact match failed, trying case-insensitive...");
+                    let table_lower = table.to_lowercase();
+                    let result = schemas
+                        .iter()
+                        .find(|(k, _)| {
+                            let matches = k.to_lowercase() == table_lower;
+                            eprintln!("[PhysicalPlanner] Comparing '{}' (lower: '{}') with '{}': {}", k, k.to_lowercase(), table_lower, matches);
+                            matches
+                        })
+                        .map(|(_, v)| v);
+                    if result.is_some() {
+                        eprintln!("[PhysicalPlanner] ✅ Case-insensitive match found!");
+                    } else {
+                        eprintln!("[PhysicalPlanner] ❌ No case-insensitive match found");
+                    }
+                    result
+                }).ok_or_else(|| {
+                    eprintln!("[PhysicalPlanner] ❌ TableNotFound: '{}'", table);
+                    DbxError::TableNotFound(table.clone())
+                })?;
+                
+                eprintln!("[PhysicalPlanner] ✅ Schema found for table '{}'", table);
                 let column_names: Vec<String> =
                     schema.fields().iter().map(|f| f.name().clone()).collect();
                 drop(schemas);

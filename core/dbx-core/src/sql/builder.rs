@@ -353,6 +353,11 @@ fn scalar_to_query_scalar(sv: &crate::storage::columnar::ScalarValue) -> ScalarV
         CSV::Float64(v) => ScalarValue::Float64(*v),
         CSV::Utf8(v) => ScalarValue::Utf8(v.clone()),
         CSV::Boolean(v) => ScalarValue::Boolean(*v),
+        CSV::Binary(_) => {
+            // Binary type is not supported in query builder ScalarValue
+            // This should not happen in normal query operations
+            ScalarValue::Null
+        }
     }
 }
 

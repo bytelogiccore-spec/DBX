@@ -443,8 +443,35 @@ impl Database {
     // ════════════════════════════════════════════
 
     /// Synchronize the Columnar Cache with the latest data from Delta Store.
+    /// 
+    /// If the table has a schema in table_schemas, it will be synced as typed data.
+    /// Otherwise, it will be synced as raw Binary data.
     pub fn sync_columnar_cache(&self, table: &str) -> DbxResult<usize> {
-        self.columnar_cache.sync_from_delta(&self.delta, table)
+        eprintln!("[sync_columnar_cache] Syncing table: '{}'", table);
+        
+        // Check if table has a schema (SQL table) - case-insensitive
+        let schemas = self.table_schemas.read().unwrap();
+        let table_schema = schemas.get(table).or_else(|| {
+            eprintln!("[sync_columnar_cache] Exact match failed, trying case-insensitive...");
+            let table_lower = table.to_lowercase();
+            schemas
+                .iter()
+                .find(|(k, _)| {
+                    let matches = k.to_lowercase() == table_lower;
+                    eprintln!("[sync_columnar_cache] Comparing '{}' with '{}': {}", k, table, matches);
+                    matches
+                })
+                .map(|(_, v)| v)
+        }).cloned();
+        drop(schemas);
+        
+        if table_schema.is_some() {
+            eprintln!("[sync_columnar_cache] ✅ Found schema for table '{}'", table);
+        } else {
+            eprintln!("[sync_columnar_cache] ⚠️ No schema found for table '{}', treating as Raw", table);
+        }
+        
+        self.columnar_cache.sync_from_delta(&self.delta, table, table_schema)
     }
 
     /// Sync data from multiple tiers (Delta and ROS) to GPU for merge operations.

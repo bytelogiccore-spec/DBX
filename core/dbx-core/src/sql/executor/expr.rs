@@ -71,6 +71,10 @@ fn scalar_to_array(scalar: &ScalarValue, len: usize) -> DbxResult<ArrayRef> {
             let arr: BooleanArray = vec![Some(*v); len].into_iter().collect();
             Ok(Arc::new(arr))
         }
+        ScalarValue::Binary(v) => {
+            let arr: BinaryArray = vec![Some(v.as_slice()); len].into_iter().collect();
+            Ok(Arc::new(arr))
+        }
         ScalarValue::Null => {
             // Default to Int32 null array
             let arr: Int32Array = vec![None; len].into_iter().collect();
@@ -315,6 +319,19 @@ fn comparison_op(left: &ArrayRef, right: &ArrayRef, op: &BinaryOperator) -> DbxR
         DataType::Utf8 => {
             let l = left.as_any().downcast_ref::<StringArray>().unwrap();
             let r = right.as_any().downcast_ref::<StringArray>().unwrap();
+            match op {
+                BinaryOperator::Eq => cmp::eq(l, r)?,
+                BinaryOperator::NotEq => cmp::neq(l, r)?,
+                BinaryOperator::Lt => cmp::lt(l, r)?,
+                BinaryOperator::LtEq => cmp::lt_eq(l, r)?,
+                BinaryOperator::Gt => cmp::gt(l, r)?,
+                BinaryOperator::GtEq => cmp::gt_eq(l, r)?,
+                _ => unreachable!(),
+            }
+        }
+        DataType::Binary => {
+            let l = left.as_any().downcast_ref::<BinaryArray>().unwrap();
+            let r = right.as_any().downcast_ref::<BinaryArray>().unwrap();
             match op {
                 BinaryOperator::Eq => cmp::eq(l, r)?,
                 BinaryOperator::NotEq => cmp::neq(l, r)?,

@@ -21,6 +21,7 @@ pub enum ScalarValue {
     Float64(f64),
     Utf8(String),
     Boolean(bool),
+    Binary(Vec<u8>),
 }
 
 impl ScalarValue {
@@ -33,6 +34,7 @@ impl ScalarValue {
             ScalarValue::Float64(_) => DataType::Float64,
             ScalarValue::Utf8(_) => DataType::Utf8,
             ScalarValue::Boolean(_) => DataType::Boolean,
+            ScalarValue::Binary(_) => DataType::Binary,
         }
     }
 
@@ -62,8 +64,11 @@ impl ScalarValue {
             DataType::Utf8 => Ok(ScalarValue::Utf8(
                 array.as_string::<i32>().value(idx).to_string(),
             )),
+            DataType::Binary => Ok(ScalarValue::Binary(
+                array.as_binary::<i32>().value(idx).to_vec(),
+            )),
             dt => Err(crate::error::DbxError::TypeMismatch {
-                expected: "Int32|Int64|Float64|Boolean|Utf8".to_string(),
+                expected: "Int32|Int64|Float64|Boolean|Utf8|Binary".to_string(),
                 actual: format!("{dt:?}"),
             }),
         }
@@ -224,6 +229,22 @@ impl ColumnarStore {
                         other => {
                             return Err(DbxError::TypeMismatch {
                                 expected: "Boolean".to_string(),
+                                actual: format!("{other:?}"),
+                            });
+                        }
+                    }
+                }
+                Ok(Arc::new(builder.finish()))
+            }
+            DataType::Binary => {
+                let mut builder = arrow::array::BinaryBuilder::with_capacity(self.rows.len(), 256);
+                for row in &self.rows {
+                    match &row[col_idx] {
+                        ScalarValue::Binary(v) => builder.append_value(v),
+                        ScalarValue::Null => builder.append_null(),
+                        other => {
+                            return Err(DbxError::TypeMismatch {
+                                expected: "Binary".to_string(),
                                 actual: format!("{other:?}"),
                             });
                         }
