@@ -23,18 +23,21 @@ jobs:
       - run: cargo build --release --locked -p dbx-node
 
       - name: npm 의존성 설치
-        working-directory: packages/nodejs
-        run: npm install
+        run: |
+          cd packages/nodejs
+          npm install
 
       - name: npm 패키지 생성
-        working-directory: packages/nodejs
-        run: npm pack
+        run: |
+          cd packages/nodejs
+          npm pack
 
       - name: npm 배포
-        working-directory: packages/nodejs
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: npm publish --access public --ignore-scripts
+        run: |
+          cd packages/nodejs
+          npm publish --access public --ignore-scripts
 
       - name: 에셋 업로드
         uses: actions/upload-artifact@v4
