@@ -879,14 +879,11 @@ impl Database {
 
     /// Execute SELECT query plans (original logic)
     fn execute_select_plan(&self, plan: &PhysicalPlan) -> DbxResult<Vec<RecordBatch>> {
-        // Phase 6.3: Automatic Tier Selection & Loading
-        // If the query is analytical (OLAP), ensure the tables are in the Columnar Cache.
-        if plan.is_analytical() {
-            for table in plan.tables() {
-                if !self.columnar_cache.has_table(&table) {
-                    // Try to sync from Delta (Tier 1) to Cache (Tier 2) automatically
-                    let _ = self.sync_columnar_cache(&table);
-                }
+        // Automatic Tier Selection & Loading
+        // Ensure all tables involved in the query are synced to Columnar Cache (Tier 2).
+        for table in plan.tables() {
+            if !self.columnar_cache.has_table(&table) {
+                let _ = self.sync_columnar_cache(&table);
             }
         }
 
@@ -962,13 +959,7 @@ impl Database {
                     // Projection is already applied, so pass empty projection to operator.
                     (cached_batches, schema, vec![])
                 } else {
-                    // Reset flag if cache miss
-                    filter_pushed_down = false;
-
-                    // Try to sync from Delta Store to Cache
-                    let _ = self.sync_columnar_cache(table);
-
-                    // Try cache again after sync
+                    // Try cache again (it should have been synced at the start of execute_select_plan)
                     let cached_after_sync = columnar_cache.get_batches(
                         table,
                         if projection.is_empty() {
