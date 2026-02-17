@@ -22,6 +22,32 @@ impl Connector {
     }
 }
 
+/// JOIN type
+#[derive(Debug, Clone, PartialEq)]
+enum JoinType {
+    Inner,
+    Left,
+    Right,
+}
+
+impl JoinType {
+    fn to_sql(&self) -> &str {
+        match self {
+            JoinType::Inner => "INNER JOIN",
+            JoinType::Left => "LEFT JOIN",
+            JoinType::Right => "RIGHT JOIN",
+        }
+    }
+}
+
+/// JOIN clause representation
+#[derive(Debug, Clone)]
+struct JoinClause {
+    join_type: JoinType,
+    table: String,
+    on_conditions: Vec<(String, String)>, // (left_column, right_column)
+}
+
 /// WHERE clause representation
 #[derive(Debug, Clone)]
 struct WhereClause {
@@ -86,6 +112,7 @@ pub struct QueryBuilder<'a> {
     db: &'a Database,
     select_columns: Vec<String>,
     from_table: Option<String>,
+    join_clauses: Vec<JoinClause>,
     where_clauses: Vec<WhereClause>,
     order_by_clauses: Vec<OrderByClause>,
     limit_value: Option<usize>,
@@ -100,6 +127,7 @@ impl<'a> QueryBuilder<'a> {
             db,
             select_columns: Vec::new(),
             from_table: None,
+            join_clauses: Vec::new(),
             where_clauses: Vec::new(),
             order_by_clauses: Vec::new(),
             limit_value: None,
@@ -295,6 +323,82 @@ impl<'a> QueryBuilder<'a> {
         self
     }
 
+    /// Add an INNER JOIN clause
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// # use dbx_core::Database;
+    /// # fn main() -> dbx_core::DbxResult<()> {
+    /// # let db = Database::open_in_memory()?;
+    /// let results = db.query_builder()
+    ///     .select(&["users.name", "orders.total"])
+    ///     .from("users")
+    ///     .inner_join("orders", "users.id", "orders.user_id")
+    ///     .execute()?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn inner_join(mut self, table: &str, left_col: &str, right_col: &str) -> Self {
+        self.join_clauses.push(JoinClause {
+            join_type: JoinType::Inner,
+            table: table.to_string(),
+            on_conditions: vec![(left_col.to_string(), right_col.to_string())],
+        });
+        self
+    }
+
+    /// Add a LEFT JOIN clause
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// # use dbx_core::Database;
+    /// # fn main() -> dbx_core::DbxResult<()> {
+    /// # let db = Database::open_in_memory()?;
+    /// let results = db.query_builder()
+    ///     .select(&["users.name", "orders.total"])
+    ///     .from("users")
+    ///     .left_join("orders", "users.id", "orders.user_id")
+    ///     .execute()?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn left_join(mut self, table: &str, left_col: &str, right_col: &str) -> Self {
+        self.join_clauses.push(JoinClause {
+            join_type: JoinType::Left,
+            table: table.to_string(),
+            on_conditions: vec![(left_col.to_string(), right_col.to_string())],
+        });
+        self
+    }
+
+    /// Add a RIGHT JOIN clause
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// # use dbx_core::Database;
+    /// # fn main() -> dbx_core::DbxResult<()> {
+    /// # let db = Database::open_in_memory()?;
+    /// let results = db.query_builder()
+    ///     .select(&["users.name", "orders.total"])
+    ///     .from("users")
+    ///     .right_join("orders", "users.id", "orders.user_id")
+    ///     .execute()?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn right_join(mut self, table: &str, left_col: &str, right_col: &str) -> Self {
+        self.join_clauses.push(JoinClause {
+            join_type: JoinType::Right,
+            table: table.to_string(),
+            on_conditions: vec![(left_col.to_string(), right_col.to_string())],
+        });
+        self
+    }
+
+
     /// Count rows
     ///
     /// # Example
@@ -360,6 +464,21 @@ impl<'a> QueryBuilder<'a> {
         if let Some(table) = &self.from_table {
             sql.push_str(&format!(" FROM {}", table));
         }
+
+        // JOIN clauses
+        for join in &self.join_clauses {
+            sql.push_str(&format!(" {} {}", join.join_type.to_sql(), join.table));
+            
+            if !join.on_conditions.is_empty() {
+                sql.push_str(" ON ");
+                let conditions: Vec<String> = join.on_conditions
+                    .iter()
+                    .map(|(left, right)| format!("{} = {}", left, right))
+                    .collect();
+                sql.push_str(&conditions.join(" AND "));
+            }
+        }
+
 
         // WHERE clause
         if !self.where_clauses.is_empty() {
