@@ -446,8 +446,6 @@ impl Database {
     /// # 인자
     ///
     /// * `path` - 데이터베이스 파일 경로
-    ///
-
     pub fn open_safe(path: impl AsRef<Path>) -> DbxResult<Arc<Self>> {
         let db = Self::open(path.as_ref())?;
         Arc::get_mut(&mut db.clone()).unwrap().durability = DurabilityLevel::Full;
@@ -476,8 +474,6 @@ impl Database {
     ///
     /// * `path` - 데이터베이스 파일 경로
     /// * `durability` - 내구성 수준
-    ///
-
     pub fn open_with_durability(
         path: impl AsRef<Path>,
         durability: DurabilityLevel,
