@@ -60,7 +60,7 @@ Commercial license fees are determined based on:
 - Deployment scale (number of production instances)
 - Support level required
 
-**Contact us for pricing:** license@bytelogic.studio
+**Contact us for pricing:** bytelogiccore@gmail.com
 
 ### 4.2 Payment Terms
 
@@ -137,8 +137,7 @@ This Agreement constitutes the entire agreement between the parties and supersed
 ## How to Obtain a Commercial License
 
 **Contact us:**
-- Email: license@bytelogic.studio
-- Website: https://bytelogic.studio/dbx/license
+- Email: bytelogiccore@gmail.com
 
 **Required Information:**
 - Company name and registration number
@@ -152,4 +151,4 @@ We typically respond within 2 business days with a customized quote.
 
 **ByteLogic Studio**  
 Seoul, Republic of Korea  
-license@bytelogic.studio
+bytelogiccore@gmail.com
