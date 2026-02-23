@@ -144,7 +144,7 @@ DBX is available under a **dual-license model**:
 
 📚 **[License Policy Guide](./legal/english/LICENSE-POLICY.md)** — Which license do I need?
 
-📧 **Commercial licensing:** license@bytelogic.studio
+📧 **Commercial licensing:** bytelogiccore@gmail.com
 
 ---
 
