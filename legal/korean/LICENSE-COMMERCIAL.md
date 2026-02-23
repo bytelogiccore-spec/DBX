@@ -60,7 +60,7 @@ Copyright (c) 2026 ByteLogic Studio
 - 배포 규모 (운영 인스턴스 수)
 - 필요한 기술 지원 수준
 
-**가격 문의:** license@bytelogic.studio
+**가격 문의:** bytelogiccore@gmail.com
 
 ### 4.2 결제 조건
 
@@ -135,8 +135,7 @@ ByteLogic Studio는 본 약관의 준수 여부를 확인하기 위해 30일 전
 ## 상업용 라이선스 취득 방법
 
 **문의처:**
-- 이메일: license@bytelogic.studio
-- 웹사이트: https://bytelogic.studio/dbx/license
+- 이메일: bytelogiccore@gmail.com
 
 **필요 정보:**
 - 회사명 및 사업자 등록 번호
@@ -150,4 +149,4 @@ ByteLogic Studio는 본 약관의 준수 여부를 확인하기 위해 30일 전
 
 **ByteLogic Studio**  
 대한민국 서울  
-license@bytelogic.studio
+bytelogiccore@gmail.com
