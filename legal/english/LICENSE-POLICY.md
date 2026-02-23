@@ -149,7 +149,6 @@ However, once you deploy DBX in a production environment, you must comply with t
 **Have questions about licensing?**
 
 - **Email:** bytelogiccore@gmail.com
-- **Website:** https://bytelogic.studio/dbx/license
 
 We typically respond within 2 business days.
 
