@@ -57,7 +57,7 @@ Commercial licenses include:
 - ✓ Bug fixes and security patches
 - ✓ Peace of mind for your legal and compliance teams
 
-**Contact us for pricing:** license@bytelogic.studio
+**Contact us for pricing:** bytelogiccore@gmail.com
 
 ---
 
@@ -67,7 +67,7 @@ Commercial licenses include:
 
 **Yes.** If you have 100+ employees, you need a commercial license regardless of revenue.
 
-However, we offer **startup-friendly pricing**. Contact us at license@bytelogic.studio to discuss options.
+However, we offer **startup-friendly pricing**. Contact us at bytelogiccore@gmail.com to discuss options.
 
 ---
 
@@ -81,7 +81,7 @@ However, we offer **startup-friendly pricing**. Contact us at license@bytelogic.
 
 **No.** Non-profit organizations, educational institutions, and research organizations can use DBX under the MIT License regardless of size.
 
-Please contact us at license@bytelogic.studio to confirm your eligibility.
+Please contact us at bytelogiccore@gmail.com to confirm your eligibility.
 
 ---
 
@@ -115,7 +115,7 @@ However, we reserve the right to:
 
 ### Q7: Can we get a trial period?
 
-**Yes!** We offer a **30-day free trial** for commercial licenses. Contact us at license@bytelogic.studio to get started.
+**Yes!** We offer a **30-day free trial** for commercial licenses. Contact us at bytelogiccore@gmail.com to get started.
 
 ---
 
@@ -148,7 +148,7 @@ However, once you deploy DBX in a production environment, you must comply with t
 
 **Have questions about licensing?**
 
-- **Email:** license@bytelogic.studio
+- **Email:** bytelogiccore@gmail.com
 - **Website:** https://bytelogic.studio/dbx/license
 
 We typically respond within 2 business days.
