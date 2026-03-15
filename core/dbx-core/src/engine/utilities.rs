@@ -54,24 +54,21 @@ impl Database {
 
         let mut total = 0;
 
-        // Step 2: Re-key WOS
-        // We need mutable access to the EncryptedWosBackend.
-        // Since WosVariant uses Arc, we use Arc::get_mut via try_unwrap workaround.
-        // For now, use the rekey method through interior mutability pattern.
-        match &self.wos {
-            WosVariant::Encrypted(enc_wos) => {
-                // Safety: We hold exclusive logical access during key rotation.
-                // Use unsafe to get mutable reference — caller guarantees no concurrent writes.
-                let wos_ptr = Arc::as_ptr(enc_wos) as *mut EncryptedWosBackend;
-                // SAFETY: rotate_key documentation states no concurrent writes allowed
-                let wos_mut = unsafe { &mut *wos_ptr };
-                total += wos_mut.rekey(new_encryption.clone())?;
-            }
-            WosVariant::Plain(_) | WosVariant::InMemory(_) => {
-                return Err(DbxError::Encryption(
-                    "WOS is not encrypted — cannot rotate key".into(),
-                ));
-            }
+        // Step 2: Re-key WOS (memory_wos and file_wos if encrypted)
+        if let WosVariant::Encrypted(enc_wos) = &self.memory_wos {
+            let wos_ptr = Arc::as_ptr(enc_wos) as *mut EncryptedWosBackend;
+            let wos_mut = unsafe { &mut *wos_ptr };
+            total += wos_mut.rekey(new_encryption.clone())?;
+        }
+        if let Some(WosVariant::Encrypted(enc_wos)) = &self.file_wos {
+            let wos_ptr = Arc::as_ptr(enc_wos) as *mut EncryptedWosBackend;
+            let wos_mut = unsafe { &mut *wos_ptr };
+            total += wos_mut.rekey(new_encryption.clone())?;
+        }
+        if total == 0 {
+            return Err(DbxError::Encryption(
+                "WOS is not encrypted — cannot rotate key".into(),
+            ));
         }
 
         // Step 3: Re-key encrypted WAL (if present)
@@ -101,9 +98,13 @@ impl Database {
                 let drained = self.delta.drain_all();
                 for (table, entries) in drained {
                     let rows: Vec<_> = entries.into_iter().collect();
-                    self.wos.insert_batch(&table, rows)?;
+                    self.wos_for_table(&table).insert_batch(&table, rows)?;
                 }
-                self.wos.flush()
+                self.memory_wos.flush()?;
+                if let Some(ref w) = self.file_wos {
+                    w.flush()?;
+                }
+                Ok(())
             }
             crate::engine::DeltaVariant::Columnar(_) => {
                 // Get all table names
@@ -119,16 +120,23 @@ impl Database {
     /// Get the total entry count (Delta + WOS) for a table.
     pub fn count(&self, table: &str) -> DbxResult<usize> {
         let delta_count = self.delta.count(table)?;
-        let wos_count = self.wos.count(table)?;
+        let wos_count = self.wos_for_table(table).count(table)?;
         Ok(delta_count + wos_count)
     }
 
     /// Get all table names across all tiers.
     pub fn table_names(&self) -> DbxResult<Vec<String>> {
         let mut names: Vec<String> = self.delta.table_names()?;
-        for name in self.wos.table_names()? {
+        for name in self.memory_wos.table_names()? {
             if !names.contains(&name) {
                 names.push(name);
+            }
+        }
+        if let Some(ref w) = self.file_wos {
+            for name in w.table_names()? {
+                if !names.contains(&name) {
+                    names.push(name);
+                }
             }
         }
         names.sort();

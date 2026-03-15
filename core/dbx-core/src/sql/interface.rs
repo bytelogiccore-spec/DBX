@@ -551,7 +551,7 @@ impl Database {
                     self.table_schemas.write().unwrap().remove(table);
 
                     // Delete schema from persistent storage
-                    self.wos.delete_schema_metadata(table)?;
+                    self.wos_for_metadata().delete_schema_metadata(table)?;
 
                     // Note: Data deletion from Delta Store/WOS would require
                     // scanning and deleting all keys with table prefix
@@ -614,7 +614,7 @@ impl Database {
                         .insert(table.clone(), schema.clone());
 
                     // Persist schema to storage
-                    self.wos.save_schema_metadata(table, &schema)?;
+                    self.wos_for_metadata().save_schema_metadata(table, &schema)?;
                 }
 
                 // Return success
@@ -672,7 +672,7 @@ impl Database {
                         .insert(index_name.clone(), (table.clone(), column.clone()));
 
                     // Persist index metadata to storage
-                    self.wos.save_index_metadata(index_name, table, column)?;
+                    self.wos_for_metadata().save_index_metadata(index_name, table, column)?;
                 }
 
                 let schema = Arc::new(Schema::new(vec![Field::new(
@@ -724,7 +724,7 @@ impl Database {
                         .remove(index_name.as_str());
 
                     // Delete index metadata from storage
-                    self.wos.delete_index_metadata(index_name)?;
+                    self.wos_for_metadata().delete_index_metadata(index_name)?;
                 }
 
                 let schema = Arc::new(Schema::new(vec![Field::new(
@@ -781,7 +781,7 @@ impl Database {
 
                         // Persist updated schema
                         drop(schemas); // Release lock before calling wos
-                        self.wos.save_schema_metadata(table, &new_schema)?;
+                        self.wos_for_metadata().save_schema_metadata(table, &new_schema)?;
                     }
                     AlterTableOperation::DropColumn { column_name } => {
                         // Get current schema
@@ -814,7 +814,7 @@ impl Database {
 
                         // Persist updated schema
                         drop(schemas); // Release lock
-                        self.wos.save_schema_metadata(table, &new_schema)?;
+                        self.wos_for_metadata().save_schema_metadata(table, &new_schema)?;
                     }
                     AlterTableOperation::RenameColumn { old_name, new_name } => {
                         // Get current schema
@@ -854,7 +854,7 @@ impl Database {
 
                         // Persist updated schema
                         drop(schemas); // Release lock
-                        self.wos.save_schema_metadata(table, &new_schema)?;
+                        self.wos_for_metadata().save_schema_metadata(table, &new_schema)?;
                     }
                 }
 

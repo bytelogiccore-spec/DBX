@@ -9,6 +9,7 @@ use crate::sql::parser::SqlParser;
 use crate::storage::StorageBackend; // Add this for trait methods
 use crate::storage::delta_store::DeltaStore;
 use crate::storage::encryption::EncryptionConfig;
+use crate::storage::memory_wos::InMemoryWosBackend;
 use crate::storage::encryption::wos::EncryptedWosBackend;
 use crate::storage::wos::WosBackend;
 use crate::transaction::mvcc::manager::TransactionManager; // Fix path
@@ -106,7 +107,9 @@ impl Database {
 
         let db = Self {
             delta: DeltaVariant::RowBased(Arc::new(DeltaStore::new())),
-            wos: WosVariant::Plain(Arc::clone(&wos_backend)),
+            memory_wos: WosVariant::InMemory(Arc::new(InMemoryWosBackend::new())),
+            file_wos: Some(WosVariant::Plain(Arc::clone(&wos_backend))),
+            table_persistence: DashMap::new(),
             schemas: Arc::new(RwLock::new(HashMap::new())),
             tables: RwLock::new(HashMap::new()),
             table_schemas: Arc::new(RwLock::new(loaded_schemas)),
@@ -261,7 +264,9 @@ impl Database {
 
         let db = Self {
             delta: DeltaVariant::RowBased(Arc::new(DeltaStore::new())),
-            wos: WosVariant::Encrypted(Arc::clone(&enc_wos)),
+            memory_wos: WosVariant::InMemory(Arc::new(InMemoryWosBackend::new())),
+            file_wos: Some(WosVariant::Encrypted(Arc::clone(&enc_wos))),
+            table_persistence: DashMap::new(),
             schemas: Arc::new(RwLock::new(HashMap::new())),
             tables: RwLock::new(HashMap::new()),
             table_schemas: Arc::new(RwLock::new(HashMap::new())),
@@ -347,9 +352,9 @@ impl Database {
 
         Ok(Self {
             delta: DeltaVariant::RowBased(Arc::new(DeltaStore::new())),
-            wos: WosVariant::InMemory(Arc::new(
-                crate::storage::memory_wos::InMemoryWosBackend::new(),
-            )),
+            memory_wos: WosVariant::InMemory(Arc::new(InMemoryWosBackend::new())),
+            file_wos: None,
+            table_persistence: DashMap::new(),
             schemas: Arc::new(RwLock::new(HashMap::new())),
             tables: RwLock::new(HashMap::new()),
             table_schemas: Arc::new(RwLock::new(HashMap::new())),
@@ -405,9 +410,11 @@ impl Database {
 
         Ok(Self {
             delta: DeltaVariant::RowBased(Arc::new(DeltaStore::new())),
-            wos: WosVariant::Encrypted(Arc::new(EncryptedWosBackend::open_temporary(
+            memory_wos: WosVariant::Encrypted(Arc::new(EncryptedWosBackend::open_temporary(
                 encryption.clone(),
             )?)),
+            file_wos: None,
+            table_persistence: DashMap::new(),
             schemas: Arc::new(RwLock::new(HashMap::new())),
             tables: RwLock::new(HashMap::new()),
             table_schemas: Arc::new(RwLock::new(HashMap::new())),
@@ -447,9 +454,7 @@ impl Database {
     ///
     /// * `path` - 데이터베이스 파일 경로
     pub fn open_safe(path: impl AsRef<Path>) -> DbxResult<Arc<Self>> {
-        let db = Self::open(path.as_ref())?;
-        Arc::get_mut(&mut db.clone()).unwrap().durability = DurabilityLevel::Full;
-        Ok(db)
+        Self::open_with_durability(path, DurabilityLevel::Full)
     }
 
     /// 최고 성능 설정으로 데이터베이스를 엽니다 (No durability).
@@ -463,9 +468,7 @@ impl Database {
     /// * `path` - 데이터베이스 파일 경로
     ///
     pub fn open_fast(path: impl AsRef<Path>) -> DbxResult<Arc<Self>> {
-        let db = Self::open(path.as_ref())?;
-        Arc::get_mut(&mut db.clone()).unwrap().durability = DurabilityLevel::None;
-        Ok(db)
+        Self::open_with_durability(path, DurabilityLevel::None)
     }
 
     /// 지정된 durability 설정으로 데이터베이스를 엽니다.
@@ -478,8 +481,103 @@ impl Database {
         path: impl AsRef<Path>,
         durability: DurabilityLevel,
     ) -> DbxResult<Arc<Self>> {
-        let db = Self::open(path.as_ref())?;
-        Arc::get_mut(&mut db.clone()).unwrap().durability = durability;
-        Ok(db)
+        info!("Opening database at {:?} with durability {:?}", path.as_ref(), durability);
+        let path = path.as_ref();
+        let wos_path = path.join("wos");
+        std::fs::create_dir_all(&wos_path)?;
+
+        // Initialize WAL
+        let wal_path = path.join("wal.log");
+        let wal = Arc::new(crate::wal::WriteAheadLog::open(&wal_path)?);
+
+        let wos_backend = Arc::new(WosBackend::open(&wos_path)?);
+        let db_index = Arc::new(HashIndex::new());
+
+        // Load persisted metadata
+        let loaded_schemas = crate::engine::metadata::load_all_schemas(&wos_backend)?;
+        let loaded_indexes = crate::engine::metadata::load_all_indexes(&wos_backend)?;
+        let loaded_triggers = crate::engine::metadata::load_all_triggers(&wos_backend)?;
+        let loaded_procedures = crate::engine::metadata::load_all_procedures(&wos_backend)?;
+        let loaded_schedules = crate::engine::metadata::load_all_schedules(&wos_backend)?;
+
+        let (tx, rx) = std::sync::mpsc::channel::<BackgroundJob>();
+        spawn_background_worker(rx, Some(wal.clone()), None, Arc::clone(&db_index));
+
+        let db = Self {
+            delta: DeltaVariant::RowBased(Arc::new(DeltaStore::new())),
+            memory_wos: WosVariant::InMemory(Arc::new(InMemoryWosBackend::new())),
+            file_wos: Some(WosVariant::Plain(Arc::clone(&wos_backend))),
+            table_persistence: DashMap::new(),
+            schemas: Arc::new(RwLock::new(HashMap::new())),
+            tables: RwLock::new(HashMap::new()),
+            table_schemas: Arc::new(RwLock::new(loaded_schemas)),
+            index: db_index,
+            row_counters: Arc::new(DashMap::new()),
+            sql_parser: SqlParser::new(),
+            sql_optimizer: QueryOptimizer::new(),
+            wal: Some(wal),
+            encrypted_wal: None,
+            encryption: RwLock::new(None),
+            tx_manager: Arc::new(TransactionManager::new()),
+            columnar_cache: Arc::new(crate::storage::columnar_cache::ColumnarCache::new()),
+            gpu_manager: crate::storage::gpu::GpuManager::try_new().map(Arc::new),
+            job_sender: Some(tx),
+            durability,  // ← set BEFORE Arc wrapping
+            index_registry: RwLock::new(loaded_indexes),
+            automation_engine: Arc::new(crate::automation::ExecutionEngine::new()),
+            trigger_registry: crate::engine::automation_api::TriggerRegistry::new(),
+            trigger_executor: Arc::new(RwLock::new(crate::automation::TriggerExecutor::new())),
+            procedure_executor: Arc::new(RwLock::new(crate::automation::ProcedureExecutor::new())),
+            schedule_executor: Arc::new(RwLock::new(crate::automation::ScheduleExecutor::new())),
+            parallel_engine: Arc::new(
+                crate::engine::parallel_engine::ParallelExecutionEngine::new_auto()
+                    .expect("Failed to create parallel engine"),
+            ),
+        };
+
+        // Crash recovery
+        let apply_fn = |record: &crate::wal::WalRecord| -> DbxResult<()> {
+            match record {
+                crate::wal::WalRecord::Insert { table, key, value, ts: _ } => {
+                    db.delta.insert(table, key, value)?;
+                }
+                crate::wal::WalRecord::Delete { table, key, ts: _ } => {
+                    db.delta.delete(table, key)?;
+                }
+                crate::wal::WalRecord::Batch { table, rows, ts: _ } => {
+                    db.delta.insert_batch(table, rows.clone())?;
+                }
+                _ => {}
+            }
+            Ok(())
+        };
+        let recovered_count = crate::wal::checkpoint::CheckpointManager::recover(&wal_path, apply_fn)?;
+        if recovered_count > 0 {
+            info!("Recovered {} WAL records", recovered_count);
+            db.flush()?;
+        }
+
+        // Auto-register triggers, procedures, schedules
+        if !loaded_triggers.is_empty() {
+            db.trigger_executor.write().unwrap().register_all(loaded_triggers);
+        }
+        if !loaded_procedures.is_empty() {
+            db.procedure_executor.write().unwrap().register_all(loaded_procedures);
+        }
+        if !loaded_schedules.is_empty() {
+            let executor = db.schedule_executor.write().unwrap();
+            for (_, schedule) in loaded_schedules {
+                let _ = executor.register(schedule);
+            }
+        }
+
+        info!("Database opened successfully with durability {:?}", durability);
+
+        let db_arc = Arc::new(db);
+        let db_weak = Arc::downgrade(&db_arc);
+        db_arc.schedule_executor.write().unwrap().start_scheduler(db_weak)?;
+
+        Ok(db_arc)
     }
 }
+

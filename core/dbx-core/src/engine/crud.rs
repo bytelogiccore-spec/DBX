@@ -215,7 +215,7 @@ impl Database {
         }
 
         // 2. Check WOS
-        if let Some((k, v)) = self.wos.scan_one(table, start_bytes..)?
+        if let Some((k, v)) = self.wos_for_table(table).scan_one(table, start_bytes..)?
             && let Some(result) = check_entry(&k, &v)
         {
             return Ok(Some(result));
@@ -231,7 +231,7 @@ impl Database {
 
     /// Helper method for Snapshot: scan all versioned entries from WOS.
     pub(crate) fn scan_wos_versioned(&self, table: &str) -> DbxResult<Vec<(Vec<u8>, Vec<u8>)>> {
-        self.wos.scan(table, ..)
+        self.wos_for_table(table).scan(table, ..)
     }
 
     /// Get the current timestamp from the transaction manager.
@@ -257,7 +257,7 @@ impl Database {
         if let Some(value) = self.delta.get(table, key)? {
             return Ok(Some(value));
         }
-        if let Some(value) = self.wos.get(table, key)? {
+        if let Some(value) = self.wos_for_table(table).get(table, key)? {
             return Ok(Some(value));
         }
 
@@ -284,7 +284,7 @@ impl Database {
         }
 
         // WOS에서 versioned key 조회
-        if let Some(value) = self.wos.get(table, &encoded_key)? {
+        if let Some(value) = self.wos_for_table(table).get(table, &encoded_key)? {
             return Ok(Self::decode_mvcc_value(value));
         }
 
@@ -322,11 +322,11 @@ impl Database {
         // Fast-path: Delta가 비어있으면 WOS 직접 스캔 (merge 오버헤드 제거)
         let delta_entries = self.delta.scan(table, ..)?;
         if delta_entries.is_empty() {
-            return self.wos.scan(table, ..);
+            return self.wos_for_table(table).scan(table, ..);
         }
 
         // 1. Collect from Delta Store and WOS
-        let wos_entries = self.wos.scan(table, ..)?;
+        let wos_entries = self.wos_for_table(table).scan(table, ..)?;
 
         // 2. Direct 2-way merge (both are already sorted)
         let mut result = Vec::with_capacity(delta_entries.len() + wos_entries.len());
@@ -399,7 +399,7 @@ impl Database {
         for (k, v) in self.delta.scan(table, range.clone())? {
             merged.insert(k, v);
         }
-        for (k, v) in self.wos.scan(table, range)? {
+        for (k, v) in self.wos_for_table(table).scan(table, range)? {
             merged.entry(k).or_insert(v);
         }
 
@@ -427,7 +427,7 @@ impl Database {
 
         // 1. Delete from legacy
         let delta_deleted = self.delta.delete(table, key)?;
-        let wos_deleted = self.wos.delete(table, key)?;
+        let wos_deleted = self.wos_for_table(table).delete(table, key)?;
 
         // 2. Add versioned tombstone if it was a versioned key
         #[cfg(feature = "mvcc")]
@@ -465,7 +465,7 @@ impl Database {
         // Scan from both Tier 1 (Delta) and Tier 3 (WOS)
         let table_lower = table.to_lowercase();
         let mut rows = self.delta.scan(&table_lower, ..)?;
-        let mut wos_rows = self.wos.scan(&table_lower, ..)?;
+        let mut wos_rows = self.wos_for_table(&table_lower).scan(&table_lower, ..)?;
         rows.append(&mut wos_rows);
 
         self.columnar_cache
