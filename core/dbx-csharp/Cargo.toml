@@ -14,7 +14,3 @@ dbx-core = { path = "../dbx-core", version = "0.1.0-beta" }
 [build-dependencies]
 csbindgen = "1.9"
 
-[profile.release]
-opt-level = 3
-lto = true
-codegen-units = 1
