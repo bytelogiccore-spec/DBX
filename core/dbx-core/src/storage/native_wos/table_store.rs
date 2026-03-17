@@ -1,4 +1,4 @@
-//! TableStore — 다중 4KB 페이지 + 스파스 인덱스 기반 SSTable
+//! TableStore — 다중 4KB 페이지 + 스파스 인덱스 + LRU 페이지 캐시 기반 SSTable
 //!
 //! ## 파일 포맷
 //! ```text
@@ -12,10 +12,11 @@
 //! ## Scan 최적화
 //! - 스파스 인덱스로 시작 페이지를 binary search
 //! - `BufReader`로 연속 페이지를 sequential read
+//! - `PageCache` (LRU): hot page를 메모리에 보관, disk I/O 제거
 //! - 메모리에는 dirty buffer(flush 전 변경분)만 BTreeMap으로 유지
 
 use crate::error::{DbxError, DbxResult};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::fs::{File, OpenOptions};
 use std::io::{BufReader, Read, Seek, SeekFrom, Write};
 use std::ops::RangeBounds;
@@ -37,6 +38,68 @@ struct IndexEntry {
     file_offset: u64,
 }
 
+// ──────────────────────────────────────────
+// LRU Page Cache
+// ──────────────────────────────────────────
+
+/// LRU 페이지 캐시 — page_index(usize) → Vec<PageEntry>
+///
+/// - `capacity`: 최대 보관 페이지 수 (기본 64 = ~256KB)
+/// - `map`: page_idx → entries (O(1) 접근)
+/// - `order`: MRU 순서 VecDeque (front = 최근, back = 가장 오래됨)
+struct PageCache {
+    capacity: usize,
+    map: HashMap<usize, Vec<PageEntry>>,
+    order: VecDeque<usize>,
+}
+
+impl PageCache {
+    fn new(capacity: usize) -> Self {
+        Self {
+            capacity,
+            map: HashMap::with_capacity(capacity),
+            order: VecDeque::with_capacity(capacity),
+        }
+    }
+
+    /// 캐시에서 page_idx 조회. 존재하면 MRU로 이동 후 반환.
+    fn get(&mut self, page_idx: usize) -> Option<&Vec<PageEntry>> {
+        if !self.map.contains_key(&page_idx) {
+            return None;
+        }
+        // order에서 해당 항목을 front로 이동
+        if let Some(pos) = self.order.iter().position(|&x| x == page_idx) {
+            self.order.remove(pos);
+        }
+        self.order.push_front(page_idx);
+        self.map.get(&page_idx)
+    }
+
+    /// 페이지를 캐시에 삽입. capacity 초과 시 LRU (back) 제거.
+    fn insert(&mut self, page_idx: usize, entries: Vec<PageEntry>) {
+        if self.map.contains_key(&page_idx) {
+            if let Some(pos) = self.order.iter().position(|&x| x == page_idx) {
+                self.order.remove(pos);
+            }
+        } else if self.map.len() >= self.capacity {
+            // LRU 제거
+            if let Some(lru) = self.order.pop_back() {
+                self.map.remove(&lru);
+            }
+        }
+        self.map.insert(page_idx, entries);
+        self.order.push_front(page_idx);
+    }
+
+    /// flush 후 캐시 전체 무효화
+    fn invalidate(&mut self) {
+        self.map.clear();
+        self.order.clear();
+    }
+
+    fn len(&self) -> usize { self.map.len() }
+}
+
 enum DirtyState {
     Put(Vec<u8>),
     Delete,
@@ -46,11 +109,13 @@ enum DirtyState {
 ///
 /// - `dirty`: flush 전 in-memory 변경분
 /// - `page_index`: flush 된 SSTable의 스파스 인덱스 (page 0..N의 첫 키)
+/// - `page_cache`: LRU hot-page cache (디스크 읽기 횟수 감소)
 /// - `file`: .wos 파일 핸들
 pub struct TableStore {
     path: PathBuf,
     dirty: BTreeMap<Vec<u8>, DirtyState>,
     page_index: Vec<IndexEntry>,
+    page_cache: PageCache,
     file: File,
     has_flushed_data: bool,
 }
@@ -67,6 +132,7 @@ impl TableStore {
             path,
             dirty: BTreeMap::new(),
             page_index: Vec::new(),
+            page_cache: PageCache::new(64), // LRU 64페이지 = ~256KB
             file,
             has_flushed_data: false,
         };
@@ -147,6 +213,12 @@ impl TableStore {
             return Err(DbxError::Storage("page index out of range".into()));
         }
 
+        // ★ LRU 캐시 조회 (cache hit 시 disk I/O 없음)
+        if self.page_cache.get(page_idx).is_some() {
+            let entries = self.page_cache.map.get(&page_idx).unwrap().clone();
+            return Ok(WosPage { entries });
+        }
+
         let start = self.page_index[page_idx].file_offset;
 
         // 끝 위치 결정
@@ -154,22 +226,22 @@ impl TableStore {
             self.page_index[page_idx + 1].file_offset
         } else {
             // 마지막 페이지: sparse index가 바로 다음에 옴
-            // sparse index offset = 마지막 페이지 offset + 마지막 페이지 크기
-            // 우리가 footer에서 index_offset을 읽었는데 load_index에서 local 변수였으므로
-            // 다시 footer를 읽어야 함.
-            let file_len = self.file.seek(SeekFrom::End(0))?;
             self.file.seek(SeekFrom::End(-(FOOTER_SIZE as i64)))?;
             let mut footer = [0u8; 16];
             self.file.read_exact(&mut footer)?;
-            let index_offset = u64::from_le_bytes(footer[0..8].try_into().unwrap());
-            index_offset
+            u64::from_le_bytes(footer[0..8].try_into().unwrap()) // index_offset
         };
 
         let size = (end - start) as usize;
         let mut buf = vec![0u8; size];
         self.file.seek(SeekFrom::Start(start))?;
         self.file.read_exact(&mut buf)?;
-        WosPage::deserialize(&buf)
+        let page = WosPage::deserialize(&buf)?;
+
+        // ★ LRU 캐시에 저장 (cache miss 후 eviction 포함)
+        self.page_cache.insert(page_idx, page.entries.clone());
+
+        Ok(page)
     }
 
     /// 스파스 인덱스에서 `key`가 속할 가능성 있는 첫 페이지 인덱스를 반환.
@@ -406,6 +478,7 @@ impl TableStore {
 
         self.page_index = page_index;
         self.has_flushed_data = !self.page_index.is_empty();
+        self.page_cache.invalidate(); // flush 후 캐시 무효화 (페이지 레이아웃 변경됨)
         self.dirty.clear();
         Ok(())
     }

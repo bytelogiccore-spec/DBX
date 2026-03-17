@@ -12,6 +12,7 @@ const MAGIC: u32 = 0xD8B_B00F;
 const VERSION: u16 = 1;
 
 /// 페이지 내 단일 key-value 엔트리
+#[derive(Clone)]
 pub struct PageEntry {
     pub key: Vec<u8>,
     pub value: Vec<u8>,
