@@ -41,6 +41,22 @@ jobs:
       - name: 테스트
         run: cargo test -p dbx-core --locked
 
+      - name: Node.js 설치
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Python 설치
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: 바인딩 크레이트 빌드 검증
+        run: |
+          cargo build --locked -p dbx-csharp
+          cargo build --locked -p dbx-node
+          cargo build --locked -p dbx-py
+
   # ──────────────────────────────────────────────
   # Phase 2: C/C++ 네이티브 빌드 (멀티 플랫폼)
   # ──────────────────────────────────────────────

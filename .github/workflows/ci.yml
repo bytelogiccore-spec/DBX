@@ -1,6 +1,18 @@
 name: CI
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - 'core/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'core/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
   workflow_dispatch:
 
 jobs:
@@ -36,6 +48,11 @@ jobs:
 
       - name: 빌드 (dbx-csharp)
         run: cargo build -p dbx-csharp --locked
+
+      - name: Node.js 설치
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
 
       - name: 빌드 (dbx-node)
         run: cargo build -p dbx-node --locked
