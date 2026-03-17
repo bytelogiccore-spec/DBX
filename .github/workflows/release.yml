@@ -51,16 +51,11 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: 바인딩 크레이트 빌드 검증 (dbx-csharp, dbx-py)
+      - name: 바인딩 크레이트 빌드 검증
         run: |
           cargo build --locked -p dbx-csharp
+          cargo build --locked -p dbx-node
           cargo build --locked -p dbx-py
-
-      - name: 빌드 검증 (dbx-node via napi)
-        run: |
-          cd packages/nodejs
-          npm install
-          npm run build:debug
 
   # ──────────────────────────────────────────────
   # Phase 2: C/C++ 네이티브 빌드 (멀티 플랫폼)

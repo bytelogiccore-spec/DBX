@@ -54,11 +54,8 @@ jobs:
         with:
           node-version: 20
 
-      - name: 빌드 (dbx-node via napi)
-        run: |
-          cd packages/nodejs
-          npm install
-          npm run build:debug
+      - name: 빌드 (dbx-node)
+        run: cargo build -p dbx-node --locked
 
       - name: Python 설치
         uses: actions/setup-python@v5
