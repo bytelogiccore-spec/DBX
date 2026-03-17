@@ -24,7 +24,7 @@
         "bench": "node benchmarks/benchmark.js"
     },
     "devDependencies": {
-        "@napi-rs/cli": "^2.18.0",
+        "@napi-rs/cli": "^3.0.0",
         "better-sqlite3": "^11.0.0"
     },
     "keywords": [
