@@ -137,3 +137,7 @@ harness = false
 [[bench]]
 name = "dbx_baseline"
 harness = false
+
+[[bench]]
+name = "wos_flush_comparison"
+harness = false

@@ -6,5 +6,6 @@
 pub mod backend;
 pub mod page;
 pub mod table_store;
+pub mod wal;
 
 pub use backend::NativeWosBackend;
