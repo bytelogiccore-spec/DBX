@@ -15,5 +15,5 @@ jobs:
       - name: Publish dbx-core
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CRATES_TOKEN }}
-        run: cargo publish --locked -p dbx-core --no-verify
+        run: cargo publish -p dbx-core --no-verify
 
