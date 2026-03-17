@@ -97,7 +97,7 @@ impl StorageBackend for NativeWosBackend {
 
     fn count(&self, table: &str) -> DbxResult<usize> {
         self.get_or_open(table)?;
-        Ok(self.tables.get(table).unwrap().lock().unwrap().count())
+        self.tables.get(table).unwrap().lock().unwrap().count()
     }
 
     fn table_names(&self) -> DbxResult<Vec<String>> {
