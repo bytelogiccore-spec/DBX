@@ -1,9 +1,9 @@
 //! Database snapshot save/load implementation
 
+use crate::engine::Database;
 use crate::engine::metadata::SchemaMetadata;
 pub use crate::engine::snapshot::DatabaseSnapshot;
 use crate::engine::snapshot::TableData;
-use crate::engine::Database;
 use crate::error::{DbxError, DbxResult};
 use arrow::datatypes::Schema;
 use std::path::Path;
@@ -168,7 +168,8 @@ impl Database {
         // 4. Restore table data
         for (table_name, table_data) in snapshot.tables {
             for (key, value) in table_data.entries {
-                self.wos_for_table(&table_name).insert(&table_name, &key, &value)?;
+                self.wos_for_table(&table_name)
+                    .insert(&table_name, &key, &value)?;
             }
         }
 

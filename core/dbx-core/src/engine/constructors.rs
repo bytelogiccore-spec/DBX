@@ -9,8 +9,8 @@ use crate::sql::parser::SqlParser;
 use crate::storage::StorageBackend; // Add this for trait methods
 use crate::storage::delta_store::DeltaStore;
 use crate::storage::encryption::EncryptionConfig;
-use crate::storage::memory_wos::InMemoryWosBackend;
 use crate::storage::encryption::wos::EncryptedWosBackend;
+use crate::storage::memory_wos::InMemoryWosBackend;
 use crate::storage::wos::WosBackend;
 use crate::transaction::mvcc::manager::TransactionManager; // Fix path
 use dashmap::DashMap;
@@ -481,7 +481,11 @@ impl Database {
         path: impl AsRef<Path>,
         durability: DurabilityLevel,
     ) -> DbxResult<Arc<Self>> {
-        info!("Opening database at {:?} with durability {:?}", path.as_ref(), durability);
+        info!(
+            "Opening database at {:?} with durability {:?}",
+            path.as_ref(),
+            durability
+        );
         let path = path.as_ref();
         let wos_path = path.join("wos");
         std::fs::create_dir_all(&wos_path)?;
@@ -522,7 +526,7 @@ impl Database {
             columnar_cache: Arc::new(crate::storage::columnar_cache::ColumnarCache::new()),
             gpu_manager: crate::storage::gpu::GpuManager::try_new().map(Arc::new),
             job_sender: Some(tx),
-            durability,  // ← set BEFORE Arc wrapping
+            durability, // ← set BEFORE Arc wrapping
             index_registry: RwLock::new(loaded_indexes),
             automation_engine: Arc::new(crate::automation::ExecutionEngine::new()),
             trigger_registry: crate::engine::automation_api::TriggerRegistry::new(),
@@ -538,7 +542,12 @@ impl Database {
         // Crash recovery
         let apply_fn = |record: &crate::wal::WalRecord| -> DbxResult<()> {
             match record {
-                crate::wal::WalRecord::Insert { table, key, value, ts: _ } => {
+                crate::wal::WalRecord::Insert {
+                    table,
+                    key,
+                    value,
+                    ts: _,
+                } => {
                     db.delta.insert(table, key, value)?;
                 }
                 crate::wal::WalRecord::Delete { table, key, ts: _ } => {
@@ -551,7 +560,8 @@ impl Database {
             }
             Ok(())
         };
-        let recovered_count = crate::wal::checkpoint::CheckpointManager::recover(&wal_path, apply_fn)?;
+        let recovered_count =
+            crate::wal::checkpoint::CheckpointManager::recover(&wal_path, apply_fn)?;
         if recovered_count > 0 {
             info!("Recovered {} WAL records", recovered_count);
             db.flush()?;
@@ -559,10 +569,16 @@ impl Database {
 
         // Auto-register triggers, procedures, schedules
         if !loaded_triggers.is_empty() {
-            db.trigger_executor.write().unwrap().register_all(loaded_triggers);
+            db.trigger_executor
+                .write()
+                .unwrap()
+                .register_all(loaded_triggers);
         }
         if !loaded_procedures.is_empty() {
-            db.procedure_executor.write().unwrap().register_all(loaded_procedures);
+            db.procedure_executor
+                .write()
+                .unwrap()
+                .register_all(loaded_procedures);
         }
         if !loaded_schedules.is_empty() {
             let executor = db.schedule_executor.write().unwrap();
@@ -571,13 +587,19 @@ impl Database {
             }
         }
 
-        info!("Database opened successfully with durability {:?}", durability);
+        info!(
+            "Database opened successfully with durability {:?}",
+            durability
+        );
 
         let db_arc = Arc::new(db);
         let db_weak = Arc::downgrade(&db_arc);
-        db_arc.schedule_executor.write().unwrap().start_scheduler(db_weak)?;
+        db_arc
+            .schedule_executor
+            .write()
+            .unwrap()
+            .start_scheduler(db_weak)?;
 
         Ok(db_arc)
     }
 }
-

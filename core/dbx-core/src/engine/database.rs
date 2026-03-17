@@ -123,13 +123,9 @@ impl Database {
         match &self.file_wos {
             None => &self.memory_wos,
             Some(file) => {
-                let is_memory = self.table_persistence.get(table).map(|r| *r)
-                    == Some(TablePersistence::Memory);
-                if is_memory {
-                    &self.memory_wos
-                } else {
-                    file
-                }
+                let is_memory =
+                    self.table_persistence.get(table).map(|r| *r) == Some(TablePersistence::Memory);
+                if is_memory { &self.memory_wos } else { file }
             }
         }
     }
@@ -153,7 +149,8 @@ impl Database {
             return Err(crate::error::DbxError::InvalidOperation {
                 message: "TablePersistence::File requires a file-backed database (open with path)"
                     .to_string(),
-                context: "Use Database::open(path) to enable per-table file persistence".to_string(),
+                context: "Use Database::open(path) to enable per-table file persistence"
+                    .to_string(),
             });
         }
         self.table_persistence

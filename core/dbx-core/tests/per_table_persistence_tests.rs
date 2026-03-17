@@ -3,8 +3,8 @@
 //! path 기반 시나리오가 먼저 실행되는지 검증하려면 `--test-threads=1`로 실행하세요.
 //! (기본 병렬 실행에서는 test_00_ 접두사만으로 순서가 보장되지 않음)
 
-use dbx_core::engine::TablePersistence;
 use dbx_core::Database;
+use dbx_core::engine::TablePersistence;
 use tempfile::tempdir;
 
 /// 한 DB에서 Memory 테이블과 File 테이블을 지정하고 insert/get 동작을 검증.
@@ -16,11 +16,16 @@ fn test_00_per_table_persistence_set_and_query() {
     let path = dir.path();
 
     let db = Database::open(path).unwrap();
-    db.set_table_persistence("temp", TablePersistence::Memory).unwrap();
-    db.set_table_persistence("persistent", TablePersistence::File).unwrap();
+    db.set_table_persistence("temp", TablePersistence::Memory)
+        .unwrap();
+    db.set_table_persistence("persistent", TablePersistence::File)
+        .unwrap();
 
     assert_eq!(db.table_persistence("temp"), Some(TablePersistence::Memory));
-    assert_eq!(db.table_persistence("persistent"), Some(TablePersistence::File));
+    assert_eq!(
+        db.table_persistence("persistent"),
+        Some(TablePersistence::File)
+    );
     assert_eq!(db.table_persistence("unknown"), None);
 
     db.insert("temp", b"k", b"v1").unwrap();
@@ -43,6 +48,8 @@ fn test_per_table_persistence_open_in_memory_insert_get() {
 fn test_open_in_memory_has_no_file_persistence() {
     let db = Database::open_in_memory().unwrap();
     // Setting File on in-memory DB should error
-    let err = db.set_table_persistence("t", TablePersistence::File).unwrap_err();
+    let err = db
+        .set_table_persistence("t", TablePersistence::File)
+        .unwrap_err();
     assert!(err.to_string().contains("file-backed") || err.to_string().contains("path"));
 }
