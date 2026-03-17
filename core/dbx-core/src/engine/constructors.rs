@@ -11,7 +11,7 @@ use crate::storage::delta_store::DeltaStore;
 use crate::storage::encryption::EncryptionConfig;
 use crate::storage::encryption::wos::EncryptedWosBackend;
 use crate::storage::memory_wos::InMemoryWosBackend;
-use crate::storage::wos::WosBackend;
+use crate::storage::native_wos::NativeWosBackend;
 use crate::transaction::mvcc::manager::TransactionManager; // Fix path
 use dashmap::DashMap;
 use std::collections::HashMap;
@@ -83,7 +83,7 @@ impl Database {
         let wal_path = path.join("wal.log");
         let wal = Arc::new(crate::wal::WriteAheadLog::open(&wal_path)?);
 
-        let wos_backend = Arc::new(WosBackend::open(&wos_path)?);
+        let wos_backend = Arc::new(NativeWosBackend::open(&wos_path)?);
         let db_index = Arc::new(HashIndex::new());
 
         // Load persisted metadata (schemas, indexes, and triggers)
@@ -108,7 +108,7 @@ impl Database {
         let db = Self {
             delta: DeltaVariant::RowBased(Arc::new(DeltaStore::new())),
             memory_wos: WosVariant::InMemory(Arc::new(InMemoryWosBackend::new())),
-            file_wos: Some(WosVariant::Plain(Arc::clone(&wos_backend))),
+            file_wos: Some(WosVariant::Native(Arc::clone(&wos_backend))),
             table_persistence: DashMap::new(),
             schemas: Arc::new(RwLock::new(HashMap::new())),
             tables: RwLock::new(HashMap::new()),
@@ -494,7 +494,7 @@ impl Database {
         let wal_path = path.join("wal.log");
         let wal = Arc::new(crate::wal::WriteAheadLog::open(&wal_path)?);
 
-        let wos_backend = Arc::new(WosBackend::open(&wos_path)?);
+        let wos_backend = Arc::new(NativeWosBackend::open(&wos_path)?);
         let db_index = Arc::new(HashIndex::new());
 
         // Load persisted metadata
@@ -510,7 +510,7 @@ impl Database {
         let db = Self {
             delta: DeltaVariant::RowBased(Arc::new(DeltaStore::new())),
             memory_wos: WosVariant::InMemory(Arc::new(InMemoryWosBackend::new())),
-            file_wos: Some(WosVariant::Plain(Arc::clone(&wos_backend))),
+            file_wos: Some(WosVariant::Native(Arc::clone(&wos_backend))),
             table_persistence: DashMap::new(),
             schemas: Arc::new(RwLock::new(HashMap::new())),
             tables: RwLock::new(HashMap::new()),

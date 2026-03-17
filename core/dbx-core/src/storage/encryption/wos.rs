@@ -1,6 +1,6 @@
 //! Encrypted WOS (Write-Optimized Store) — transparent encryption wrapper.
 //!
-//! Wraps [`WosBackend`] to encrypt all values before storage and decrypt on read.
+//! Wraps [`NativeWosBackend`] to encrypt all values before storage and decrypt on read.
 //! Keys remain unencrypted to support range scans and ordered iteration.
 //!
 //! # Architecture
@@ -12,7 +12,7 @@
 //! EncryptedWosBackend
 //!     │ encrypt(value) → ciphertext
 //!     ▼
-//! WosBackend (sled)
+//! NativeWosBackend (custom SSTable)
 //!     │ store ciphertext
 //!     ▼
 //! Disk
@@ -27,30 +27,30 @@
 use crate::error::DbxResult;
 use crate::storage::StorageBackend;
 use crate::storage::encryption::EncryptionConfig;
-use crate::storage::wos::WosBackend;
+use crate::storage::native_wos::NativeWosBackend;
 use std::ops::RangeBounds;
 use std::path::Path;
 
-/// Tier 3 with transparent encryption: sled-backed storage with AEAD encryption.
+/// Tier 3 with transparent encryption: native SSTable storage with AEAD encryption.
 ///
-/// All values are encrypted before being written to sled and decrypted on read.
+/// All values are encrypted before being written to NativeWosBackend and decrypted on read.
 /// Keys remain in plaintext to preserve ordered iteration and range scans.
 ///
 pub struct EncryptedWosBackend {
-    inner: WosBackend,
+    inner: NativeWosBackend,
     encryption: EncryptionConfig,
 }
 
 impl EncryptedWosBackend {
     /// Open an encrypted WOS at the given directory path.
     pub fn open(path: &Path, encryption: EncryptionConfig) -> DbxResult<Self> {
-        let inner = WosBackend::open(path)?;
+        let inner = NativeWosBackend::open(path)?;
         Ok(Self { inner, encryption })
     }
 
     /// Open a temporary encrypted WOS (for testing).
     pub fn open_temporary(encryption: EncryptionConfig) -> DbxResult<Self> {
-        let inner = WosBackend::open_temporary()?;
+        let inner = NativeWosBackend::open_temporary()?;
         Ok(Self { inner, encryption })
     }
 

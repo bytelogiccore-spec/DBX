@@ -16,9 +16,9 @@ pub mod gpu;
 pub mod index;
 pub mod kv_adapter;
 pub mod memory_wos;
+pub mod native_wos;
 pub mod parquet_io;
 pub mod versioned_batch;
-pub mod wos;
 
 use crate::error::DbxResult;
 use std::ops::RangeBounds;

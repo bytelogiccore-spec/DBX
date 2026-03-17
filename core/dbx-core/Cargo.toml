@@ -16,8 +16,7 @@ thiserror = "2.0"
 arrow = { version = "54", features = ["prettyprint"] }
 parquet = { version = "54", features = ["arrow"] }
 
-# Storage engines
-sled = "0.34"
+# Storage engines — native WOS (custom SSTable), no sled dependency
 dashmap = "6.1"
 lru = "0.12"
 crossbeam-skiplist = "0.1"
@@ -50,6 +49,7 @@ zstd = "0.13"
 aes-gcm-siv = "0.11"
 chacha20poly1305 = "0.10"
 rand = "0.8"
+crc32fast = "1.4"
 hkdf = "0.12"
 sha2 = "0.10"
 base64 = "0.22"

@@ -29,12 +29,6 @@ pub enum DbxError {
         source: parquet::errors::ParquetError,
     },
 
-    /// sled embedded database error
-    #[error("sled error: {source}")]
-    Sled {
-        #[from]
-        source: sled::Error,
-    },
 
     /// Standard I/O error
     #[error("io error: {source}")]

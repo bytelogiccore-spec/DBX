@@ -47,56 +47,101 @@ struct NamedParam {
     value: ScalarValue,
 }
 
-/// Positional `$N` placeholder를 리터럴 값으로 치환
-fn substitute_params(sql: &str, params: &[ScalarValue]) -> String {
-    let mut result = sql.to_string();
-    // 큰 번호부터 치환해야 $10이 $1로 잘못 매치되지 않음
-    for (i, param) in params.iter().enumerate().rev() {
-        let placeholder = format!("${}", i + 1);
-        result = result.replace(&placeholder, &param.to_sql_literal());
-    }
-    result
-}
-
-/// Named `:name` placeholder를 positional `$N`으로 변환하고
-/// 파라미터 순서를 재배열
-fn resolve_named_params(
-    sql: &str,
-    named: &[NamedParam],
-    positional: &[ScalarValue],
-) -> DbxResult<(String, Vec<ScalarValue>)> {
-    if named.is_empty() {
-        // Positional only — 그대로 사용
-        return Ok((sql.to_string(), positional.to_vec()));
-    }
-    if !positional.is_empty() {
+/// SQL에 파라미터를 적용하여 최종 실행 가능한 SQL 생성
+/// 문자열 리터럴('...') 및 식별자("...") 내부에 있는 placeholder는 무시합니다.
+fn apply_params(sql: &str, positional: &[ScalarValue], named: &[NamedParam]) -> DbxResult<String> {
+    if !positional.is_empty() && !named.is_empty() {
         return Err(DbxError::InvalidOperation {
             message: "positional과 named 파라미터를 동시에 사용할 수 없습니다".to_string(),
-            context: "resolve_named_params".to_string(),
+            context: "apply_params".to_string(),
         });
     }
 
-    let mut result_sql = sql.to_string();
-    let mut ordered_params = Vec::new();
-    let mut idx = 1;
+    let mut result = String::with_capacity(sql.len() + 64);
+    let mut chars = sql.chars().peekable();
+    let mut in_single_quote = false;
+    let mut in_double_quote = false;
 
-    for np in named {
-        let named_placeholder = format!(":{}", np.name);
-        if result_sql.contains(&named_placeholder) {
-            let positional_placeholder = format!("${idx}");
-            result_sql = result_sql.replace(&named_placeholder, &positional_placeholder);
-            ordered_params.push(np.value.clone());
-            idx += 1;
+    while let Some(c) = chars.next() {
+        if in_single_quote {
+            result.push(c);
+            if c == '\'' {
+                in_single_quote = false;
+            }
+            continue;
+        } else if in_double_quote {
+            result.push(c);
+            if c == '"' {
+                in_double_quote = false;
+            }
+            continue;
+        }
+
+        match c {
+            '\'' => {
+                in_single_quote = true;
+                result.push(c);
+            }
+            '"' => {
+                in_double_quote = true;
+                result.push(c);
+            }
+            '$' if !positional.is_empty() => {
+                let mut num_str = String::new();
+                while let Some(&next_c) = chars.peek() {
+                    if next_c.is_ascii_digit() {
+                        num_str.push(next_c);
+                        chars.next();
+                    } else {
+                        break;
+                    }
+                }
+                if let Ok(idx) = num_str.parse::<usize>() {
+                    if idx > 0 && idx <= positional.len() {
+                        result.push_str(&positional[idx - 1].to_sql_literal());
+                    } else {
+                        result.push('$');
+                        result.push_str(&num_str);
+                    }
+                } else {
+                    result.push('$');
+                    result.push_str(&num_str);
+                }
+            }
+            ':' if !named.is_empty() => {
+                let mut name = String::new();
+                while let Some(&next_c) = chars.peek() {
+                    if next_c.is_ascii_alphanumeric() || next_c == '_' {
+                        name.push(next_c);
+                        chars.next();
+                    } else {
+                        break;
+                    }
+                }
+                if !name.is_empty() {
+                    let mut found = false;
+                    for np in named {
+                        if np.name == name {
+                            result.push_str(&np.value.to_sql_literal());
+                            found = true;
+                            break;
+                        }
+                    }
+                    if !found {
+                        result.push(':');
+                        result.push_str(&name);
+                    }
+                } else {
+                    result.push(':');
+                }
+            }
+            _ => {
+                result.push(c);
+            }
         }
     }
 
-    Ok((result_sql, ordered_params))
-}
-
-/// SQL에 파라미터를 적용하여 최종 실행 가능한 SQL 생성
-fn apply_params(sql: &str, positional: &[ScalarValue], named: &[NamedParam]) -> DbxResult<String> {
-    let (resolved_sql, params) = resolve_named_params(sql, named, positional)?;
-    Ok(substitute_params(&resolved_sql, &params))
+    Ok(result)
 }
 
 /// Query Builder — 여러 행 반환
@@ -280,7 +325,7 @@ impl<'a, T: FromScalar> QueryScalar<'a, T> {
     }
 
     pub fn fetch(self) -> DbxResult<T> {
-        let final_sql = substitute_params(&self.sql, &self.params);
+        let final_sql = apply_params(&self.sql, &self.params, &[])?;
         let batches = self.db.execute_sql(&final_sql)?;
         for batch in &batches {
             if batch.num_rows() > 0 && batch.num_columns() > 0 {
@@ -509,30 +554,30 @@ mod tests {
     }
 
     #[test]
-    fn test_substitute_params_positional() {
+    fn test_apply_params_positional() {
         let sql = "SELECT * FROM users WHERE id = $1 AND age > $2";
         let params = vec![ScalarValue::Int32(42), ScalarValue::Int64(18)];
-        let result = substitute_params(sql, &params);
+        let result = apply_params(sql, &params, &[]).unwrap();
         assert_eq!(result, "SELECT * FROM users WHERE id = 42 AND age > 18");
     }
 
     #[test]
-    fn test_substitute_params_string() {
+    fn test_apply_params_string() {
         let sql = "SELECT * FROM users WHERE name = $1";
         let params = vec![ScalarValue::Utf8("Alice".into())];
-        let result = substitute_params(sql, &params);
+        let result = apply_params(sql, &params, &[]).unwrap();
         assert_eq!(result, "SELECT * FROM users WHERE name = 'Alice'");
     }
 
     #[test]
-    fn test_substitute_params_null_bool() {
+    fn test_apply_params_null_bool() {
         let sql = "SELECT * FROM t WHERE a = $1 AND b = $2 AND c = $3";
         let params = vec![
             ScalarValue::Null,
             ScalarValue::Boolean(true),
             ScalarValue::Boolean(false),
         ];
-        let result = substitute_params(sql, &params);
+        let result = apply_params(sql, &params, &[]).unwrap();
         assert_eq!(
             result,
             "SELECT * FROM t WHERE a = NULL AND b = TRUE AND c = FALSE"
@@ -540,19 +585,19 @@ mod tests {
     }
 
     #[test]
-    fn test_substitute_params_reverse_order_safety() {
+    fn test_apply_params_reverse_order_safety() {
         // $10이 $1로 잘못 매치되지 않아야 함
         let sql = "SELECT $1, $10";
         let mut params = vec![ScalarValue::Int32(1)];
         for i in 2..=10 {
             params.push(ScalarValue::Int32(i));
         }
-        let result = substitute_params(sql, &params);
+        let result = apply_params(sql, &params, &[]).unwrap();
         assert_eq!(result, "SELECT 1, 10");
     }
 
     #[test]
-    fn test_resolve_named_params() {
+    fn test_apply_named_params() {
         let sql = "SELECT * FROM users WHERE name = :name AND age > :age";
         let named = vec![
             NamedParam {
@@ -564,21 +609,19 @@ mod tests {
                 value: ScalarValue::Int32(18),
             },
         ];
-        let (resolved_sql, params) = resolve_named_params(sql, &named, &[]).unwrap();
+        let result = apply_params(sql, &[], &named).unwrap();
         assert_eq!(
-            resolved_sql,
-            "SELECT * FROM users WHERE name = $1 AND age > $2"
+            result,
+            "SELECT * FROM users WHERE name = 'Alice' AND age > 18"
         );
-        assert_eq!(params.len(), 2);
     }
 
     #[test]
-    fn test_resolve_named_params_empty() {
-        let sql = "SELECT * FROM users WHERE id = $1";
+    fn test_apply_named_params_ignores_strings() {
+        let sql = "SELECT * FROM users WHERE txt = 'cost: $1, name: :name' AND id = $1";
         let positional = vec![ScalarValue::Int32(5)];
-        let (resolved_sql, params) = resolve_named_params(sql, &[], &positional).unwrap();
-        assert_eq!(resolved_sql, sql);
-        assert_eq!(params.len(), 1);
+        let result = apply_params(sql, &positional, &[]).unwrap();
+        assert_eq!(result, "SELECT * FROM users WHERE txt = 'cost: $1, name: :name' AND id = 5");
     }
 
     #[test]
@@ -589,7 +632,7 @@ mod tests {
             name: "a".into(),
             value: ScalarValue::Int32(2),
         }];
-        let result = resolve_named_params(sql, &named, &positional);
+        let result = apply_params(sql, &positional, &named);
         assert!(result.is_err());
     }
 

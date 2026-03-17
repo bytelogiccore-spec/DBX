@@ -4,7 +4,8 @@
 //! to the sled backend, enabling automatic restoration on database reopen.
 
 use crate::error::{DbxError, DbxResult};
-use crate::storage::{StorageBackend, wos::WosBackend};
+use crate::storage::StorageBackend;
+use crate::storage::native_wos::NativeWosBackend;
 use arrow::datatypes::{DataType, Field, Schema};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -133,7 +134,7 @@ fn string_to_datatype(s: &str) -> DbxResult<DataType> {
 // ════════════════════════════════════════════
 
 /// Save table schema to persistent storage
-pub fn save_schema(wos: &WosBackend, table: &str, schema: &Schema) -> DbxResult<()> {
+pub fn save_schema(wos: &NativeWosBackend, table: &str, schema: &Schema) -> DbxResult<()> {
     let mut metadata = SchemaMetadata::from(schema);
     metadata.table_name = table.to_string();
 
@@ -145,7 +146,7 @@ pub fn save_schema(wos: &WosBackend, table: &str, schema: &Schema) -> DbxResult<
 }
 
 /// Load table schema from persistent storage
-pub fn load_schema(wos: &WosBackend, table: &str) -> DbxResult<Option<Arc<Schema>>> {
+pub fn load_schema(wos: &NativeWosBackend, table: &str) -> DbxResult<Option<Arc<Schema>>> {
     match wos.get("__meta__/schemas", table.as_bytes())? {
         Some(json_bytes) => {
             let metadata: SchemaMetadata = serde_json::from_slice(&json_bytes)
@@ -158,13 +159,13 @@ pub fn load_schema(wos: &WosBackend, table: &str) -> DbxResult<Option<Arc<Schema
 }
 
 /// Delete table schema from persistent storage
-pub fn delete_schema(wos: &WosBackend, table: &str) -> DbxResult<()> {
+pub fn delete_schema(wos: &NativeWosBackend, table: &str) -> DbxResult<()> {
     wos.delete("__meta__/schemas", table.as_bytes())?;
     Ok(())
 }
 
 /// Load all schemas from persistent storage
-pub fn load_all_schemas(wos: &WosBackend) -> DbxResult<HashMap<String, Arc<Schema>>> {
+pub fn load_all_schemas(wos: &NativeWosBackend) -> DbxResult<HashMap<String, Arc<Schema>>> {
     let mut schemas = HashMap::new();
     let all_records = wos.scan("__meta__/schemas", ..)?;
 
@@ -185,7 +186,7 @@ pub fn load_all_schemas(wos: &WosBackend) -> DbxResult<HashMap<String, Arc<Schem
 // ════════════════════════════════════════════
 
 /// Save index metadata to persistent storage
-pub fn save_index(wos: &WosBackend, index_name: &str, table: &str, column: &str) -> DbxResult<()> {
+pub fn save_index(wos: &NativeWosBackend, index_name: &str, table: &str, column: &str) -> DbxResult<()> {
     let metadata = IndexMetadata {
         index_name: index_name.to_string(),
         table_name: table.to_string(),
@@ -200,13 +201,13 @@ pub fn save_index(wos: &WosBackend, index_name: &str, table: &str, column: &str)
 }
 
 /// Delete index metadata from persistent storage
-pub fn delete_index(wos: &WosBackend, index_name: &str) -> DbxResult<()> {
+pub fn delete_index(wos: &NativeWosBackend, index_name: &str) -> DbxResult<()> {
     wos.delete("__meta__/indexes", index_name.as_bytes())?;
     Ok(())
 }
 
 /// Load all index metadata from persistent storage
-pub fn load_all_indexes(wos: &WosBackend) -> DbxResult<HashMap<String, (String, String)>> {
+pub fn load_all_indexes(wos: &NativeWosBackend) -> DbxResult<HashMap<String, (String, String)>> {
     let mut indexes = HashMap::new();
     let all_records = wos.scan("__meta__/indexes", ..)?;
 
@@ -226,7 +227,7 @@ pub fn load_all_indexes(wos: &WosBackend) -> DbxResult<HashMap<String, (String, 
 // ════════════════════════════════════════════
 
 /// Save trigger metadata to persistent storage
-pub fn save_trigger(wos: &WosBackend, trigger: &crate::automation::Trigger) -> DbxResult<()> {
+pub fn save_trigger(wos: &NativeWosBackend, trigger: &crate::automation::Trigger) -> DbxResult<()> {
     let json = trigger.to_json()?;
     wos.insert(
         "__meta__/triggers",
@@ -237,7 +238,7 @@ pub fn save_trigger(wos: &WosBackend, trigger: &crate::automation::Trigger) -> D
 }
 
 /// Load trigger metadata from persistent storage
-pub fn load_trigger(wos: &WosBackend, name: &str) -> DbxResult<Option<crate::automation::Trigger>> {
+pub fn load_trigger(wos: &NativeWosBackend, name: &str) -> DbxResult<Option<crate::automation::Trigger>> {
     match wos.get("__meta__/triggers", name.as_bytes())? {
         Some(json_bytes) => {
             let json = String::from_utf8(json_bytes)
@@ -250,13 +251,13 @@ pub fn load_trigger(wos: &WosBackend, name: &str) -> DbxResult<Option<crate::aut
 }
 
 /// Delete trigger metadata from persistent storage
-pub fn delete_trigger(wos: &WosBackend, name: &str) -> DbxResult<()> {
+pub fn delete_trigger(wos: &NativeWosBackend, name: &str) -> DbxResult<()> {
     wos.delete("__meta__/triggers", name.as_bytes())?;
     Ok(())
 }
 
 /// Load all trigger metadata from persistent storage
-pub fn load_all_triggers(wos: &WosBackend) -> DbxResult<Vec<crate::automation::Trigger>> {
+pub fn load_all_triggers(wos: &NativeWosBackend) -> DbxResult<Vec<crate::automation::Trigger>> {
     let mut triggers = Vec::new();
     let all_records = wos.scan("__meta__/triggers", ..)?;
 
@@ -276,7 +277,7 @@ pub fn load_all_triggers(wos: &WosBackend) -> DbxResult<Vec<crate::automation::T
 
 /// Save stored procedure metadata to persistent storage
 pub fn save_procedure(
-    wos: &WosBackend,
+    wos: &NativeWosBackend,
     procedure: &crate::automation::StoredProcedure,
 ) -> DbxResult<()> {
     let json = procedure.to_json()?;
@@ -290,7 +291,7 @@ pub fn save_procedure(
 
 /// Load stored procedure metadata from persistent storage
 pub fn load_procedure(
-    wos: &WosBackend,
+    wos: &NativeWosBackend,
     name: &str,
 ) -> DbxResult<Option<crate::automation::StoredProcedure>> {
     match wos.get("__meta__/procedures", name.as_bytes())? {
@@ -305,13 +306,13 @@ pub fn load_procedure(
 }
 
 /// Delete stored procedure metadata from persistent storage
-pub fn delete_procedure(wos: &WosBackend, name: &str) -> DbxResult<()> {
+pub fn delete_procedure(wos: &NativeWosBackend, name: &str) -> DbxResult<()> {
     wos.delete("__meta__/procedures", name.as_bytes())?;
     Ok(())
 }
 
 /// Load all stored procedure metadata from persistent storage
-pub fn load_all_procedures(wos: &WosBackend) -> DbxResult<Vec<crate::automation::StoredProcedure>> {
+pub fn load_all_procedures(wos: &NativeWosBackend) -> DbxResult<Vec<crate::automation::StoredProcedure>> {
     let mut procedures = Vec::new();
     let all_records = wos.scan("__meta__/procedures", ..)?;
 
@@ -330,14 +331,14 @@ pub fn load_all_procedures(wos: &WosBackend) -> DbxResult<Vec<crate::automation:
 // ════════════════════════════════════════════
 
 /// Save UDF metadata to persistent storage
-pub fn save_udf(wos: &WosBackend, udf: &crate::automation::UdfMetadata) -> DbxResult<()> {
+pub fn save_udf(wos: &NativeWosBackend, udf: &crate::automation::UdfMetadata) -> DbxResult<()> {
     let json = udf.to_json()?;
     wos.insert("__meta__/udfs", udf.name.as_bytes(), json.as_bytes())?;
     Ok(())
 }
 
 /// Load UDF metadata from persistent storage
-pub fn load_udf(wos: &WosBackend, name: &str) -> DbxResult<Option<crate::automation::UdfMetadata>> {
+pub fn load_udf(wos: &NativeWosBackend, name: &str) -> DbxResult<Option<crate::automation::UdfMetadata>> {
     match wos.get("__meta__/udfs", name.as_bytes())? {
         Some(json_bytes) => {
             let json = String::from_utf8(json_bytes)
@@ -350,13 +351,13 @@ pub fn load_udf(wos: &WosBackend, name: &str) -> DbxResult<Option<crate::automat
 }
 
 /// Delete UDF metadata from persistent storage
-pub fn delete_udf(wos: &WosBackend, name: &str) -> DbxResult<()> {
+pub fn delete_udf(wos: &NativeWosBackend, name: &str) -> DbxResult<()> {
     wos.delete("__meta__/udfs", name.as_bytes())?;
     Ok(())
 }
 
 /// Load all UDF metadata from persistent storage
-pub fn load_all_udfs(wos: &WosBackend) -> DbxResult<Vec<crate::automation::UdfMetadata>> {
+pub fn load_all_udfs(wos: &NativeWosBackend) -> DbxResult<Vec<crate::automation::UdfMetadata>> {
     let mut udfs = Vec::new();
     let all_records = wos.scan("__meta__/udfs", ..)?;
 
@@ -375,7 +376,7 @@ pub fn load_all_udfs(wos: &WosBackend) -> DbxResult<Vec<crate::automation::UdfMe
 // ════════════════════════════════════════════
 
 /// Save schedule metadata
-pub fn save_schedule(wos: &WosBackend, schedule: &crate::automation::Schedule) -> DbxResult<()> {
+pub fn save_schedule(wos: &NativeWosBackend, schedule: &crate::automation::Schedule) -> DbxResult<()> {
     let json = schedule.to_json()?;
     wos.insert(
         "__meta__/schedules",
@@ -387,7 +388,7 @@ pub fn save_schedule(wos: &WosBackend, schedule: &crate::automation::Schedule) -
 
 /// Load schedule metadata by name
 pub fn load_schedule(
-    wos: &WosBackend,
+    wos: &NativeWosBackend,
     name: &str,
 ) -> DbxResult<Option<crate::automation::Schedule>> {
     match wos.get("__meta__/schedules", name.as_bytes())? {
@@ -403,14 +404,14 @@ pub fn load_schedule(
 }
 
 /// Delete schedule metadata
-pub fn delete_schedule(wos: &WosBackend, name: &str) -> DbxResult<()> {
+pub fn delete_schedule(wos: &NativeWosBackend, name: &str) -> DbxResult<()> {
     wos.delete("__meta__/schedules", name.as_bytes())?;
     Ok(())
 }
 
 /// Load all schedules
 pub fn load_all_schedules(
-    wos: &WosBackend,
+    wos: &NativeWosBackend,
 ) -> DbxResult<HashMap<String, crate::automation::Schedule>> {
     let mut schedules = HashMap::new();
     let all_records = wos.scan("__meta__/schedules", ..)?;
@@ -461,7 +462,7 @@ mod tests {
 
     #[test]
     fn test_schema_persistence() {
-        let wos = WosBackend::open_temporary().unwrap();
+        let wos = NativeWosBackend::open_temporary().unwrap();
         let schema = Arc::new(Schema::new(vec![
             Field::new("id", DataType::Int64, false),
             Field::new("name", DataType::Utf8, true),
@@ -486,7 +487,7 @@ mod tests {
 
     #[test]
     fn test_load_all_schemas() {
-        let wos = WosBackend::open_temporary().unwrap();
+        let wos = NativeWosBackend::open_temporary().unwrap();
 
         // Save multiple schemas
         let schema1 = Arc::new(Schema::new(vec![Field::new("id", DataType::Int64, false)]));
@@ -504,7 +505,7 @@ mod tests {
 
     #[test]
     fn test_index_persistence() {
-        let wos = WosBackend::open_temporary().unwrap();
+        let wos = NativeWosBackend::open_temporary().unwrap();
 
         // Save index
         save_index(&wos, "idx_name", "users", "name").unwrap();
