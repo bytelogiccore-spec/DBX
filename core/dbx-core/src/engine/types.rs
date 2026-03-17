@@ -1,5 +1,14 @@
 //! Database Engine Types — enums and type definitions
 
+/// 테이블 단위 저장소: 메모리만 쓸지, 파일에 쓸지.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TablePersistence {
+    /// 메모리만. 프로세스 종료 시 사라져도 됨 (캐시 등).
+    Memory,
+    /// 파일에 저장. 재시작 후에도 유지.
+    File,
+}
+
 /// WAL 내구성 수준 정책
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(C)]

@@ -1,9 +1,9 @@
 //! Database snapshot save/load implementation
 
+use crate::engine::Database;
 use crate::engine::metadata::SchemaMetadata;
 pub use crate::engine::snapshot::DatabaseSnapshot;
 use crate::engine::snapshot::TableData;
-use crate::engine::{Database, WosVariant};
 use crate::error::{DbxError, DbxResult};
 use arrow::datatypes::Schema;
 use std::path::Path;
@@ -86,9 +86,9 @@ impl Database {
         Ok(db)
     }
 
-    /// Check if this is an in-memory database
+    /// Check if this is an in-memory database (no file persistence)
     fn is_in_memory(&self) -> bool {
-        matches!(self.wos, WosVariant::InMemory(_))
+        self.file_wos.is_none()
     }
 
     /// Create a snapshot of the current database state
@@ -122,7 +122,7 @@ impl Database {
                 continue;
             }
 
-            let entries = self.wos.scan(&table_name, ..)?;
+            let entries = self.wos_for_table(&table_name).scan(&table_name, ..)?;
             snapshot.tables.insert(table_name, TableData { entries });
         }
 
@@ -168,7 +168,8 @@ impl Database {
         // 4. Restore table data
         for (table_name, table_data) in snapshot.tables {
             for (key, value) in table_data.entries {
-                self.wos.insert(&table_name, &key, &value)?;
+                self.wos_for_table(&table_name)
+                    .insert(&table_name, &key, &value)?;
             }
         }
 

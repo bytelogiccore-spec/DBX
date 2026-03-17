@@ -88,3 +88,4 @@ packages/**/*.tgz
 packages/**/*.whl
 packages/**/*.nupkg
 
+packages/**/release/

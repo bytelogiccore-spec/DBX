@@ -1,6 +1,6 @@
 //! Database struct definition — the core data structure
 
-use crate::engine::types::BackgroundJob;
+use crate::engine::types::{BackgroundJob, TablePersistence};
 use crate::engine::{DeltaVariant, DurabilityLevel, WosVariant};
 use crate::sql::optimizer::QueryOptimizer;
 use crate::sql::parser::SqlParser;
@@ -40,8 +40,14 @@ pub struct Database {
     /// Tier 1: Delta Store (in-memory write buffer) — row-based or columnar
     pub(crate) delta: DeltaVariant,
 
-    /// Tier 3: WOS (Write-Optimized Store) — persistent storage (plain or encrypted)
-    pub(crate) wos: WosVariant,
+    /// Tier 3: 메모리 WOS (테이블별 Memory 지정 시 사용)
+    pub(crate) memory_wos: WosVariant,
+
+    /// Tier 3: 파일 WOS (path 기반 DB에서만 Some, 테이블별 File/미지정 시 사용)
+    pub(crate) file_wos: Option<WosVariant>,
+
+    /// 테이블별 저장소 지정 (Memory | File). file_wos가 Some일 때만 사용.
+    pub(crate) table_persistence: DashMap<String, TablePersistence>,
 
     /// Schema registry: table_name → Arrow Schema
     #[allow(dead_code)]
@@ -109,4 +115,51 @@ pub struct Database {
     /// Parallel Execution Engine for multi-threaded query execution
     #[allow(dead_code)]
     pub(crate) parallel_engine: Arc<crate::engine::parallel_engine::ParallelExecutionEngine>,
+}
+
+impl Database {
+    /// 테이블에 사용할 WOS. file_wos가 None이면(인메모리 전용 DB) 항상 memory_wos.
+    pub(crate) fn wos_for_table(&self, table: &str) -> &WosVariant {
+        match &self.file_wos {
+            None => &self.memory_wos,
+            Some(file) => {
+                let is_memory =
+                    self.table_persistence.get(table).map(|r| *r) == Some(TablePersistence::Memory);
+                if is_memory { &self.memory_wos } else { file }
+            }
+        }
+    }
+
+    /// 스키마/인덱스 메타데이터 저장용 WOS. 파일이 있으면 파일, 없으면 메모리.
+    pub(crate) fn wos_for_metadata(&self) -> &WosVariant {
+        self.file_wos.as_ref().unwrap_or(&self.memory_wos)
+    }
+
+    /// 테이블별 저장소를 지정합니다 (파일 DB에서만 유효).
+    ///
+    /// `TablePersistence::File`은 파일에 저장(재시작 후 유지),
+    /// `TablePersistence::Memory`는 메모리만 사용(프로세스 종료 시 사라짐).
+    /// 인메모리 전용 DB(`open_in_memory`)에서는 `File` 지정 시 에러를 반환합니다.
+    pub fn set_table_persistence(
+        &self,
+        table: &str,
+        persistence: TablePersistence,
+    ) -> crate::error::DbxResult<()> {
+        if persistence == TablePersistence::File && self.file_wos.is_none() {
+            return Err(crate::error::DbxError::InvalidOperation {
+                message: "TablePersistence::File requires a file-backed database (open with path)"
+                    .to_string(),
+                context: "Use Database::open(path) to enable per-table file persistence"
+                    .to_string(),
+            });
+        }
+        self.table_persistence
+            .insert(table.to_string(), persistence);
+        Ok(())
+    }
+
+    /// 테이블에 지정된 저장소 종류를 반환합니다 (미지정 시 None).
+    pub fn table_persistence(&self, table: &str) -> Option<TablePersistence> {
+        self.table_persistence.get(table).map(|r| *r)
+    }
 }

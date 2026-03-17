@@ -41,5 +41,5 @@ pub use rollback::{Checkpoint, RollbackManager};
 pub use schema_builder::SchemaBuilder;
 pub use serialization::{SerializationRegistry, TwoLevelCache};
 pub use snapshot::{DatabaseSnapshot, TableData};
-pub use types::DurabilityLevel;
+pub use types::{DurabilityLevel, TablePersistence};
 pub use wos_variant::WosVariant;
