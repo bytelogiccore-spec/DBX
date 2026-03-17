@@ -112,7 +112,7 @@ You represent that:
 
 By submitting a pull request, you acknowledge that you have read and agree to this CLA.
 
-For corporate contributors, please contact us at license@bytelogic.studio to sign a Corporate CLA.
+For corporate contributors, please contact us at bytelogiccore@gmail.com to sign a Corporate CLA.
 
 ---
 

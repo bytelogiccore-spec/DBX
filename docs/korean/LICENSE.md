@@ -49,7 +49,7 @@ DBX는 **이중 라이선스 모델**로 제공됩니다.
 
 
 
-**📧 문의:** license@bytelogic.studio
+**📧 문의:** bytelogiccore@gmail.com
 
 ---
 

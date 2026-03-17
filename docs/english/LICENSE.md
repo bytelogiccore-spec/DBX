@@ -31,7 +31,7 @@ See the full MIT License terms below.
 - Your annual revenue is **$5,000,000 USD or more**, OR
 - Your total funding is **$10,000,000 USD or more**
 
-**📧 Contact:** license@bytelogic.studio
+**📧 Contact:** bytelogiccore@gmail.com
 
 ---
 
@@ -67,7 +67,7 @@ If your organization benefits from DBX, please consider sponsoring ongoing devel
 
 ### For Enterprises & Large Organizations
 - **GitHub Sponsors**: [Coming Soon]
-- **Corporate Sponsorship**: Contact license@bytelogic.studio
+- **Corporate Sponsorship**: Contact bytelogiccore@gmail.com
 - **One-time Donation**: [Coming Soon]
 
 ### Why Sponsor?

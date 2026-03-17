@@ -145,7 +145,7 @@ DBX는 **이중 라이선스 모델**로 제공됩니다:
 
 📚 **[라이선스 정책 가이드](https://github.com/bytelogiccore-spec/DBX/blob/main/legal/korean/LICENSE-POLICY.md)** — 나에게 맞는 라이선스는?
 
-📧 **상업용 라이선스 문의:** license@bytelogic.studio
+📧 **상업용 라이선스 문의:** bytelogiccore@gmail.com
 
 ---
 
