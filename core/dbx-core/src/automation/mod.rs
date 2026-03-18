@@ -7,6 +7,7 @@
 //! - Stored Procedures
 
 pub mod callable;
+pub mod job_dag;
 pub mod event_hook;
 pub mod executor;
 pub mod function_parser;
@@ -27,6 +28,7 @@ pub mod udf;
 // mod integration_tests;
 
 pub use callable::{Callable, ExecutionContext, Signature};
+pub use job_dag::{JobDag, JobSchedule};
 pub use event_hook::{
     EventHook, EventHookAction, EventHookCondition, EventHookEvent, EventHookEventType,
 };
