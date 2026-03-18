@@ -18,6 +18,7 @@ pub mod kv_adapter;
 pub mod memory_wos;
 pub mod native_wos;
 pub mod parquet_io;
+pub mod partition;
 pub mod versioned_batch;
 
 use crate::error::DbxResult;
