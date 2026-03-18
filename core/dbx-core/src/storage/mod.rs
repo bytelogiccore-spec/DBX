@@ -19,6 +19,7 @@ pub mod memory_wos;
 pub mod native_wos;
 pub mod parquet_io;
 pub mod partition;
+pub mod realtime_sync;
 pub mod versioned_batch;
 
 use crate::error::DbxResult;
