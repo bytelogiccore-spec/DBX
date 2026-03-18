@@ -27,6 +27,7 @@ pub mod types;
 pub mod udf_api;
 pub mod utilities;
 pub mod wos_variant;
+pub mod workload_analyzer;
 
 #[cfg(test)]
 mod parallel_engine_tests;
@@ -36,7 +37,7 @@ pub use database::Database;
 pub use delta_variant::DeltaVariant;
 pub use feature_flags::{Feature, FeatureFlags};
 pub use metadata::{FieldMetadata, IndexMetadata, SchemaMetadata};
-pub use parallel_engine::{ParallelExecutionEngine, ParallelizationPolicy};
+pub use parallel_engine::{DbConfig, ParallelExecutionEngine, ParallelismConfig, ParallelizationPolicy};
 pub use rollback::{Checkpoint, RollbackManager};
 pub use schema_builder::SchemaBuilder;
 pub use serialization::{SerializationRegistry, TwoLevelCache};
