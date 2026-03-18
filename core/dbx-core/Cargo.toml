@@ -27,6 +27,8 @@ ahash = "0.8"
 smallvec = "1.15"
 rayon = "1.10"
 num_cpus = "1.16"
+# Stable SIMD abstraction (wide crate — no nightly required)
+wide = "0.7"
 
 # Logging (zero-cost in release)
 tracing = "0.1"
@@ -37,6 +39,9 @@ sqlparser = "0.52"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 bincode = "1"
+
+# Async runtime (Replication broadcast channels)
+tokio = { version = "1", features = ["sync", "rt", "macros", "rt-multi-thread"] }
 
 # Cron scheduling
 cron = "0.12"

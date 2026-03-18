@@ -84,6 +84,7 @@ pub mod automation;
 pub mod engine;
 pub mod error;
 pub mod index;
+pub mod replication;
 pub mod sql;
 pub mod storage;
 pub mod traits;
