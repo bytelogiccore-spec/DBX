@@ -1,11 +1,12 @@
-//! Database Constructors — factory methods for creating Database instances
+//! Database Constructors - factory methods for creating Database instances
 
 use crate::engine::types::BackgroundJob;
-use crate::engine::{Database, DeltaVariant, DurabilityLevel, WosVariant};
+use crate::engine::{Database, DbConfig, DeltaVariant, DurabilityLevel, WosVariant};
 use crate::error::DbxResult;
 use crate::index::HashIndex;
 use crate::sql::optimizer::QueryOptimizer;
 use crate::sql::parser::SqlParser;
+use crate::sql::view::ViewRegistry;
 use crate::storage::StorageBackend; // Add this for trait methods
 use crate::storage::delta_store::DeltaStore;
 use crate::storage::encryption::EncryptionConfig;
@@ -136,6 +137,7 @@ impl Database {
                 crate::engine::parallel_engine::ParallelExecutionEngine::new_auto()
                     .expect("Failed to create parallel engine"),
             ),
+            view_registry: ViewRegistry::new(),
         };
 
         // Perform crash recovery
@@ -293,9 +295,8 @@ impl Database {
                 crate::engine::parallel_engine::ParallelExecutionEngine::new_auto()
                     .expect("Failed to create parallel engine"),
             ),
+            view_registry: ViewRegistry::new(),
         };
-
-        // Perform crash recovery from encrypted WAL
         let records = encrypted_wal.replay()?;
         let mut recovered_count = 0;
         for record in &records {
@@ -381,6 +382,7 @@ impl Database {
                 crate::engine::parallel_engine::ParallelExecutionEngine::new_auto()
                     .expect("Failed to create parallel engine"),
             ),
+            view_registry: ViewRegistry::new(),
         })
     }
 
@@ -441,6 +443,7 @@ impl Database {
                 crate::engine::parallel_engine::ParallelExecutionEngine::new_auto()
                     .expect("Failed to create parallel engine"),
             ),
+            view_registry: ViewRegistry::new(),
         })
     }
 
@@ -537,6 +540,7 @@ impl Database {
                 crate::engine::parallel_engine::ParallelExecutionEngine::new_auto()
                     .expect("Failed to create parallel engine"),
             ),
+            view_registry: ViewRegistry::new(),
         };
 
         // Crash recovery
@@ -599,6 +603,152 @@ impl Database {
             .write()
             .unwrap()
             .start_scheduler(db_weak)?;
+
+        Ok(db_arc)
+    }
+}
+/// open_with_config: DbConfig를 받는 새 생성자 그룹
+impl Database {
+    /// `DbConfig`를 사용하여 데이터베이스를 엽니다.
+    ///
+    /// `config.parallelism.cpu_cap`으로 CPU 사용량을 제어할 수 있습니다.
+    ///
+    /// # 예시
+    ///
+    /// ```rust,no_run
+    /// use dbx_core::Database;
+    /// use dbx_core::engine::parallel_engine::{DbConfig, ParallelismConfig};
+    /// use std::path::Path;
+    ///
+    /// let db = Database::open_with_config(
+    ///     Path::new("./data"),
+    ///     DbConfig {
+    ///         parallelism: ParallelismConfig::conservative(), // CPU 50%만 사용
+    ///     },
+    /// ).unwrap();
+    /// ```
+    pub fn open_with_config(
+        path: &std::path::Path,
+        config: DbConfig,
+    ) -> DbxResult<std::sync::Arc<Self>> {
+        use crate::engine::parallel_engine::{ParallelExecutionEngine, ParallelizationPolicy};
+        use crate::storage::native_wos::NativeWosBackend;
+        use crate::transaction::mvcc::manager::TransactionManager;
+        use dashmap::DashMap;
+        use std::collections::HashMap;
+        use crate::index::HashIndex;
+        use crate::sql::optimizer::QueryOptimizer;
+        use crate::sql::parser::SqlParser;
+        use std::sync::{Arc, RwLock};
+        use tracing::info;
+
+        info!("Opening database at {:?} with custom config", path);
+        let wos_path = path.join("wos");
+        std::fs::create_dir_all(&wos_path)?;
+
+        let wal_path = path.join("wal.log");
+        let wal = Arc::new(crate::wal::WriteAheadLog::open(&wal_path)?);
+
+        let wos_backend = Arc::new(NativeWosBackend::open(&wos_path)?);
+        let db_index = Arc::new(HashIndex::new());
+
+        let loaded_schemas = crate::engine::metadata::load_all_schemas(&wos_backend)?;
+        let loaded_indexes = crate::engine::metadata::load_all_indexes(&wos_backend)?;
+        let loaded_triggers = crate::engine::metadata::load_all_triggers(&wos_backend)?;
+        let loaded_procedures = crate::engine::metadata::load_all_procedures(&wos_backend)?;
+        let loaded_schedules = crate::engine::metadata::load_all_schedules(&wos_backend)?;
+
+        let (tx, rx) = std::sync::mpsc::channel::<BackgroundJob>();
+        spawn_background_worker(rx, Some(wal.clone()), None, Arc::clone(&db_index));
+
+        // 병렬 엔진을 config로 생성
+        let parallel_engine = Arc::new(
+            ParallelExecutionEngine::new_with_config(
+                ParallelizationPolicy::Auto,
+                config.parallelism.clone(),
+            )
+            .expect("Failed to create parallel engine"),
+        );
+
+        let db = Self {
+            delta: DeltaVariant::RowBased(Arc::new(crate::storage::delta_store::DeltaStore::new())),
+            memory_wos: crate::engine::WosVariant::InMemory(Arc::new(
+                crate::storage::memory_wos::InMemoryWosBackend::new(),
+            )),
+            file_wos: Some(crate::engine::WosVariant::Native(Arc::clone(&wos_backend))),
+            table_persistence: DashMap::new(),
+            schemas: Arc::new(RwLock::new(HashMap::new())),
+            tables: RwLock::new(HashMap::new()),
+            table_schemas: Arc::new(RwLock::new(loaded_schemas)),
+            index: db_index,
+            row_counters: Arc::new(DashMap::new()),
+            sql_parser: SqlParser::new(),
+            sql_optimizer: QueryOptimizer::new(),
+            wal: Some(wal),
+            encrypted_wal: None,
+            encryption: RwLock::new(None),
+            tx_manager: Arc::new(TransactionManager::new()),
+            columnar_cache: Arc::new(crate::storage::columnar_cache::ColumnarCache::new()),
+            gpu_manager: crate::storage::gpu::GpuManager::try_new().map(Arc::new),
+            job_sender: Some(tx),
+            durability: DurabilityLevel::Lazy,
+            index_registry: RwLock::new(loaded_indexes),
+            automation_engine: Arc::new(crate::automation::ExecutionEngine::new()),
+            trigger_registry: crate::engine::automation_api::TriggerRegistry::new(),
+            trigger_executor: Arc::new(RwLock::new(crate::automation::TriggerExecutor::new())),
+            procedure_executor: Arc::new(RwLock::new(
+                crate::automation::ProcedureExecutor::new(),
+            )),
+            schedule_executor: Arc::new(RwLock::new(
+                crate::automation::ScheduleExecutor::new(),
+            )),
+            parallel_engine,
+            view_registry: ViewRegistry::new(),
+        };
+
+        // Crash recovery
+        let apply_fn = |record: &crate::wal::WalRecord| -> DbxResult<()> {
+            match record {
+                crate::wal::WalRecord::Insert { table, key, value, ts: _ } => {
+                    db.delta.insert(table, key, value)?;
+                }
+                crate::wal::WalRecord::Delete { table, key, ts: _ } => {
+                    db.delta.delete(table, key)?;
+                }
+                crate::wal::WalRecord::Batch { table, rows, ts: _ } => {
+                    db.delta.insert_batch(table, rows.clone())?;
+                }
+                _ => {}
+            }
+            Ok(())
+        };
+        let recovered_count =
+            crate::wal::checkpoint::CheckpointManager::recover(&wal_path, apply_fn)?;
+        if recovered_count > 0 {
+            info!("Recovered {} WAL records", recovered_count);
+            db.flush()?;
+        }
+
+        // Triggers, procedures, schedules
+        if !loaded_triggers.is_empty() {
+            db.trigger_executor.write().unwrap().register_all(loaded_triggers);
+        }
+        if !loaded_procedures.is_empty() {
+            db.procedure_executor.write().unwrap().register_all(loaded_procedures);
+        }
+        if !loaded_schedules.is_empty() {
+            let executor = db.schedule_executor.write().unwrap();
+            for (_, schedule) in loaded_schedules {
+                let _ = executor.register(schedule);
+            }
+        }
+
+        info!("Database opened with custom parallelism config (cpu_cap={:.0}%)",
+              config.parallelism.cpu_cap * 100.0);
+
+        let db_arc = Arc::new(db);
+        let db_weak = Arc::downgrade(&db_arc);
+        db_arc.schedule_executor.write().unwrap().start_scheduler(db_weak)?;
 
         Ok(db_arc)
     }

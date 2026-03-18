@@ -6,6 +6,7 @@ pub mod optimizer;
 pub mod parallel_parser;
 pub mod parser;
 pub mod planner;
+pub mod view;
 
 pub use builder::{Execute, Query, QueryOne, QueryOptional, QueryScalar, ScalarValue};
 pub use executor::{

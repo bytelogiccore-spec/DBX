@@ -295,6 +295,21 @@ impl Database {
     /// # }
     /// ```
     pub fn execute_sql(&self, sql: &str) -> DbxResult<Vec<RecordBatch>> {
+        // Step 0: Intercept CREATE VIEW / DROP VIEW (before parser)
+        let sql_trimmed = sql.trim();
+        let sql_upper = sql_trimmed.to_uppercase();
+
+        if sql_upper.starts_with("CREATE VIEW") {
+            return self.handle_create_view(sql_trimmed);
+        }
+        if sql_upper.starts_with("DROP VIEW") {
+            return self.handle_drop_view(sql_trimmed);
+        }
+
+        // Step 0b: Expand views in FROM clauses
+        let expanded = self.view_registry.expand(sql_trimmed);
+        let sql = expanded.as_str();
+
         // Step 1: Parse SQL → AST
         let statements = self.sql_parser.parse(sql)?;
         if statements.is_empty() {
@@ -314,6 +329,57 @@ impl Database {
 
         // Step 5: Execute
         self.execute_physical_plan(&physical_plan)
+    }
+
+    /// CREATE VIEW handler
+    fn handle_create_view(&self, sql: &str) -> DbxResult<Vec<RecordBatch>> {
+        // Syntax: CREATE VIEW <name> AS <select_sql>
+        let upper = sql.to_uppercase();
+        let after_view = &sql[upper.find("VIEW").unwrap() + 4..].trim_start().to_owned();
+        let as_pos = after_view.to_uppercase().find(" AS ").ok_or_else(|| {
+            DbxError::SqlParse {
+                message: "CREATE VIEW requires AS".to_string(),
+                sql: sql.to_string(),
+            }
+        })?;
+        let view_name = after_view[..as_pos].trim();
+        let view_sql = after_view[as_pos + 4..].trim();
+        self.view_registry.create(view_name, view_sql)?;
+        self.one_row_affected_batch()
+    }
+
+    /// DROP VIEW handler
+    fn handle_drop_view(&self, sql: &str) -> DbxResult<Vec<RecordBatch>> {
+        // Syntax: DROP VIEW [IF EXISTS] <name>
+        let upper = sql.to_uppercase();
+        let after_view = sql[upper.find("VIEW").unwrap() + 4..].trim_start().to_owned();
+        let (if_exists, name_part) = if after_view.to_uppercase().starts_with("IF EXISTS") {
+            (true, after_view[9..].trim_start().to_string())
+        } else {
+            (false, after_view.clone())
+        };
+        let view_name = name_part.trim();
+
+        if if_exists && !self.view_registry.exists(view_name) {
+            return self.one_row_affected_batch();
+        }
+
+        self.view_registry.drop(view_name)?;
+        self.one_row_affected_batch()
+    }
+
+    /// Helper: single-row `rows_affected = 1` result batch
+    fn one_row_affected_batch(&self) -> DbxResult<Vec<RecordBatch>> {
+        use arrow::array::Int64Array;
+        use arrow::datatypes::{DataType, Field, Schema};
+        let schema = Arc::new(Schema::new(vec![Field::new(
+            "rows_affected",
+            DataType::Int64,
+            false,
+        )]));
+        let array = Int64Array::from(vec![1_i64]);
+        let batch = RecordBatch::try_new(schema, vec![Arc::new(array)]).map_err(DbxError::from)?;
+        Ok(vec![batch])
     }
 
     /// Execute a physical plan against registered table data.

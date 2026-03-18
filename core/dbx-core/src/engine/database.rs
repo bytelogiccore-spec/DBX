@@ -4,6 +4,7 @@ use crate::engine::types::{BackgroundJob, TablePersistence};
 use crate::engine::{DeltaVariant, DurabilityLevel, WosVariant};
 use crate::sql::optimizer::QueryOptimizer;
 use crate::sql::parser::SqlParser;
+use crate::sql::view::ViewRegistry;
 use crate::storage::encryption::EncryptionConfig;
 use crate::transaction::mvcc::manager::TransactionManager;
 use arrow::array::RecordBatch;
@@ -115,6 +116,9 @@ pub struct Database {
     /// Parallel Execution Engine for multi-threaded query execution
     #[allow(dead_code)]
     pub(crate) parallel_engine: Arc<crate::engine::parallel_engine::ParallelExecutionEngine>,
+
+    /// SQL View Registry — CREATE/DROP VIEW 지원
+    pub(crate) view_registry: ViewRegistry,
 }
 
 impl Database {
