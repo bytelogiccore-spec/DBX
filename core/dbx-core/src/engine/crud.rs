@@ -72,6 +72,25 @@ impl Database {
     /// * `key` - 키 (바이트 배열)
     /// * `value` - 값 (바이트 배열)
     pub fn insert(&self, table: &str, key: &[u8], value: &[u8]) -> DbxResult<()> {
+        // ════════════════════════════════════════════
+        // Phase 3: 파티셔닝 (Partition Routing)
+        // ════════════════════════════════════════════
+        let target_table = {
+            let maps = self.partition_maps.read().unwrap();
+            if let Some(map) = maps.get(table) {
+                // To do exact partition routing, we need the value of the partition column.
+                // For MVP, we pass the key as a string for routing, but ideally we'd parse
+                // the `value` JSON/Bytes to extract the specific partition column.
+                // Here we use the row key as a simple fallback routing mechanism.
+                use crate::storage::partition::PartitionValue;
+                // Try to parse key as UTF-8 string for routing
+                let key_str = String::from_utf8_lossy(key).into_owned();
+                map.route_key(&PartitionValue::Text(key_str))
+            } else {
+                table.to_string()
+            }
+        };
+        let table = target_table.as_str();
         // Log to WAL first — only allocate record if WAL exists
         #[cfg(feature = "wal")]
         if self.durability != DurabilityLevel::None
@@ -113,11 +132,55 @@ impl Database {
             self.flush()?;
         }
 
+        // ════════════════════════════════════════════
+        // Phase 0: HTAP 실시간 동기화 (RealtimeSync)
+        // ════════════════════════════════════════════
+        use crate::storage::realtime_sync::SyncMode;
+        let sync_config = &self.config.sync;
+        match sync_config.mode {
+            SyncMode::Immediate => {
+                // 즉시 Columnar Cache 동기화
+                let _ = self.sync_columnar_cache(table);
+            }
+            SyncMode::Threshold(n) => {
+                // N건 이상일 때만 동기화 (이 로직은 보통 flush에서 처리되거나,
+                // delta row count를 기반으로 수행)
+                if self.delta.count(table).unwrap_or(0) >= n as usize {
+                    let _ = self.sync_columnar_cache(table);
+                }
+            }
+            SyncMode::AsyncBatch { .. } => {
+                // 비동기 배치는 백그라운드 스레드에서 주기적으로 수행됨.
+                // 여기서는 nothing.
+            }
+        }
+
         Ok(())
     }
 
     /// 여러 키-값 쌍을 일괄 삽입합니다 (최적화됨).
+    ///
+    /// `parallel_engine`의 `min_rows_for_parallel` 이상이면 Rayon 스레드 풀에서 병렬 삽입합니다.
     pub fn insert_batch(&self, table: &str, rows: Vec<(Vec<u8>, Vec<u8>)>) -> DbxResult<()> {
+        // ════════════════════════════════════════════
+        // Phase 3: 파티셔닝 (Partition Routing)
+        // ════════════════════════════════════════════
+        let target_table = {
+            let maps = self.partition_maps.read().unwrap();
+            if let Some(map) = maps.get(table) {
+                // MVP: Use the first row's key for routing the whole batch to avoid splitting logic
+                if let Some((first_key, _)) = rows.first() {
+                    use crate::storage::partition::PartitionValue;
+                    let key_str = String::from_utf8_lossy(first_key).into_owned();
+                    map.route_key(&PartitionValue::Text(key_str))
+                } else {
+                    table.to_string()
+                }
+            } else {
+                table.to_string()
+            }
+        };
+        let table = target_table.as_str();
         #[cfg(feature = "wal")]
         if self.durability != DurabilityLevel::None
             && (self.wal.is_some() || self.encrypted_wal.is_some())
@@ -129,15 +192,51 @@ impl Database {
             })?;
         }
 
-        self.delta.insert_batch(table, rows)?;
+        // 병렬화 임계값 이상이면 parallel_engine 으로 병렬 삽입
+        if self.parallel_engine.should_parallelize_rows(rows.len()) {
+            use rayon::prelude::*;
+            let delta = &self.delta;
+            let table_owned = table.to_string();
+            // 각 (key, value) 쌍을 병렬로 삽입
+            // DeltaStore는 내부적으로 DashMap + SkipMap(Arc)이므로 공유 안전
+            let results: Vec<crate::error::DbxResult<()>> =
+                self.parallel_engine.execute(|| {
+                    rows.par_iter()
+                        .map(|(key, value)| delta.insert(&table_owned, key, value))
+                        .collect()
+                });
+            for r in results {
+                r?;
+            }
+        } else {
+            self.delta.insert_batch(table, rows)?;
+        }
 
         // Auto-flush if threshold exceeded
         if self.delta.should_flush() {
             self.flush()?;
         }
 
+        // ════════════════════════════════════════════
+        // Phase 0: HTAP 실시간 동기화 (RealtimeSync)
+        // ════════════════════════════════════════════
+        use crate::storage::realtime_sync::SyncMode;
+        let sync_config = &self.config.sync;
+        match sync_config.mode {
+            SyncMode::Immediate => {
+                let _ = self.sync_columnar_cache(table);
+            }
+            SyncMode::Threshold(n) => {
+                if self.delta.count(table).unwrap_or(0) >= n as usize {
+                    let _ = self.sync_columnar_cache(table);
+                }
+            }
+            SyncMode::AsyncBatch { .. } => {}
+        }
+
         Ok(())
     }
+
 
     /// Insert a versioned key-value pair for MVCC.
     pub fn insert_versioned(
@@ -147,6 +246,20 @@ impl Database {
         value: Option<&[u8]>,
         commit_ts: u64,
     ) -> DbxResult<()> {
+        // ════════════════════════════════════════════
+        // Phase 3: 파티셔닝 (Partition Routing)
+        // ════════════════════════════════════════════
+        let target_table = {
+            let maps = self.partition_maps.read().unwrap();
+            if let Some(map) = maps.get(table) {
+                use crate::storage::partition::PartitionValue;
+                let key_str = String::from_utf8_lossy(key).into_owned();
+                map.route_key(&PartitionValue::Text(key_str))
+            } else {
+                table.to_string()
+            }
+        };
+        let table = target_table.as_str();
         let vk = crate::transaction::mvcc::version::VersionedKey::new(key.to_vec(), commit_ts);
         let encoded_key = vk.encode();
 
@@ -164,6 +277,23 @@ impl Database {
 
         // Write to Delta Store
         self.delta.insert(table, &encoded_key, &encoded_value)?;
+
+        // ════════════════════════════════════════════
+        // Phase 0: HTAP 실시간 동기화 (RealtimeSync)
+        // ════════════════════════════════════════════
+        use crate::storage::realtime_sync::SyncMode;
+        let sync_config = &self.config.sync;
+        match sync_config.mode {
+            SyncMode::Immediate => {
+                let _ = self.sync_columnar_cache(table);
+            }
+            SyncMode::Threshold(n) => {
+                if self.delta.count(table).unwrap_or(0) >= n as usize {
+                    let _ = self.sync_columnar_cache(table);
+                }
+            }
+            SyncMode::AsyncBatch { .. } => {}
+        }
 
         Ok(())
     }
@@ -318,17 +448,34 @@ impl Database {
     }
 
     /// 테이블의 모든 키-값 쌍을 스캔합니다.
+    ///
+    /// Delta + WOS 를 `rayon::join()`으로 병렬 스캔합니다.
     pub fn scan(&self, table: &str) -> DbxResult<Vec<(Vec<u8>, Vec<u8>)>> {
-        // Fast-path: Delta가 비어있으면 WOS 직접 스캔 (merge 오버헤드 제거)
-        let delta_entries = self.delta.scan(table, ..)?;
+        use crate::storage::StorageBackend;
+
+        // Delta + WOS 병렬 스캔
+        let (delta_result, wos_result) = rayon::join(
+            || StorageBackend::scan(&self.delta, table, ..),
+            || self.wos_for_table(table).scan(table, ..),
+        );
+
+        let delta_entries = delta_result?;
+        let wos_entries = wos_result?;
+
+        // Fast-path: Delta가 비어있으면 WOS만 반환
         if delta_entries.is_empty() {
-            return self.wos_for_table(table).scan(table, ..);
+            return Ok(
+                wos_entries
+                    .into_iter()
+                    .filter_map(|(k, v)| {
+                        let dk = Self::decode_versioned_key(k);
+                        Self::decode_mvcc_value(v).map(|dv| (dk, dv))
+                    })
+                    .collect(),
+            );
         }
 
-        // 1. Collect from Delta Store and WOS
-        let wos_entries = self.wos_for_table(table).scan(table, ..)?;
-
-        // 2. Direct 2-way merge (both are already sorted)
+        // 2-way merge (both are already sorted)
         let mut result = Vec::with_capacity(delta_entries.len() + wos_entries.len());
 
         let mut i = 0;
@@ -337,7 +484,6 @@ impl Database {
         while i < delta_entries.len() && j < wos_entries.len() {
             match delta_entries[i].0.cmp(&wos_entries[j].0) {
                 std::cmp::Ordering::Less => {
-                    // Delta key is smaller
                     if let Some(decoded_v) = Self::decode_mvcc_value(delta_entries[i].1.clone()) {
                         let user_key = Self::decode_versioned_key(delta_entries[i].0.clone());
                         result.push((user_key, decoded_v));
@@ -345,16 +491,14 @@ impl Database {
                     i += 1;
                 }
                 std::cmp::Ordering::Equal => {
-                    // Same key - Delta takes priority
                     if let Some(decoded_v) = Self::decode_mvcc_value(delta_entries[i].1.clone()) {
                         let user_key = Self::decode_versioned_key(delta_entries[i].0.clone());
                         result.push((user_key, decoded_v));
                     }
                     i += 1;
-                    j += 1; // Skip WOS entry
+                    j += 1;
                 }
                 std::cmp::Ordering::Greater => {
-                    // WOS key is smaller
                     if let Some(decoded_v) = Self::decode_mvcc_value(wos_entries[j].1.clone()) {
                         let user_key = Self::decode_versioned_key(wos_entries[j].0.clone());
                         result.push((user_key, decoded_v));
@@ -364,7 +508,6 @@ impl Database {
             }
         }
 
-        // 3. Process remaining Delta entries
         while i < delta_entries.len() {
             if let Some(decoded_v) = Self::decode_mvcc_value(delta_entries[i].1.clone()) {
                 let user_key = Self::decode_versioned_key(delta_entries[i].0.clone());
@@ -373,7 +516,6 @@ impl Database {
             i += 1;
         }
 
-        // 4. Process remaining WOS entries
         while j < wos_entries.len() {
             if let Some(decoded_v) = Self::decode_mvcc_value(wos_entries[j].1.clone()) {
                 let user_key = Self::decode_versioned_key(wos_entries[j].0.clone());
@@ -384,6 +526,7 @@ impl Database {
 
         Ok(result)
     }
+
 
     /// 테이블의 키 범위를 스캔합니다.
     pub fn range(

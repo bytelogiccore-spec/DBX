@@ -119,6 +119,15 @@ pub struct Database {
 
     /// SQL View Registry — CREATE/DROP VIEW 지원
     pub(crate) view_registry: ViewRegistry,
+
+    /// 파티션 매핑 정보 (테이블명 -> PartitionMap)
+    pub(crate) partition_maps: Arc<RwLock<std::collections::HashMap<String, crate::storage::partition::PartitionMap>>>,
+
+    /// Database Configuration (Parallelism, HTAP Sync)
+    pub(crate) config: crate::engine::parallel_engine::DbConfig,
+
+    /// 적응형 워크로드 분석기 (HTAP/OLAP 비율 분석)
+    pub(crate) workload_analyzer: Arc<RwLock<crate::engine::workload_analyzer::WorkloadAnalyzer>>,
 }
 
 impl Database {

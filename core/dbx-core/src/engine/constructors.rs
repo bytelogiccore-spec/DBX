@@ -138,6 +138,9 @@ impl Database {
                     .expect("Failed to create parallel engine"),
             ),
             view_registry: ViewRegistry::new(),
+            partition_maps: Arc::new(RwLock::new(HashMap::new())),
+            config: DbConfig::default(),
+            workload_analyzer: Arc::new(RwLock::new(crate::engine::workload_analyzer::WorkloadAnalyzer::default_window())),
         };
 
         // Perform crash recovery
@@ -296,6 +299,9 @@ impl Database {
                     .expect("Failed to create parallel engine"),
             ),
             view_registry: ViewRegistry::new(),
+            partition_maps: Arc::new(RwLock::new(HashMap::new())),
+            config: DbConfig::default(),
+            workload_analyzer: Arc::new(RwLock::new(crate::engine::workload_analyzer::WorkloadAnalyzer::default_window())),
         };
         let records = encrypted_wal.replay()?;
         let mut recovered_count = 0;
@@ -383,6 +389,9 @@ impl Database {
                     .expect("Failed to create parallel engine"),
             ),
             view_registry: ViewRegistry::new(),
+            partition_maps: Arc::new(RwLock::new(HashMap::new())),
+            config: DbConfig::default(),
+            workload_analyzer: Arc::new(RwLock::new(crate::engine::workload_analyzer::WorkloadAnalyzer::default_window())),
         })
     }
 
@@ -444,6 +453,9 @@ impl Database {
                     .expect("Failed to create parallel engine"),
             ),
             view_registry: ViewRegistry::new(),
+            partition_maps: Arc::new(RwLock::new(HashMap::new())),
+            config: DbConfig::default(),
+            workload_analyzer: Arc::new(RwLock::new(crate::engine::workload_analyzer::WorkloadAnalyzer::default_window())),
         })
     }
 
@@ -541,6 +553,9 @@ impl Database {
                     .expect("Failed to create parallel engine"),
             ),
             view_registry: ViewRegistry::new(),
+            partition_maps: Arc::new(RwLock::new(HashMap::new())),
+            config: DbConfig::default(),
+            workload_analyzer: Arc::new(RwLock::new(crate::engine::workload_analyzer::WorkloadAnalyzer::default_window())),
         };
 
         // Crash recovery
@@ -624,6 +639,7 @@ impl Database {
     ///     Path::new("./data"),
     ///     DbConfig {
     ///         parallelism: ParallelismConfig::conservative(), // CPU 50%만 사용
+    ///         sync: Default::default(),
     ///     },
     /// ).unwrap();
     /// ```
@@ -665,7 +681,7 @@ impl Database {
         let parallel_engine = Arc::new(
             ParallelExecutionEngine::new_with_config(
                 ParallelizationPolicy::Auto,
-                config.parallelism.clone(),
+                config.clone(),
             )
             .expect("Failed to create parallel engine"),
         );
@@ -704,6 +720,9 @@ impl Database {
             )),
             parallel_engine,
             view_registry: ViewRegistry::new(),
+            partition_maps: Arc::new(RwLock::new(HashMap::new())),
+            config: config.clone(),
+            workload_analyzer: Arc::new(RwLock::new(crate::engine::workload_analyzer::WorkloadAnalyzer::default_window())),
         };
 
         // Crash recovery

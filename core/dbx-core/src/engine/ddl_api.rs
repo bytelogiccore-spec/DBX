@@ -423,4 +423,34 @@ impl Database {
         self.execute_sql(&sql)?;
         Ok(())
     }
+
+    // ════════════════════════════════════════════
+    // Phase 3: 파티셔닝 API (Partitioning API)
+    // ════════════════════════════════════════════
+
+    /// 파티셔닝 규칙을 생성합니다.
+    ///
+    /// 이후 해당 `table`로 들어오는 INSERT는 키 값에 따라
+    /// `route_key()`가 반환하는 내부 sub-table로 라우팅됩니다.
+    pub fn create_partition(&self, map: crate::storage::partition::PartitionMap) -> DbxResult<()> {
+        let table_name = map.table.clone();
+        self.partition_maps.write().unwrap().insert(table_name, map);
+        Ok(())
+    }
+
+    /// 파티셔닝 규칙을 제거합니다.
+    pub fn drop_partition(&self, table: &str) -> DbxResult<()> {
+        self.partition_maps.write().unwrap().remove(table);
+        Ok(())
+    }
+
+    /// 뷰를 생성합니다 (Phase 5.1).
+    pub fn create_view(&self, name: &str, sql: &str) -> DbxResult<()> {
+        self.view_registry.create(name, sql)
+    }
+
+    /// 뷰를 삭제합니다 (Phase 5.1).
+    pub fn drop_view(&self, name: &str) -> DbxResult<()> {
+        self.view_registry.drop(name)
+    }
 }
