@@ -259,15 +259,26 @@ impl Database {
 
     /// 파티셔닝 라우팅 리스트를 가져옵니다.
     /// 조건이 없으면 모든 파티션을 스캔, 조건이 있으면 (향후) 필요한 파티션만 스캔합니다.
-    pub(crate) fn get_tables_to_scan(&self, table: &str, _filter: Option<&PhysicalExpr>) -> Vec<String> {
+    pub(crate) fn get_tables_to_scan(
+        &self,
+        table: &str,
+        _filter: Option<&PhysicalExpr>,
+    ) -> Vec<String> {
         let maps = self.partition_maps.read().unwrap();
         if let Some(map) = maps.get(table) {
             // MVP: 조건절을 분석하여 특정 파티션만 추출하는 프루닝 로직 대신 전체 파티션을 반환.
             // TODO: Extract PartitionValue from _filter and prune.
             map.all_partitions()
         } else {
-            // 파티션 매핑이 없으면 원래 테이블 반환
-            vec![table.to_string()]
+            // 파티션 매핑이 없으면 셔딩 라우터에 쓰인 모든 샤드 가상 테이블을 조회
+            // ════════════════════════════════════════════
+            // Phase 6: Sharding Scatter Read (Scatter-Gather)
+            // ════════════════════════════════════════════
+            self.sharding_router
+                .all_shards()
+                .iter()
+                .map(|shard| format!("{}__shard_{}", table, shard.id))
+                .collect()
         }
     }
 
@@ -313,6 +324,8 @@ impl Database {
     /// # }
     /// ```
     pub fn execute_sql(&self, sql: &str) -> DbxResult<Vec<RecordBatch>> {
+        let t0 = std::time::Instant::now();
+
         // Step 0: Intercept CREATE VIEW / DROP VIEW (before parser)
         let sql_trimmed = sql.trim();
         let sql_upper = sql_trimmed.to_uppercase();
@@ -346,20 +359,30 @@ impl Database {
         let physical_plan = physical_planner.plan(&optimized)?;
 
         // Step 5: Execute
-        self.execute_physical_plan(&physical_plan)
+        let result = self.execute_physical_plan(&physical_plan);
+
+        // ── Metrics ─────────────────────────────────────────────────
+        let elapsed_us = t0.elapsed().as_micros() as u64;
+        self.metrics.inc_sql_queries();
+        self.metrics.query_latency_us.observe(elapsed_us);
+
+        result
     }
 
     /// CREATE VIEW handler
     fn handle_create_view(&self, sql: &str) -> DbxResult<Vec<RecordBatch>> {
         // Syntax: CREATE VIEW <name> AS <select_sql>
         let upper = sql.to_uppercase();
-        let after_view = &sql[upper.find("VIEW").unwrap() + 4..].trim_start().to_owned();
-        let as_pos = after_view.to_uppercase().find(" AS ").ok_or_else(|| {
-            DbxError::SqlParse {
+        let after_view = &sql[upper.find("VIEW").unwrap() + 4..]
+            .trim_start()
+            .to_owned();
+        let as_pos = after_view
+            .to_uppercase()
+            .find(" AS ")
+            .ok_or_else(|| DbxError::SqlParse {
                 message: "CREATE VIEW requires AS".to_string(),
                 sql: sql.to_string(),
-            }
-        })?;
+            })?;
         let view_name = after_view[..as_pos].trim();
         let view_sql = after_view[as_pos + 4..].trim();
         self.view_registry.create(view_name, view_sql)?;
@@ -370,7 +393,9 @@ impl Database {
     fn handle_drop_view(&self, sql: &str) -> DbxResult<Vec<RecordBatch>> {
         // Syntax: DROP VIEW [IF EXISTS] <name>
         let upper = sql.to_uppercase();
-        let after_view = sql[upper.find("VIEW").unwrap() + 4..].trim_start().to_owned();
+        let after_view = sql[upper.find("VIEW").unwrap() + 4..]
+            .trim_start()
+            .to_owned();
         let (if_exists, name_part) = if after_view.to_uppercase().starts_with("IF EXISTS") {
             (true, after_view[9..].trim_start().to_string())
         } else {
@@ -409,7 +434,10 @@ impl Database {
                 values,
             } => {
                 // Track OLTP Workload
-                self.workload_analyzer.write().unwrap().record(crate::engine::workload_analyzer::QueryPattern::PointQuery);
+                self.workload_analyzer
+                    .write()
+                    .unwrap()
+                    .record(crate::engine::workload_analyzer::QueryPattern::PointQuery);
 
                 // Execute INSERT: convert PhysicalExpr values to bytes and insert into Delta Store
                 let mut rows_inserted = 0;
@@ -465,8 +493,19 @@ impl Database {
                     // Always use Arrow IPC serialization
                     let value_bytes = serialize_to_arrow_ipc(&schema, row_values)?;
 
-                    // Insert into Delta Store
-                    self.insert(table, &key, &value_bytes)?;
+                    // ════════════════════════════════════════════
+                    // Phase 6: Sharding Scatter Write
+                    // ════════════════════════════════════════════
+                    self.scatter_gather.scatter_write(
+                        &key,
+                        &value_bytes,
+                        |shard_id, sub_key, sub_val| {
+                            let shard_table = format!("{}__shard_{}", table, shard_id);
+                            // Write to the specific shard virtual table (which will then be partitioned by crud.rs if PartitionMap exists)
+                            let _ = self.insert(&shard_table, sub_key, sub_val);
+                        },
+                    );
+
                     rows_inserted += 1;
                 }
 
@@ -491,7 +530,10 @@ impl Database {
                 filter,
             } => {
                 // Track OLTP Workload
-                self.workload_analyzer.write().unwrap().record(crate::engine::workload_analyzer::QueryPattern::PointQuery);
+                self.workload_analyzer
+                    .write()
+                    .unwrap()
+                    .record(crate::engine::workload_analyzer::QueryPattern::PointQuery);
 
                 // Execute UPDATE: scan (across partitions), evaluate filter, update matching records
                 let target_tables = self.get_tables_to_scan(table, filter.as_ref());
@@ -595,7 +637,10 @@ impl Database {
             }
             PhysicalPlan::Delete { table, filter } => {
                 // Track OLTP Workload
-                self.workload_analyzer.write().unwrap().record(crate::engine::workload_analyzer::QueryPattern::PointQuery);
+                self.workload_analyzer
+                    .write()
+                    .unwrap()
+                    .record(crate::engine::workload_analyzer::QueryPattern::PointQuery);
 
                 // Execute DELETE: scan table (across partitions), evaluate filter, delete matching records
 
@@ -1016,7 +1061,10 @@ impl Database {
                 filter,
             } => {
                 // Track OLAP Workload
-                self.workload_analyzer.write().unwrap().record(crate::engine::workload_analyzer::QueryPattern::RangeScan);
+                self.workload_analyzer
+                    .write()
+                    .unwrap()
+                    .record(crate::engine::workload_analyzer::QueryPattern::RangeScan);
 
                 let mut filter_pushed_down = false;
                 let target_tables = self.get_tables_to_scan(table, filter.as_ref());
@@ -1045,9 +1093,9 @@ impl Database {
                                     .as_any()
                                     .downcast_ref::<BooleanArray>()
                                     .ok_or_else(|| DbxError::TypeMismatch {
-                                        expected: "BooleanArray".to_string(),
-                                        actual: format!("{:?}", array.data_type()),
-                                    })?;
+                                    expected: "BooleanArray".to_string(),
+                                    actual: format!("{:?}", array.data_type()),
+                                })?;
                                 Ok(boolean_array.clone())
                             },
                         )?;
@@ -1066,11 +1114,46 @@ impl Database {
                         )?
                     };
 
-                    let (batches, schema, _) =
-                        if let Some(cached_batches) = cached_results {
-                            if cached_batches.is_empty() {
-                                // Table exists but is empty in cache.
-                                // We need the schema to return an empty scan.
+                    let (batches, schema, _) = if let Some(cached_batches) = cached_results {
+                        if cached_batches.is_empty() {
+                            // Table exists but is empty in cache.
+                            // We need the schema to return an empty scan.
+                            let schema = {
+                                let schemas = self.table_schemas.read().unwrap();
+                                schemas
+                                    .get(table)
+                                    .or_else(|| {
+                                        let table_lower = table.to_lowercase();
+                                        schemas
+                                            .iter()
+                                            .find(|(k, _)| k.to_lowercase() == table_lower)
+                                            .map(|(_, v)| v)
+                                    })
+                                    .cloned()
+                            }
+                            .unwrap_or_else(|| Arc::new(arrow::datatypes::Schema::empty()));
+                            (vec![], schema, projection.clone())
+                        } else {
+                            let schema = cached_batches[0].schema();
+                            (cached_batches, schema, vec![])
+                        }
+                    } else {
+                        // Try cache again
+                        let cached_after_sync = columnar_cache.get_batches(
+                            &t,
+                            if projection.is_empty() {
+                                None
+                            } else {
+                                Some(projection)
+                            },
+                        )?;
+
+                        if let Some(batches) = cached_after_sync {
+                            if !batches.is_empty() {
+                                let schema = batches[0].schema();
+                                (batches, schema, vec![])
+                            } else {
+                                // Table exists but is empty
                                 let schema = {
                                     let schemas = self.table_schemas.read().unwrap();
                                     schemas
@@ -1086,27 +1169,19 @@ impl Database {
                                 }
                                 .unwrap_or_else(|| Arc::new(arrow::datatypes::Schema::empty()));
                                 (vec![], schema, projection.clone())
-                            } else {
-                                let schema = cached_batches[0].schema();
-                                (cached_batches, schema, vec![])
                             }
                         } else {
-                            // Try cache again
-                            let cached_after_sync = columnar_cache.get_batches(
-                                &t,
-                                if projection.is_empty() {
-                                    None
-                                } else {
-                                    Some(projection)
-                                },
-                            )?;
+                            // Not in cache, check HashMap fallback
+                            let batches_opt = tables.get(&t).or_else(|| {
+                                let table_lower = t.to_lowercase();
+                                tables
+                                    .iter()
+                                    .find(|(k, _)| k.to_lowercase() == table_lower)
+                                    .map(|(_, v)| v)
+                            });
 
-                            if let Some(batches) = cached_after_sync {
-                                if !batches.is_empty() {
-                                    let schema = batches[0].schema();
-                                    (batches, schema, vec![])
-                                } else {
-                                    // Table exists but is empty
+                            if let Some(batches) = batches_opt {
+                                if batches.is_empty() {
                                     let schema = {
                                         let schemas = self.table_schemas.read().unwrap();
                                         schemas
@@ -1122,52 +1197,22 @@ impl Database {
                                     }
                                     .unwrap_or_else(|| Arc::new(arrow::datatypes::Schema::empty()));
                                     (vec![], schema, projection.clone())
+                                } else {
+                                    let schema = batches[0].schema();
+                                    (batches.clone(), schema, projection.clone())
                                 }
                             } else {
-                                // Not in cache, check HashMap fallback
-                                let batches_opt = tables.get(&t).or_else(|| {
-                                    let table_lower = t.to_lowercase();
-                                    tables
-                                        .iter()
-                                        .find(|(k, _)| k.to_lowercase() == table_lower)
-                                        .map(|(_, v)| v)
-                                });
-
-                                if let Some(batches) = batches_opt {
-                                    if batches.is_empty() {
-                                        let schema = {
-                                            let schemas = self.table_schemas.read().unwrap();
-                                            schemas
-                                                .get(table)
-                                                .or_else(|| {
-                                                    let table_lower = table.to_lowercase();
-                                                    schemas
-                                                        .iter()
-                                                        .find(|(k, _)| k.to_lowercase() == table_lower)
-                                                        .map(|(_, v)| v)
-                                                })
-                                                .cloned()
-                                        }
-                                        .unwrap_or_else(|| Arc::new(arrow::datatypes::Schema::empty()));
-                                        (vec![], schema, projection.clone())
-                                    } else {
-                                        let schema = batches[0].schema();
-                                        (batches.clone(), schema, projection.clone())
-                                    }
-                                } else {
-                                    // Skip missing sub-table if it has no data yet
-                                    let schema = {
-                                        let schemas = self.table_schemas.read().unwrap();
-                                        schemas
-                                            .get(table)
-                                            .cloned()
-                                    }
-                                    .unwrap_or_else(|| Arc::new(arrow::datatypes::Schema::empty()));
-                                    (vec![], schema, projection.clone())
+                                // Skip missing sub-table if it has no data yet
+                                let schema = {
+                                    let schemas = self.table_schemas.read().unwrap();
+                                    schemas.get(table).cloned()
                                 }
+                                .unwrap_or_else(|| Arc::new(arrow::datatypes::Schema::empty()));
+                                (vec![], schema, projection.clone())
                             }
-                        };
-                        
+                        }
+                    };
+
                     if base_schema.is_none() {
                         base_schema = Some(schema);
                     }
@@ -1177,10 +1222,17 @@ impl Database {
                 // Use the base schema from the loop, or try to look it up if all partitions were empty
                 let final_schema = base_schema.unwrap_or_else(|| {
                     let schemas = self.table_schemas.read().unwrap();
-                    schemas.get(table).cloned().unwrap_or_else(|| Arc::new(arrow::datatypes::Schema::empty()))
+                    schemas
+                        .get(table)
+                        .cloned()
+                        .unwrap_or_else(|| Arc::new(arrow::datatypes::Schema::empty()))
                 });
 
-                let projection_to_use = if projection.is_empty() { vec![] } else { projection.clone() };
+                let projection_to_use = if projection.is_empty() {
+                    vec![]
+                } else {
+                    projection.clone()
+                };
                 let mut scan =
                     TableScanOperator::new(table.clone(), final_schema, projection_to_use);
                 scan.set_data(all_batches);
@@ -1252,7 +1304,10 @@ impl Database {
                 aggregates,
             } => {
                 // Track OLAP Workload
-                self.workload_analyzer.write().unwrap().record(crate::engine::workload_analyzer::QueryPattern::Aggregation);
+                self.workload_analyzer
+                    .write()
+                    .unwrap()
+                    .record(crate::engine::workload_analyzer::QueryPattern::Aggregation);
 
                 let input_op = self.build_operator(input, tables, columnar_cache)?;
                 let input_schema = input_op.schema();
@@ -1264,12 +1319,13 @@ impl Database {
 
                 for agg in aggregates {
                     use arrow::datatypes::DataType;
-                    let data_type =
-                        if matches!(agg.function, crate::sql::planner::AggregateFunction::Count) {
-                            DataType::Int64
-                        } else {
-                            input_schema.field(agg.input).data_type().clone()
-                        };
+                    let data_type = match agg.function {
+                        crate::sql::planner::AggregateFunction::Count => DataType::Int64,
+                        crate::sql::planner::AggregateFunction::Sum
+                        | crate::sql::planner::AggregateFunction::Avg
+                        | crate::sql::planner::AggregateFunction::Min
+                        | crate::sql::planner::AggregateFunction::Max => DataType::Float64,
+                    };
                     let name = agg
                         .alias
                         .clone()
@@ -1296,7 +1352,10 @@ impl Database {
                 join_type,
             } => {
                 // Track OLAP Workload
-                self.workload_analyzer.write().unwrap().record(crate::engine::workload_analyzer::QueryPattern::Join);
+                self.workload_analyzer
+                    .write()
+                    .unwrap()
+                    .record(crate::engine::workload_analyzer::QueryPattern::Join);
 
                 use arrow::datatypes::Field;
 

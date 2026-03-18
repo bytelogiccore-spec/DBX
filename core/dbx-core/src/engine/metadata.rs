@@ -186,7 +186,12 @@ pub fn load_all_schemas(wos: &NativeWosBackend) -> DbxResult<HashMap<String, Arc
 // ════════════════════════════════════════════
 
 /// Save index metadata to persistent storage
-pub fn save_index(wos: &NativeWosBackend, index_name: &str, table: &str, column: &str) -> DbxResult<()> {
+pub fn save_index(
+    wos: &NativeWosBackend,
+    index_name: &str,
+    table: &str,
+    column: &str,
+) -> DbxResult<()> {
     let metadata = IndexMetadata {
         index_name: index_name.to_string(),
         table_name: table.to_string(),
@@ -238,7 +243,10 @@ pub fn save_trigger(wos: &NativeWosBackend, trigger: &crate::automation::Trigger
 }
 
 /// Load trigger metadata from persistent storage
-pub fn load_trigger(wos: &NativeWosBackend, name: &str) -> DbxResult<Option<crate::automation::Trigger>> {
+pub fn load_trigger(
+    wos: &NativeWosBackend,
+    name: &str,
+) -> DbxResult<Option<crate::automation::Trigger>> {
     match wos.get("__meta__/triggers", name.as_bytes())? {
         Some(json_bytes) => {
             let json = String::from_utf8(json_bytes)
@@ -312,7 +320,9 @@ pub fn delete_procedure(wos: &NativeWosBackend, name: &str) -> DbxResult<()> {
 }
 
 /// Load all stored procedure metadata from persistent storage
-pub fn load_all_procedures(wos: &NativeWosBackend) -> DbxResult<Vec<crate::automation::StoredProcedure>> {
+pub fn load_all_procedures(
+    wos: &NativeWosBackend,
+) -> DbxResult<Vec<crate::automation::StoredProcedure>> {
     let mut procedures = Vec::new();
     let all_records = wos.scan("__meta__/procedures", ..)?;
 
@@ -338,7 +348,10 @@ pub fn save_udf(wos: &NativeWosBackend, udf: &crate::automation::UdfMetadata) ->
 }
 
 /// Load UDF metadata from persistent storage
-pub fn load_udf(wos: &NativeWosBackend, name: &str) -> DbxResult<Option<crate::automation::UdfMetadata>> {
+pub fn load_udf(
+    wos: &NativeWosBackend,
+    name: &str,
+) -> DbxResult<Option<crate::automation::UdfMetadata>> {
     match wos.get("__meta__/udfs", name.as_bytes())? {
         Some(json_bytes) => {
             let json = String::from_utf8(json_bytes)
@@ -376,7 +389,10 @@ pub fn load_all_udfs(wos: &NativeWosBackend) -> DbxResult<Vec<crate::automation:
 // ════════════════════════════════════════════
 
 /// Save schedule metadata
-pub fn save_schedule(wos: &NativeWosBackend, schedule: &crate::automation::Schedule) -> DbxResult<()> {
+pub fn save_schedule(
+    wos: &NativeWosBackend,
+    schedule: &crate::automation::Schedule,
+) -> DbxResult<()> {
     let json = schedule.to_json()?;
     wos.insert(
         "__meta__/schedules",

@@ -84,6 +84,7 @@ pub mod automation;
 pub mod engine;
 pub mod error;
 pub mod index;
+pub mod monitoring;
 pub mod replication;
 pub mod sharding;
 pub mod sql;
@@ -102,3 +103,4 @@ pub mod logging;
 // Re-export commonly used types
 pub use engine::{Database, DurabilityLevel, SchemaBuilder};
 pub use error::{DbxError, DbxResult};
+pub use monitoring::MetricsSnapshot;

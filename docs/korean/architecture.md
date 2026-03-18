@@ -91,13 +91,15 @@ DBX는 OLTP와 OLAP 워크로드 모두에 최적화된 정교한 5계층 아키
 
 **목적**: 영구적 트랜잭션 저장소
 
-**구현**: `sled` 임베디드 데이터베이스
+**구현**: Native SSTable + WAL
+- `.wos` — SSTable (컴팩트된 4KB 페이지 + 스파스 인덱스 + footer)
+- `.wal` — WAL 로그 (순차 append, 컴팩트 시 truncate)
 
 **특징**:
-- MVCC 및 스냅샷 격리
-- ACID 트랜잭션
-- 크래시 복구
-- 컴팩션 (Compaction)
+- WAL sequential append 방식 초고속 flush
+- compact 조건 도달 시에만 SSTable 병합 (드물게 발생)
+- LRU 페이지 캐시 (4KB 단위)
+- Tombstone 기반 삭제
 
 ### Tier 4: Index
 
@@ -227,7 +229,39 @@ Arrow RecordBatch를 이용한 SIMD 연산:
 
 ---
 
-## 데이터 흐름
+## 병렬 실행 (Parallel Execution)
+
+v0.1.1부터 Rayon 기반 멀티코어 병렬화가 전면 적용되었습니다.
+
+### `ParallelismConfig` 사용 예시
+
+```rust
+// PC 동작에 여유를 두는 보수적 설정 (CPU 50%, 5000행 임계)
+let db = Database::open_with_config(path, DbConfig {
+    parallelism: ParallelismConfig::conservative(),
+})?;
+
+// 모든 코어 활용 (CPU 100%, 500행 임계)
+let db = Database::open_with_config(path, DbConfig {
+    parallelism: ParallelismConfig::aggressive(),
+})?;
+```
+
+### 병렬화 적용 연산
+
+| 연산 | 기법 | 작동 조건 |
+|------|------|--------|
+| `insert_batch()` | `par_iter()` | 1,000행 이상 |
+| `scan()` | `rayon::join()` Delta+WOS | 항상 |
+| GROUP BY 집계 | `par_iter()` | 1,000 그룹 이상 |
+| JOIN Build/Probe | `into_par_iter()` | 1,000행 이상 |
+| `get_batches` projection | `par_iter()` | 항상 |
+| WAL encode | `par_iter()` (쓰기는 순차) | 500건 이상 |
+| compact() 역직렬화 | `par_iter()` (읽기는 순차) | 4페이지 이상 |
+| SIMD (`wide` crate) | 4-lane f64x4 | 항상 활성 |
+
+---
+
 
 ### 쓰기 경로 (Write Path)
 

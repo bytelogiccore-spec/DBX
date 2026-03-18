@@ -438,6 +438,36 @@ impl Database {
         Ok(())
     }
 
+    /// 자동 확장(Auto-Expand)을 지원하는 범위 파티션을 생성합니다 (Phase 3.4).
+    ///
+    /// 설정된 범위를 초과하는 키 값이 인입되면 `interval` 크기만큼
+    /// 새로운 파티션 구획을 자동 생성하며 지속적으로 확장됩니다.
+    pub fn create_auto_range_partition(
+        &self,
+        table: &str,
+        column: &str,
+        initial_low: i64,
+        interval: i64,
+        max_partitions: usize,
+    ) -> DbxResult<()> {
+        use crate::storage::partition::{PartitionMap, PartitionType};
+        let map = PartitionMap {
+            table: table.to_string(),
+            partition_type: PartitionType::Range {
+                column: column.to_string(),
+                bounds: vec![(initial_low, initial_low + interval)],
+                auto_expand_interval: Some((interval, max_partitions)),
+            },
+            num_partitions: 1, // 초기 파티션 크기
+        };
+
+        self.partition_maps
+            .write()
+            .unwrap()
+            .insert(table.to_string(), map);
+        Ok(())
+    }
+
     /// 파티셔닝 규칙을 제거합니다.
     pub fn drop_partition(&self, table: &str) -> DbxResult<()> {
         self.partition_maps.write().unwrap().remove(table);

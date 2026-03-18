@@ -555,10 +555,11 @@ impl ColumnarCache {
             return Ok(None);
         }
 
-        // Apply projection if specified
+        // Apply projection if specified — par_iter()로 병렬 적용
         let result = if let Some(indices) = projection {
+            use rayon::prelude::*;
             batches
-                .iter()
+                .par_iter()
                 .map(|batch| project_batch(batch, indices))
                 .collect::<DbxResult<Vec<_>>>()?
         } else {

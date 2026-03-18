@@ -59,9 +59,7 @@ impl WosPage {
 
         // CRC32 검증 (마지막 4바이트 제외한 나머지)
         let payload = &bytes[..bytes.len() - 4];
-        let stored_crc = u32::from_le_bytes(
-            bytes[bytes.len() - 4..].try_into().unwrap(),
-        );
+        let stored_crc = u32::from_le_bytes(bytes[bytes.len() - 4..].try_into().unwrap());
         if crc32fast::hash(payload) != stored_crc {
             return Err(DbxError::Storage("WosPage: checksum mismatch".into()));
         }
@@ -90,7 +88,11 @@ impl WosPage {
             let deleted = bytes[cur] != 0;
             cur += 1;
 
-            entries.push(PageEntry { key, value, deleted });
+            entries.push(PageEntry {
+                key,
+                value,
+                deleted,
+            });
         }
 
         Ok(Self { entries })
@@ -102,19 +104,24 @@ mod tests {
     use super::*;
 
     fn entry(key: &[u8], value: &[u8]) -> PageEntry {
-        PageEntry { key: key.to_vec(), value: value.to_vec(), deleted: false }
+        PageEntry {
+            key: key.to_vec(),
+            value: value.to_vec(),
+            deleted: false,
+        }
     }
 
     fn deleted(key: &[u8]) -> PageEntry {
-        PageEntry { key: key.to_vec(), value: vec![], deleted: true }
+        PageEntry {
+            key: key.to_vec(),
+            value: vec![],
+            deleted: true,
+        }
     }
 
     #[test]
     fn page_roundtrip() {
-        let entries = vec![
-            entry(b"aaa", b"val1"),
-            entry(b"bbb", b"val2"),
-        ];
+        let entries = vec![entry(b"aaa", b"val1"), entry(b"bbb", b"val2")];
         let page = WosPage::from_entries(entries);
         let bytes = page.serialize().unwrap();
         let decoded = WosPage::deserialize(&bytes).unwrap();
@@ -136,10 +143,7 @@ mod tests {
 
     #[test]
     fn deleted_entry_roundtrip() {
-        let entries = vec![
-            entry(b"k1", b"v1"),
-            deleted(b"k2"),
-        ];
+        let entries = vec![entry(b"k1", b"v1"), deleted(b"k2")];
         let page = WosPage::from_entries(entries);
         let bytes = page.serialize().unwrap();
         let decoded = WosPage::deserialize(&bytes).unwrap();
@@ -159,7 +163,11 @@ mod tests {
     #[test]
     fn large_value_roundtrip() {
         let big_val = vec![0xABu8; 65536];
-        let entries = vec![PageEntry { key: b"bigkey".to_vec(), value: big_val.clone(), deleted: false }];
+        let entries = vec![PageEntry {
+            key: b"bigkey".to_vec(),
+            value: big_val.clone(),
+            deleted: false,
+        }];
         let page = WosPage::from_entries(entries);
         let bytes = page.serialize().unwrap();
         let decoded = WosPage::deserialize(&bytes).unwrap();

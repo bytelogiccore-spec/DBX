@@ -10,22 +10,24 @@
 //! ```
 //!
 //! ## 파일 구조
-//! ```
-//! bench.wos  — SSTable (compact된 페이지 + 스파스 인덱스 + footer)
-//! bench.wal  — WAL log (순차 append, compact 시 truncate)
+//! ```text
+//! bench.wos  - SSTable (compact된 페이지 + 스파스 인덱스 + footer)
+//! bench.wal  - WAL log (순차 append, compact 시 truncate)
 //! ```
 //!
 //! ## WAL compact 조건
 //! `wal_entries.len() >= WAL_COMPACT_THRESHOLD` (기본 5000)
 
+use super::page::{PageEntry, WosPage};
+use super::wal::{WalRecord, replay_wal};
 use crate::error::{DbxError, DbxResult};
+#[allow(unused_imports)]
+use rayon::prelude::ParallelIterator;
 use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::fs::{File, OpenOptions};
 use std::io::{BufReader, Read, Seek, SeekFrom, Write};
 use std::ops::RangeBounds;
 use std::path::{Path, PathBuf};
-use super::page::{PageEntry, WosPage};
-use super::wal::{WalRecord, replay_wal};
 
 // ──────────────────────────────────────────
 // 상수
@@ -77,11 +79,10 @@ impl PageCache {
             if let Some(pos) = self.order.iter().position(|&x| x == page_idx) {
                 self.order.remove(pos);
             }
-        } else if self.map.len() >= self.capacity {
-            if let Some(lru) = self.order.pop_back() {
+        } else if self.map.len() >= self.capacity
+            && let Some(lru) = self.order.pop_back() {
                 self.map.remove(&lru);
             }
-        }
         self.map.insert(page_idx, entries);
         self.order.push_front(page_idx);
     }
@@ -124,17 +125,17 @@ enum DirtyState {
 /// - `page_cache`: LRU hot-page cache
 /// - `file`: `.wos` SSTable 파일 핸들
 pub struct TableStore {
-    path: PathBuf,           // .wos 경로
-    wal_path: PathBuf,       // .wal 경로
+    _path: PathBuf,    // .wos 경로
+    wal_path: PathBuf, // .wal 경로
 
-    dirty: BTreeMap<Vec<u8>, DirtyState>,       // 아직 WAL에도 안 씀
+    dirty: BTreeMap<Vec<u8>, DirtyState>, // 아직 WAL에도 안 씀
     wal_entries: BTreeMap<Vec<u8>, DirtyState>, // WAL에 씀, SSTable엔 없음
 
     wal_file: File,
     page_index: Vec<IndexEntry>,
     page_cache: PageCache,
     file: File,
-    has_flushed_data: bool,   // SSTable에 데이터가 있는지
+    has_flushed_data: bool, // SSTable에 데이터가 있는지
 }
 
 impl TableStore {
@@ -143,15 +144,21 @@ impl TableStore {
         let wal_path = path.with_extension("wal");
 
         let file = OpenOptions::new()
-            .read(true).write(true).create(true)
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(false)
             .open(&path)?;
 
+        #[allow(clippy::suspicious_open_options)]
         let wal_file = OpenOptions::new()
-            .read(true).write(true).create(true).append(true)
+            .read(true)
+            .create(true)
+            .append(true)
             .open(&wal_path)?;
 
         let mut store = Self {
-            path,
+            _path: path,
             wal_path,
             dirty: BTreeMap::new(),
             wal_entries: BTreeMap::new(),
@@ -193,13 +200,16 @@ impl TableStore {
         let mut cur = 0;
         let mut entries = Vec::with_capacity(page_count);
         for _ in 0..page_count {
-            let klen = u32::from_le_bytes(index_buf[cur..cur+4].try_into().unwrap()) as usize;
+            let klen = u32::from_le_bytes(index_buf[cur..cur + 4].try_into().unwrap()) as usize;
             cur += 4;
-            let first_key = index_buf[cur..cur+klen].to_vec();
+            let first_key = index_buf[cur..cur + klen].to_vec();
             cur += klen;
-            let file_offset = u64::from_le_bytes(index_buf[cur..cur+8].try_into().unwrap());
+            let file_offset = u64::from_le_bytes(index_buf[cur..cur + 8].try_into().unwrap());
             cur += 8;
-            entries.push(IndexEntry { first_key, file_offset });
+            entries.push(IndexEntry {
+                first_key,
+                file_offset,
+            });
         }
         self.page_index = entries;
         self.has_flushed_data = !self.page_index.is_empty();
@@ -263,7 +273,9 @@ impl TableStore {
     }
 
     fn find_page_for_key(&self, key: &[u8]) -> Option<usize> {
-        if self.page_index.is_empty() { return None; }
+        if self.page_index.is_empty() {
+            return None;
+        }
         let mut lo = 0usize;
         let mut hi = self.page_index.len();
         while lo < hi {
@@ -282,16 +294,53 @@ impl TableStore {
     // ──────────────────────────────────────────
 
     fn compact(&mut self) -> DbxResult<()> {
-        // 0. dirty를 먼저 wal_entries에 병합 (flush 없이 compact 호출 시 데이터 손실 방지)
+        // 0. dirty를 먼저 wal_entries에 병합
         for (k, state) in std::mem::take(&mut self.dirty) {
             self.wal_entries.insert(k, state);
         }
 
-        // 1. SSTable 전체 로드
+        // 1. P6: SSTable 페이지 바이트를 순차로 읽어서 Vec<Vec<u8>>로 수집
+        //    (read_page_at는 &mut self이므로 순차 읽기 후,
+        //     CPU-bound 역직렬화만 par_iter로 병렬처리)
         let mut all: BTreeMap<Vec<u8>, Vec<u8>> = BTreeMap::new();
         if self.has_flushed_data {
-            for pi in 0..self.page_index.len() {
-                let page = self.read_page_at(pi)?;
+            let page_count = self.page_index.len();
+
+            // Step 1a: 각 페이지 바이트를 순차로 파일에서 읽기 (&mut self 필요)
+            let index_offset = self.read_index_offset()?;
+            let mut page_bufs: Vec<Vec<u8>> = Vec::with_capacity(page_count);
+            for pi in 0..page_count {
+                let start = self.page_index[pi].file_offset;
+                let end = if pi + 1 < page_count {
+                    self.page_index[pi + 1].file_offset
+                } else {
+                    index_offset
+                };
+                let size = (end - start) as usize;
+                let mut buf = vec![0u8; size];
+                self.file.seek(SeekFrom::Start(start))?;
+                self.file.read_exact(&mut buf)?;
+                page_bufs.push(buf);
+            }
+
+            // Step 1b: 역직렬화를 par_iter로 병렬 처리 (CPU-bound, &self 불필요)
+            const PARALLEL_PAGE_THRESHOLD: usize = 4;
+            let pages: Vec<DbxResult<WosPage>> = if page_bufs.len() >= PARALLEL_PAGE_THRESHOLD {
+                use rayon::prelude::*;
+                page_bufs
+                    .par_iter()
+                    .map(|buf| WosPage::deserialize(buf))
+                    .collect()
+            } else {
+                page_bufs
+                    .iter()
+                    .map(|buf| WosPage::deserialize(buf))
+                    .collect()
+            };
+
+            // Step 1c: 순차로 BTreeMap에 merge
+            for page_result in pages {
+                let page = page_result?;
                 for entry in page.entries {
                     if !entry.deleted {
                         all.insert(entry.key, entry.value);
@@ -299,26 +348,37 @@ impl TableStore {
                 }
             }
         }
+
         // 2. WAL entries overlay (dirty 포함)
         for (k, state) in &self.wal_entries {
             match state {
-                DirtyState::Put(v) => { all.insert(k.clone(), v.clone()); }
-                DirtyState::Delete => { all.remove(k); }
+                DirtyState::Put(v) => {
+                    all.insert(k.clone(), v.clone());
+                }
+                DirtyState::Delete => {
+                    all.remove(k);
+                }
             }
         }
         // 3. 4KB 페이지로 분할 후 재작성
         self.write_sstable(all)?;
-        // 4. WAL 클리어 — 파일을 truncate mode로 재오픈 (Windows 호환)
+        // 4. WAL 클리어
         drop(std::mem::replace(
             &mut self.wal_file,
             OpenOptions::new()
-                .read(true).write(true).create(true).truncate(true)
+                .read(true)
+                .write(true)
+                .create(true)
+                .truncate(true)
                 .open(&self.wal_path)?,
         ));
-        // 이후 append를 위해 append 모드로 재오픈
-        self.wal_file = OpenOptions::new()
-            .read(true).write(true).create(true).append(true)
+        #[allow(clippy::suspicious_open_options)]
+        let new_wal = OpenOptions::new()
+            .read(true)
+            .create(true)
+            .append(true)
             .open(&self.wal_path)?;
+        self.wal_file = new_wal;
         self.wal_entries.clear();
         self.page_cache.invalidate();
         Ok(())
@@ -335,9 +395,15 @@ impl TableStore {
                 current_size = 0;
             }
             current_size += entry_size;
-            current_page.push(PageEntry { key: k.clone(), value: v.clone(), deleted: false });
+            current_page.push(PageEntry {
+                key: k.clone(),
+                value: v.clone(),
+                deleted: false,
+            });
         }
-        if !current_page.is_empty() { pages.push(current_page); }
+        if !current_page.is_empty() {
+            pages.push(current_page);
+        }
 
         self.file.seek(SeekFrom::Start(0))?;
         self.file.set_len(0)?;
@@ -347,7 +413,10 @@ impl TableStore {
         for page_entries in pages {
             let first_key = page_entries[0].key.clone();
             let bytes = WosPage::from_entries(page_entries).serialize()?;
-            page_index.push(IndexEntry { first_key, file_offset: offset });
+            page_index.push(IndexEntry {
+                first_key,
+                file_offset: offset,
+            });
             self.file.write_all(&bytes)?;
             offset += bytes.len() as u64;
         }
@@ -378,7 +447,8 @@ impl TableStore {
     // ──────────────────────────────────────────
 
     pub fn insert(&mut self, key: &[u8], value: &[u8]) -> DbxResult<()> {
-        self.dirty.insert(key.to_vec(), DirtyState::Put(value.to_vec()));
+        self.dirty
+            .insert(key.to_vec(), DirtyState::Put(value.to_vec()));
         Ok(())
     }
 
@@ -402,7 +472,11 @@ impl TableStore {
             let page = self.read_page_at(page_idx)?;
             for entry in &page.entries {
                 if entry.key == key {
-                    return if entry.deleted { Ok(None) } else { Ok(Some(entry.value.clone())) };
+                    return if entry.deleted {
+                        Ok(None)
+                    } else {
+                        Ok(Some(entry.value.clone()))
+                    };
                 }
             }
         }
@@ -415,10 +489,15 @@ impl TableStore {
         Ok(existed)
     }
 
-    pub fn scan<R: RangeBounds<Vec<u8>>>(&mut self, range: R) -> DbxResult<Vec<(Vec<u8>, Vec<u8>)>> {
+    pub fn scan<R: RangeBounds<Vec<u8>>>(
+        &mut self,
+        range: R,
+    ) -> DbxResult<Vec<(Vec<u8>, Vec<u8>)>> {
         // Fast-path: SSTable도 WAL도 없음 → dirty만
         if !self.has_flushed_data && self.wal_entries.is_empty() {
-            return Ok(self.dirty.range(range)
+            return Ok(self
+                .dirty
+                .range(range)
                 .filter_map(|(k, s)| match s {
                     DirtyState::Put(v) => Some((k.clone(), v.clone())),
                     DirtyState::Delete => None,
@@ -439,10 +518,8 @@ impl TableStore {
             let index_offset = self.read_index_offset()?;
             let start_offset = self.page_index[start_page].file_offset;
             self.file.seek(SeekFrom::Start(start_offset))?;
-            let mut reader = BufReader::with_capacity(
-                64 * 1024,
-                (&self.file).take(index_offset - start_offset),
-            );
+            let mut reader =
+                BufReader::with_capacity(64 * 1024, (&self.file).take(index_offset - start_offset));
             let mut reached_end = false;
             let mut page_i = start_page;
             while !reached_end && page_i < self.page_index.len() {
@@ -456,15 +533,22 @@ impl TableStore {
                 reader.read_exact(&mut buf)?;
                 let page = WosPage::deserialize(&buf)?;
                 for entry in page.entries {
-                    if entry.deleted { continue; }
+                    if entry.deleted {
+                        continue;
+                    }
                     let k = entry.key;
                     let past_end = match range.end_bound() {
                         std::ops::Bound::Included(end) => k.as_slice() > end.as_slice(),
                         std::ops::Bound::Excluded(end) => k.as_slice() >= end.as_slice(),
                         std::ops::Bound::Unbounded => false,
                     };
-                    if past_end { reached_end = true; break; }
-                    if range.contains(&k) { merged.insert(k, entry.value); }
+                    if past_end {
+                        reached_end = true;
+                        break;
+                    }
+                    if range.contains(&k) {
+                        merged.insert(k, entry.value);
+                    }
                 }
                 page_i += 1;
             }
@@ -472,25 +556,38 @@ impl TableStore {
 
         // wal_entries overlay — BTreeMap range로 순회 (range 조건 수동 체크)
         for (k, state) in &self.wal_entries {
-            if !range.contains(k) { continue; }
+            if !range.contains(k) {
+                continue;
+            }
             match state {
-                DirtyState::Put(v) => { merged.insert(k.clone(), v.clone()); }
-                DirtyState::Delete => { merged.remove(k); }
+                DirtyState::Put(v) => {
+                    merged.insert(k.clone(), v.clone());
+                }
+                DirtyState::Delete => {
+                    merged.remove(k);
+                }
             }
         }
 
         // dirty overlay
         for (k, state) in self.dirty.range(range) {
             match state {
-                DirtyState::Put(v) => { merged.insert(k.clone(), v.clone()); }
-                DirtyState::Delete => { merged.remove(k); }
+                DirtyState::Put(v) => {
+                    merged.insert(k.clone(), v.clone());
+                }
+                DirtyState::Delete => {
+                    merged.remove(k);
+                }
             }
         }
 
         Ok(merged.into_iter().collect())
     }
 
-    pub fn scan_one<R: RangeBounds<Vec<u8>>>(&mut self, range: R) -> DbxResult<Option<(Vec<u8>, Vec<u8>)>> {
+    pub fn scan_one<R: RangeBounds<Vec<u8>>>(
+        &mut self,
+        range: R,
+    ) -> DbxResult<Option<(Vec<u8>, Vec<u8>)>> {
         Ok(self.scan(range)?.into_iter().next())
     }
 
@@ -498,20 +595,58 @@ impl TableStore {
         Ok(self.scan(..)?.len())
     }
 
-    /// WAL에 dirty entries를 sequential append (빠름 — read 없음)
+    /// WAL에 dirty entries를 sequential append (빠름 - read 없음)
     /// WAL이 threshold를 넘으면 자동으로 compact() 호출
     pub fn flush(&mut self) -> DbxResult<()> {
         if self.dirty.is_empty() {
             return Ok(());
         }
-        // WAL append (sequential write only)
-        for (k, state) in &self.dirty {
-            let (val, deleted) = match state {
-                DirtyState::Put(v) => (v.as_slice(), false),
-                DirtyState::Delete => (b"".as_ref(), true),
-            };
-            let record = WalRecord { key: k.clone(), value: val.to_vec(), deleted };
-            self.wal_file.write_all(&record.encode())?;
+
+        // P8: WAL record encode 병렬화 후 순서 보장으로 파일 쓰기
+        // encode는 CPU-bound이므로 par_iter()로 병렬 처리
+        // I/O 쓰기는 순차(파일 append 순서 보장 필요)
+        const PARALLEL_WAL_THRESHOLD: usize = 500;
+
+        let entries: Vec<(&Vec<u8>, &DirtyState)> = self.dirty.iter().collect();
+
+        let encoded_records: Vec<Vec<u8>> = if entries.len() >= PARALLEL_WAL_THRESHOLD {
+            use rayon::prelude::*;
+            entries
+                .par_iter()
+                .map(|(k, state)| {
+                    let (val, deleted) = match state {
+                        DirtyState::Put(v) => (v.as_slice(), false),
+                        DirtyState::Delete => (b"".as_ref(), true),
+                    };
+                    WalRecord {
+                        key: k.to_vec(),
+                        value: val.to_vec(),
+                        deleted,
+                    }
+                    .encode()
+                })
+                .collect()
+        } else {
+            entries
+                .iter()
+                .map(|(k, state)| {
+                    let (val, deleted) = match state {
+                        DirtyState::Put(v) => (v.as_slice(), false),
+                        DirtyState::Delete => (b"".as_ref(), true),
+                    };
+                    WalRecord {
+                        key: k.to_vec(),
+                        value: val.to_vec(),
+                        deleted,
+                    }
+                    .encode()
+                })
+                .collect()
+        };
+
+        // 순차 파일 쓰기 (append 순서 보장)
+        for encoded in &encoded_records {
+            self.wal_file.write_all(encoded)?;
         }
         self.wal_file.sync_all()?;
 
@@ -531,19 +666,6 @@ impl TableStore {
 // ──────────────────────────────────────────
 // 스캔 헬퍼: Bound cloning workaround
 // ──────────────────────────────────────────
-
-trait BoundClone {
-    fn cloned(self) -> std::ops::Bound<Vec<u8>>;
-}
-impl BoundClone for std::ops::Bound<&Vec<u8>> {
-    fn cloned(self) -> std::ops::Bound<Vec<u8>> {
-        match self {
-            std::ops::Bound::Included(k) => std::ops::Bound::Included(k.clone()),
-            std::ops::Bound::Excluded(k) => std::ops::Bound::Excluded(k.clone()),
-            std::ops::Bound::Unbounded => std::ops::Bound::Unbounded,
-        }
-    }
-}
 
 #[cfg(test)]
 mod tests {
@@ -688,7 +810,11 @@ mod tests {
             s.insert(&key, &val).unwrap();
         }
         s.compact().unwrap();
-        assert!(s.page_index.len() > 1, "expected >1 pages, got {}", s.page_index.len());
+        assert!(
+            s.page_index.len() > 1,
+            "expected >1 pages, got {}",
+            s.page_index.len()
+        );
         assert_eq!(s.scan(..).unwrap().len(), 200);
     }
 
@@ -700,8 +826,11 @@ mod tests {
             let mut s = TableStore::open(&path).unwrap();
             for i in 0..200u32 {
                 // 30 bytes value → 2+ pages
-                s.insert(format!("key{:05}", i).as_bytes(),
-                          format!("{:030}", i).as_bytes()).unwrap();
+                s.insert(
+                    format!("key{:05}", i).as_bytes(),
+                    format!("{:030}", i).as_bytes(),
+                )
+                .unwrap();
             }
             s.compact().unwrap();
         }

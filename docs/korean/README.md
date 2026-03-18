@@ -140,14 +140,9 @@ DBX는 다양한 언어를 위한 공식 바인딩을 제공합니다:
 
 ## 📄 라이선스
 
-DBX는 **이중 라이선스 모델**로 제공됩니다:
+DBX는 완전한 무료 오픈 소스 프로젝트이며, **MIT 라이선스**에 따라 배포됩니다.
 
-- **🆓 MIT 라이선스** — 개인, 스타트업, 소규모 조직에 무료
-- **💼 상업용 라이선스** — 대규모 조직(구성원 100명 이상 또는 매출 500만 달러 이상) 필수
-
-📚 **[라이선스 정책 가이드](https://github.com/bytelogiccore-spec/DBX/blob/main/legal/korean/LICENSE-POLICY.md)** — 나에게 맞는 라이선스는?
-
-📧 **상업용 라이선스 문의:** bytelogiccore@gmail.com
+자세한 내용은 [라이선스](https://bytelogiccore-spec.github.io/DBX/korean/license) 페이지를 참고해 주세요.
 
 ---
 

@@ -9,13 +9,15 @@
 
 use crate::sharding::router::ShardRouter;
 
+use std::sync::Arc;
+
 /// Scatter-Gather 실행기
-pub struct ScatterGather<'a> {
-    router: &'a ShardRouter,
+pub struct ScatterGather {
+    router: Arc<ShardRouter>,
 }
 
-impl<'a> ScatterGather<'a> {
-    pub fn new(router: &'a ShardRouter) -> Self {
+impl ScatterGather {
+    pub fn new(router: Arc<ShardRouter>) -> Self {
         Self { router }
     }
 
@@ -79,13 +81,16 @@ mod tests {
 
     #[test]
     fn test_scatter_write_and_read() {
-        let router = ShardRouter::new_local(4);
-        let sg = ScatterGather::new(&router);
+        let router = Arc::new(ShardRouter::new_local(4));
+        let sg = ScatterGather::new(router);
         let store = make_store(4);
 
         // 쓰기
         sg.scatter_write(b"user:1", b"Alice", |shard_id, key, val| {
-            store[shard_id].lock().unwrap().insert(key.to_vec(), val.to_vec());
+            store[shard_id]
+                .lock()
+                .unwrap()
+                .insert(key.to_vec(), val.to_vec());
         });
 
         // 읽기
@@ -98,8 +103,8 @@ mod tests {
 
     #[test]
     fn test_gather_all_shards() {
-        let router = ShardRouter::new_local(3);
-        let sg = ScatterGather::new(&router);
+        let router = Arc::new(ShardRouter::new_local(3));
+        let sg = ScatterGather::new(router);
         let store = make_store(3);
 
         // 각 샤드에 한 건씩 직접 넣기
@@ -124,14 +129,23 @@ mod tests {
 
     #[test]
     fn test_gather_sorted() {
-        let router = ShardRouter::new_local(2);
-        let sg = ScatterGather::new(&router);
+        let router = Arc::new(ShardRouter::new_local(2));
+        let sg = ScatterGather::new(router);
         let store = make_store(2);
 
         // 정렬 역순으로 삽입
-        store[0].lock().unwrap().insert(b"c".to_vec(), b"C".to_vec());
-        store[0].lock().unwrap().insert(b"a".to_vec(), b"A".to_vec());
-        store[1].lock().unwrap().insert(b"b".to_vec(), b"B".to_vec());
+        store[0]
+            .lock()
+            .unwrap()
+            .insert(b"c".to_vec(), b"C".to_vec());
+        store[0]
+            .lock()
+            .unwrap()
+            .insert(b"a".to_vec(), b"A".to_vec());
+        store[1]
+            .lock()
+            .unwrap()
+            .insert(b"b".to_vec(), b"B".to_vec());
 
         let sorted = sg.gather_sorted(|shard_id| {
             store[shard_id]

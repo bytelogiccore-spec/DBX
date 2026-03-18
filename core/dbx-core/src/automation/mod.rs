@@ -7,10 +7,10 @@
 //! - Stored Procedures
 
 pub mod callable;
-pub mod job_dag;
 pub mod event_hook;
 pub mod executor;
 pub mod function_parser;
+pub mod job_dag;
 pub mod procedure;
 pub mod procedure_executor;
 pub mod procedure_parser;
@@ -29,12 +29,12 @@ pub mod udf;
 // mod integration_tests;
 
 pub use callable::{Callable, ExecutionContext, Signature};
-pub use job_dag::{JobDag, JobSchedule};
 pub use event_hook::{
     EventHook, EventHookAction, EventHookCondition, EventHookEvent, EventHookEventType,
 };
 pub use executor::ExecutionEngine;
 pub use function_parser::{parse_create_function, parse_drop_function};
+pub use job_dag::{JobDag, JobSchedule};
 pub use procedure::{ProcedureParameter, StoredProcedure};
 pub use procedure_executor::ProcedureExecutor;
 pub use procedure_parser::{parse_call_procedure, parse_create_procedure, parse_drop_procedure};

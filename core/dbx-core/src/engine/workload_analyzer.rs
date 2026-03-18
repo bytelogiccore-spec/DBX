@@ -46,8 +46,8 @@ impl AdaptiveConfig {
     /// OLTP 중심 (포인트 쿼리 70%+)
     pub fn oltp_heavy() -> Self {
         Self {
-            delta_max_rows: 1_000,      // 작은 delta → 빠른 쓰기
-            cache_max_mb: 64,           // 캐시 최소화
+            delta_max_rows: 1_000,          // 작은 delta → 빠른 쓰기
+            cache_max_mb: 64,               // 캐시 최소화
             compaction_interval_secs: 3600, // 드물게 compaction
         }
     }
@@ -55,8 +55,8 @@ impl AdaptiveConfig {
     /// OLAP 중심 (포인트 쿼리 30%-)
     pub fn olap_heavy() -> Self {
         Self {
-            delta_max_rows: 100_000,    // 큰 delta → 배치 쓰기 효율
-            cache_max_mb: 1_024,        // 큰 캐시 → 쿼리 가속
+            delta_max_rows: 100_000,       // 큰 delta → 배치 쓰기 효율
+            cache_max_mb: 1_024,           // 큰 캐시 → 쿼리 가속
             compaction_interval_secs: 300, // 자주 compaction
         }
     }

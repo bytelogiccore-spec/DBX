@@ -50,6 +50,17 @@ impl Database {
                 }
             }
         }
+
+        // ════════════════════════════════════════════
+        // Phase 5: Replication (Master 브로드캐스트)
+        // ════════════════════════════════════════════
+        if let Some(master) = &self.replication_master {
+            // bincode로 직렬화하여 전송 (임시)
+            if let Ok(data) = bincode::serialize(record) {
+                master.replicate(data);
+            }
+        }
+
         Ok(())
     }
 
@@ -60,6 +71,64 @@ impl Database {
     // ════════════════════════════════════════════
     // CREATE Operations
     // ════════════════════════════════════════════
+
+    // ════════════════════════════════════════════
+    // Phase 3.4: 자동 파티션 지원 라우터
+    // ════════════════════════════════════════════
+    fn route_partition_or_expand(&self, table: &str, key_str: &str) -> String {
+        let route_res = {
+            let maps = self.partition_maps.read().unwrap();
+            if let Some(map) = maps.get(table) {
+                use crate::storage::partition::PartitionValue;
+                let pv = PartitionValue::Text(key_str.to_string());
+                Some(map.route_or_expand(&pv))
+            } else {
+                None
+            }
+        };
+
+        if let Some(res) = route_res {
+            use crate::storage::partition::RouteResult;
+            match res {
+                RouteResult::Routed(sub_tbl) => sub_tbl,
+                RouteResult::NeedsExpansion {
+                    new_table,
+                    new_bounds,
+                } => {
+                    // 쓰기 락을 획득하여 Range 파티션 bounds 갱신
+                    let mut maps = self.partition_maps.write().unwrap();
+                    if let Some(map) = maps.get_mut(table) {
+                        use crate::storage::partition::PartitionType;
+                        if let PartitionType::Range { bounds, .. } = &mut map.partition_type {
+                            let last_hi = bounds.last().map(|(_, hi)| *hi).unwrap_or(0);
+                            let v = key_str.parse::<i64>().unwrap_or(0);
+                            // 다른 스레드에서 먼저 갱신했을 수 있으므로 재검사
+                            if v >= last_hi {
+                                bounds.push(new_bounds);
+                                map.num_partitions += 1;
+                            }
+
+                            // 갱신 후 다시 라우팅 시도
+                            use crate::storage::partition::PartitionValue;
+                            let pv = PartitionValue::Text(key_str.to_string());
+                            let final_res = map.route_or_expand(&pv);
+                            if let RouteResult::Routed(final_tbl) = final_res {
+                                final_tbl
+                            } else {
+                                new_table
+                            }
+                        } else {
+                            new_table
+                        }
+                    } else {
+                        table.to_string()
+                    }
+                }
+            }
+        } else {
+            table.to_string()
+        }
+    }
 
     /// 키-값 쌍을 삽입합니다.
     ///
@@ -73,23 +142,10 @@ impl Database {
     /// * `value` - 값 (바이트 배열)
     pub fn insert(&self, table: &str, key: &[u8], value: &[u8]) -> DbxResult<()> {
         // ════════════════════════════════════════════
-        // Phase 3: 파티셔닝 (Partition Routing)
+        // Phase 3: 파티셔닝 (Partition Routing with Auto-Expand)
         // ════════════════════════════════════════════
-        let target_table = {
-            let maps = self.partition_maps.read().unwrap();
-            if let Some(map) = maps.get(table) {
-                // To do exact partition routing, we need the value of the partition column.
-                // For MVP, we pass the key as a string for routing, but ideally we'd parse
-                // the `value` JSON/Bytes to extract the specific partition column.
-                // Here we use the row key as a simple fallback routing mechanism.
-                use crate::storage::partition::PartitionValue;
-                // Try to parse key as UTF-8 string for routing
-                let key_str = String::from_utf8_lossy(key).into_owned();
-                map.route_key(&PartitionValue::Text(key_str))
-            } else {
-                table.to_string()
-            }
-        };
+        let key_str = String::from_utf8_lossy(key).into_owned();
+        let target_table = self.route_partition_or_expand(table, &key_str);
         let table = target_table.as_str();
         // Log to WAL first — only allocate record if WAL exists
         #[cfg(feature = "wal")]
@@ -145,7 +201,7 @@ impl Database {
             SyncMode::Threshold(n) => {
                 // N건 이상일 때만 동기화 (이 로직은 보통 flush에서 처리되거나,
                 // delta row count를 기반으로 수행)
-                if self.delta.count(table).unwrap_or(0) >= n as usize {
+                if self.delta.count(table).unwrap_or(0) >= n {
                     let _ = self.sync_columnar_cache(table);
                 }
             }
@@ -155,6 +211,7 @@ impl Database {
             }
         }
 
+        self.metrics.inc_inserts();
         Ok(())
     }
 
@@ -163,22 +220,13 @@ impl Database {
     /// `parallel_engine`의 `min_rows_for_parallel` 이상이면 Rayon 스레드 풀에서 병렬 삽입합니다.
     pub fn insert_batch(&self, table: &str, rows: Vec<(Vec<u8>, Vec<u8>)>) -> DbxResult<()> {
         // ════════════════════════════════════════════
-        // Phase 3: 파티셔닝 (Partition Routing)
+        // Phase 3: 파티셔닝 (Partition Routing with Auto-Expand)
         // ════════════════════════════════════════════
-        let target_table = {
-            let maps = self.partition_maps.read().unwrap();
-            if let Some(map) = maps.get(table) {
-                // MVP: Use the first row's key for routing the whole batch to avoid splitting logic
-                if let Some((first_key, _)) = rows.first() {
-                    use crate::storage::partition::PartitionValue;
-                    let key_str = String::from_utf8_lossy(first_key).into_owned();
-                    map.route_key(&PartitionValue::Text(key_str))
-                } else {
-                    table.to_string()
-                }
-            } else {
-                table.to_string()
-            }
+        let target_table = if let Some((first_key, _)) = rows.first() {
+            let key_str = String::from_utf8_lossy(first_key).into_owned();
+            self.route_partition_or_expand(table, &key_str)
+        } else {
+            table.to_string()
         };
         let table = target_table.as_str();
         #[cfg(feature = "wal")]
@@ -199,12 +247,11 @@ impl Database {
             let table_owned = table.to_string();
             // 각 (key, value) 쌍을 병렬로 삽입
             // DeltaStore는 내부적으로 DashMap + SkipMap(Arc)이므로 공유 안전
-            let results: Vec<crate::error::DbxResult<()>> =
-                self.parallel_engine.execute(|| {
-                    rows.par_iter()
-                        .map(|(key, value)| delta.insert(&table_owned, key, value))
-                        .collect()
-                });
+            let results: Vec<crate::error::DbxResult<()>> = self.parallel_engine.execute(|| {
+                rows.par_iter()
+                    .map(|(key, value)| delta.insert(&table_owned, key, value))
+                    .collect()
+            });
             for r in results {
                 r?;
             }
@@ -227,7 +274,7 @@ impl Database {
                 let _ = self.sync_columnar_cache(table);
             }
             SyncMode::Threshold(n) => {
-                if self.delta.count(table).unwrap_or(0) >= n as usize {
+                if self.delta.count(table).unwrap_or(0) >= n {
                     let _ = self.sync_columnar_cache(table);
                 }
             }
@@ -236,7 +283,6 @@ impl Database {
 
         Ok(())
     }
-
 
     /// Insert a versioned key-value pair for MVCC.
     pub fn insert_versioned(
@@ -288,7 +334,7 @@ impl Database {
                 let _ = self.sync_columnar_cache(table);
             }
             SyncMode::Threshold(n) => {
-                if self.delta.count(table).unwrap_or(0) >= n as usize {
+                if self.delta.count(table).unwrap_or(0) >= n {
                     let _ = self.sync_columnar_cache(table);
                 }
             }
@@ -385,11 +431,17 @@ impl Database {
         // MVCC feature가 활성화되어도 Fast-path를 우선 사용
         // 일반 insert()로 저장된 데이터는 여기서 조회됨
         if let Some(value) = self.delta.get(table, key)? {
+            self.metrics.inc_gets();
+            self.metrics.inc_delta_hit();
             return Ok(Some(value));
         }
+        self.metrics.inc_delta_miss();
         if let Some(value) = self.wos_for_table(table).get(table, key)? {
+            self.metrics.inc_gets();
+            self.metrics.inc_wos_hit();
             return Ok(Some(value));
         }
+        self.metrics.inc_wos_miss();
 
         // ════════════════════════════════════════════
         // MVCC Fallback: Transaction Commit 후 데이터 조회
@@ -417,6 +469,10 @@ impl Database {
         if let Some(value) = self.wos_for_table(table).get(table, &encoded_key)? {
             return Ok(Self::decode_mvcc_value(value));
         }
+
+        // ── Metrics ──────────────────────────────────────────────────────────
+        self.metrics.inc_gets();
+        // No hit recorded for MVCC fallback path
 
         Ok(None)
     }
@@ -464,15 +520,13 @@ impl Database {
 
         // Fast-path: Delta가 비어있으면 WOS만 반환
         if delta_entries.is_empty() {
-            return Ok(
-                wos_entries
-                    .into_iter()
-                    .filter_map(|(k, v)| {
-                        let dk = Self::decode_versioned_key(k);
-                        Self::decode_mvcc_value(v).map(|dv| (dk, dv))
-                    })
-                    .collect(),
-            );
+            return Ok(wos_entries
+                .into_iter()
+                .filter_map(|(k, v)| {
+                    let dk = Self::decode_versioned_key(k);
+                    Self::decode_mvcc_value(v).map(|dv| (dk, dv))
+                })
+                .collect());
         }
 
         // 2-way merge (both are already sorted)
@@ -527,7 +581,6 @@ impl Database {
         Ok(result)
     }
 
-
     /// 테이블의 키 범위를 스캔합니다.
     pub fn range(
         &self,
@@ -579,6 +632,7 @@ impl Database {
             self.insert_versioned(table, key, None, commit_ts)?;
         }
 
+        self.metrics.inc_deletes();
         Ok(delta_deleted || wos_deleted)
     }
 
@@ -591,12 +645,18 @@ impl Database {
     /// If the table has a schema in table_schemas, it will be synced as typed data.
     /// Otherwise, it will be synced as raw Binary data.
     pub fn sync_columnar_cache(&self, table: &str) -> DbxResult<usize> {
+        let base_table = if let Some(idx) = table.find("__shard_") {
+            &table[..idx]
+        } else {
+            table
+        };
+
         // Check if table has a schema (SQL table) - case-insensitive
         let schemas = self.table_schemas.read().unwrap();
         let table_schema = schemas
-            .get(table)
+            .get(base_table)
             .or_else(|| {
-                let table_lower = table.to_lowercase();
+                let table_lower = base_table.to_lowercase();
                 schemas
                     .iter()
                     .find(|(k, _)| k.to_lowercase() == table_lower)

@@ -1,12 +1,12 @@
 //! NativeWosBackend — StorageBackend 구현 (stub, Task 3에서 완성)
 
+use super::table_store::TableStore;
 use crate::error::DbxResult;
 use crate::storage::StorageBackend;
 use dashmap::DashMap;
 use std::ops::RangeBounds;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
-use super::table_store::TableStore;
 
 /// Tier 3: 자체 구현 WOS — sled 의존 없음.
 /// DashMap으로 테이블별 독립 락 제공.
@@ -57,7 +57,12 @@ impl NativeWosBackend {
 impl StorageBackend for NativeWosBackend {
     fn insert(&self, table: &str, key: &[u8], value: &[u8]) -> DbxResult<()> {
         self.get_or_open(table)?;
-        self.tables.get(table).unwrap().lock().unwrap().insert(key, value)
+        self.tables
+            .get(table)
+            .unwrap()
+            .lock()
+            .unwrap()
+            .insert(key, value)
     }
 
     fn get(&self, table: &str, key: &[u8]) -> DbxResult<Option<Vec<u8>>> {
@@ -85,7 +90,12 @@ impl StorageBackend for NativeWosBackend {
         range: R,
     ) -> DbxResult<Option<(Vec<u8>, Vec<u8>)>> {
         self.get_or_open(table)?;
-        self.tables.get(table).unwrap().lock().unwrap().scan_one(range)
+        self.tables
+            .get(table)
+            .unwrap()
+            .lock()
+            .unwrap()
+            .scan_one(range)
     }
 
     fn flush(&self) -> DbxResult<()> {

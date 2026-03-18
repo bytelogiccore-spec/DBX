@@ -8,7 +8,7 @@
 //! - CRC32는 key_len..deleted 전체에 대해 계산한다.
 //! - 파일 끝(EOF)나 CRC 불일치는 replaying 시 gracefully 무시한다.
 
-use std::io::{self, Read, Write};
+use std::io::{self, Read};
 
 /// WAL 단일 레코드
 pub struct WalRecord {
@@ -20,8 +20,7 @@ pub struct WalRecord {
 impl WalRecord {
     /// 레코드를 바이트로 인코딩 (append용)
     pub fn encode(&self) -> Vec<u8> {
-        let mut buf =
-            Vec::with_capacity(4 + self.key.len() + 4 + self.value.len() + 1 + 4);
+        let mut buf = Vec::with_capacity(4 + self.key.len() + 4 + self.value.len() + 1 + 4);
         buf.extend_from_slice(&(self.key.len() as u32).to_le_bytes());
         buf.extend_from_slice(&self.key);
         buf.extend_from_slice(&(self.value.len() as u32).to_le_bytes());
@@ -81,7 +80,11 @@ impl WalRecord {
             ));
         }
 
-        Ok(Some(WalRecord { key, value, deleted }))
+        Ok(Some(WalRecord {
+            key,
+            value,
+            deleted,
+        }))
     }
 }
 
@@ -92,8 +95,8 @@ pub fn replay_wal(reader: &mut impl Read) -> Vec<WalRecord> {
     loop {
         match WalRecord::decode_from(reader) {
             Ok(Some(r)) => records.push(r),
-            Ok(None) => break,        // EOF
-            Err(_) => break,          // 부분 쓰기 또는 손상 — 여기서 중단 (WAL truncate 필요)
+            Ok(None) => break, // EOF
+            Err(_) => break,   // 부분 쓰기 또는 손상 — 여기서 중단 (WAL truncate 필요)
         }
     }
     records
@@ -106,7 +109,11 @@ mod tests {
 
     #[test]
     fn roundtrip_put() {
-        let r = WalRecord { key: b"hello".to_vec(), value: b"world".to_vec(), deleted: false };
+        let r = WalRecord {
+            key: b"hello".to_vec(),
+            value: b"world".to_vec(),
+            deleted: false,
+        };
         let enc = r.encode();
         let mut cur = Cursor::new(&enc);
         let dec = WalRecord::decode_from(&mut cur).unwrap().unwrap();
@@ -117,7 +124,11 @@ mod tests {
 
     #[test]
     fn roundtrip_delete() {
-        let r = WalRecord { key: b"key".to_vec(), value: vec![], deleted: true };
+        let r = WalRecord {
+            key: b"key".to_vec(),
+            value: vec![],
+            deleted: true,
+        };
         let enc = r.encode();
         let mut cur = Cursor::new(&enc);
         let dec = WalRecord::decode_from(&mut cur).unwrap().unwrap();
@@ -133,7 +144,11 @@ mod tests {
 
     #[test]
     fn crc_mismatch_returns_err() {
-        let r = WalRecord { key: b"k".to_vec(), value: b"v".to_vec(), deleted: false };
+        let r = WalRecord {
+            key: b"k".to_vec(),
+            value: b"v".to_vec(),
+            deleted: false,
+        };
         let mut enc = r.encode();
         let n = enc.len();
         enc[n - 1] ^= 0xFF; // CRC 오염
@@ -143,8 +158,16 @@ mod tests {
 
     #[test]
     fn replay_stops_at_corruption() {
-        let r1 = WalRecord { key: b"a".to_vec(), value: b"1".to_vec(), deleted: false };
-        let r2 = WalRecord { key: b"b".to_vec(), value: b"2".to_vec(), deleted: false };
+        let r1 = WalRecord {
+            key: b"a".to_vec(),
+            value: b"1".to_vec(),
+            deleted: false,
+        };
+        let r2 = WalRecord {
+            key: b"b".to_vec(),
+            value: b"2".to_vec(),
+            deleted: false,
+        };
         let mut data = r1.encode();
         let mut bad = r2.encode();
         let bad_len = bad.len();

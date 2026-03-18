@@ -1,0 +1,36 @@
+    Checking dbx-core v0.1.0-beta (D:\ByteLogicCore\DBX\core\dbx-core)
+warning: unused import: `Write`
+  --> core\dbx-core\src\storage\native_wos\wal.rs:11:27
+   |
+11 | use std::io::{self, Read, Write};
+   |                           ^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+error[E0609]: no field `config` on type `&database::Database`
+   --> core\dbx-core\src\engine\crud.rs:139:33
+    |
+139 |         let sync_config = &self.config.sync;
+    |                                 ^^^^^^ unknown field
+    |
+    = note: available fields are: `delta`, `memory_wos`, `file_wos`, `table_persistence`, `schemas` ... and 23 others
+
+error[E0609]: no field `config` on type `&database::Database`
+   --> core\dbx-core\src\engine\crud.rs:224:33
+    |
+224 |         let sync_config = &self.config.sync;
+    |                                 ^^^^^^ unknown field
+    |
+    = note: available fields are: `delta`, `memory_wos`, `file_wos`, `table_persistence`, `schemas` ... and 23 others
+
+error[E0609]: no field `config` on type `&database::Database`
+   --> core\dbx-core\src\engine\crud.rs:285:33
+    |
+285 |         let sync_config = &self.config.sync;
+    |                                 ^^^^^^ unknown field
+    |
+    = note: available fields are: `delta`, `memory_wos`, `file_wos`, `table_persistence`, `schemas` ... and 23 others
+
+For more information about this error, try `rustc --explain E0609`.
+warning: `dbx-core` (lib) generated 1 warning
+error: could not compile `dbx-core` (lib) due to 3 previous errors; 1 warning emitted

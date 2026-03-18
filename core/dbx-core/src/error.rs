@@ -29,7 +29,6 @@ pub enum DbxError {
         source: parquet::errors::ParquetError,
     },
 
-
     /// Standard I/O error
     #[error("io error: {source}")]
     Io {

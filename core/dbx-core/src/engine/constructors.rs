@@ -140,7 +140,15 @@ impl Database {
             view_registry: ViewRegistry::new(),
             partition_maps: Arc::new(RwLock::new(HashMap::new())),
             config: DbConfig::default(),
-            workload_analyzer: Arc::new(RwLock::new(crate::engine::workload_analyzer::WorkloadAnalyzer::default_window())),
+            workload_analyzer: Arc::new(RwLock::new(
+                crate::engine::workload_analyzer::WorkloadAnalyzer::default_window(),
+            )),
+            replication_master: None,
+            sharding_router: Arc::new(crate::sharding::router::ShardRouter::new_local(4)),
+            scatter_gather: Arc::new(crate::sharding::scatter_gather::ScatterGather::new(
+                Arc::new(crate::sharding::router::ShardRouter::new_local(4)),
+            )),
+            metrics: Arc::new(crate::monitoring::DbxMetrics::new()),
         };
 
         // Perform crash recovery
@@ -301,7 +309,15 @@ impl Database {
             view_registry: ViewRegistry::new(),
             partition_maps: Arc::new(RwLock::new(HashMap::new())),
             config: DbConfig::default(),
-            workload_analyzer: Arc::new(RwLock::new(crate::engine::workload_analyzer::WorkloadAnalyzer::default_window())),
+            workload_analyzer: Arc::new(RwLock::new(
+                crate::engine::workload_analyzer::WorkloadAnalyzer::default_window(),
+            )),
+            replication_master: None,
+            sharding_router: Arc::new(crate::sharding::router::ShardRouter::new_local(4)),
+            scatter_gather: Arc::new(crate::sharding::scatter_gather::ScatterGather::new(
+                Arc::new(crate::sharding::router::ShardRouter::new_local(4)),
+            )),
+            metrics: Arc::new(crate::monitoring::DbxMetrics::new()),
         };
         let records = encrypted_wal.replay()?;
         let mut recovered_count = 0;
@@ -391,7 +407,15 @@ impl Database {
             view_registry: ViewRegistry::new(),
             partition_maps: Arc::new(RwLock::new(HashMap::new())),
             config: DbConfig::default(),
-            workload_analyzer: Arc::new(RwLock::new(crate::engine::workload_analyzer::WorkloadAnalyzer::default_window())),
+            workload_analyzer: Arc::new(RwLock::new(
+                crate::engine::workload_analyzer::WorkloadAnalyzer::default_window(),
+            )),
+            replication_master: None,
+            sharding_router: Arc::new(crate::sharding::router::ShardRouter::new_local(4)),
+            scatter_gather: Arc::new(crate::sharding::scatter_gather::ScatterGather::new(
+                Arc::new(crate::sharding::router::ShardRouter::new_local(4)),
+            )),
+            metrics: Arc::new(crate::monitoring::DbxMetrics::new()),
         })
     }
 
@@ -455,7 +479,15 @@ impl Database {
             view_registry: ViewRegistry::new(),
             partition_maps: Arc::new(RwLock::new(HashMap::new())),
             config: DbConfig::default(),
-            workload_analyzer: Arc::new(RwLock::new(crate::engine::workload_analyzer::WorkloadAnalyzer::default_window())),
+            workload_analyzer: Arc::new(RwLock::new(
+                crate::engine::workload_analyzer::WorkloadAnalyzer::default_window(),
+            )),
+            replication_master: None,
+            sharding_router: Arc::new(crate::sharding::router::ShardRouter::new_local(4)),
+            scatter_gather: Arc::new(crate::sharding::scatter_gather::ScatterGather::new(
+                Arc::new(crate::sharding::router::ShardRouter::new_local(4)),
+            )),
+            metrics: Arc::new(crate::monitoring::DbxMetrics::new()),
         })
     }
 
@@ -555,7 +587,15 @@ impl Database {
             view_registry: ViewRegistry::new(),
             partition_maps: Arc::new(RwLock::new(HashMap::new())),
             config: DbConfig::default(),
-            workload_analyzer: Arc::new(RwLock::new(crate::engine::workload_analyzer::WorkloadAnalyzer::default_window())),
+            workload_analyzer: Arc::new(RwLock::new(
+                crate::engine::workload_analyzer::WorkloadAnalyzer::default_window(),
+            )),
+            replication_master: None,
+            sharding_router: Arc::new(crate::sharding::router::ShardRouter::new_local(4)),
+            scatter_gather: Arc::new(crate::sharding::scatter_gather::ScatterGather::new(
+                Arc::new(crate::sharding::router::ShardRouter::new_local(4)),
+            )),
+            metrics: Arc::new(crate::monitoring::DbxMetrics::new()),
         };
 
         // Crash recovery
@@ -648,13 +688,13 @@ impl Database {
         config: DbConfig,
     ) -> DbxResult<std::sync::Arc<Self>> {
         use crate::engine::parallel_engine::{ParallelExecutionEngine, ParallelizationPolicy};
+        use crate::index::HashIndex;
+        use crate::sql::optimizer::QueryOptimizer;
+        use crate::sql::parser::SqlParser;
         use crate::storage::native_wos::NativeWosBackend;
         use crate::transaction::mvcc::manager::TransactionManager;
         use dashmap::DashMap;
         use std::collections::HashMap;
-        use crate::index::HashIndex;
-        use crate::sql::optimizer::QueryOptimizer;
-        use crate::sql::parser::SqlParser;
         use std::sync::{Arc, RwLock};
         use tracing::info;
 
@@ -679,11 +719,8 @@ impl Database {
 
         // 병렬 엔진을 config로 생성
         let parallel_engine = Arc::new(
-            ParallelExecutionEngine::new_with_config(
-                ParallelizationPolicy::Auto,
-                config.clone(),
-            )
-            .expect("Failed to create parallel engine"),
+            ParallelExecutionEngine::new_with_config(ParallelizationPolicy::Auto, config.clone())
+                .expect("Failed to create parallel engine"),
         );
 
         let db = Self {
@@ -712,23 +749,32 @@ impl Database {
             automation_engine: Arc::new(crate::automation::ExecutionEngine::new()),
             trigger_registry: crate::engine::automation_api::TriggerRegistry::new(),
             trigger_executor: Arc::new(RwLock::new(crate::automation::TriggerExecutor::new())),
-            procedure_executor: Arc::new(RwLock::new(
-                crate::automation::ProcedureExecutor::new(),
-            )),
-            schedule_executor: Arc::new(RwLock::new(
-                crate::automation::ScheduleExecutor::new(),
-            )),
+            procedure_executor: Arc::new(RwLock::new(crate::automation::ProcedureExecutor::new())),
+            schedule_executor: Arc::new(RwLock::new(crate::automation::ScheduleExecutor::new())),
             parallel_engine,
             view_registry: ViewRegistry::new(),
             partition_maps: Arc::new(RwLock::new(HashMap::new())),
             config: config.clone(),
-            workload_analyzer: Arc::new(RwLock::new(crate::engine::workload_analyzer::WorkloadAnalyzer::default_window())),
+            workload_analyzer: Arc::new(RwLock::new(
+                crate::engine::workload_analyzer::WorkloadAnalyzer::default_window(),
+            )),
+            replication_master: None,
+            sharding_router: Arc::new(crate::sharding::router::ShardRouter::new_local(4)),
+            scatter_gather: Arc::new(crate::sharding::scatter_gather::ScatterGather::new(
+                Arc::new(crate::sharding::router::ShardRouter::new_local(4)),
+            )),
+            metrics: Arc::new(crate::monitoring::DbxMetrics::new()),
         };
 
         // Crash recovery
         let apply_fn = |record: &crate::wal::WalRecord| -> DbxResult<()> {
             match record {
-                crate::wal::WalRecord::Insert { table, key, value, ts: _ } => {
+                crate::wal::WalRecord::Insert {
+                    table,
+                    key,
+                    value,
+                    ts: _,
+                } => {
                     db.delta.insert(table, key, value)?;
                 }
                 crate::wal::WalRecord::Delete { table, key, ts: _ } => {
@@ -750,10 +796,16 @@ impl Database {
 
         // Triggers, procedures, schedules
         if !loaded_triggers.is_empty() {
-            db.trigger_executor.write().unwrap().register_all(loaded_triggers);
+            db.trigger_executor
+                .write()
+                .unwrap()
+                .register_all(loaded_triggers);
         }
         if !loaded_procedures.is_empty() {
-            db.procedure_executor.write().unwrap().register_all(loaded_procedures);
+            db.procedure_executor
+                .write()
+                .unwrap()
+                .register_all(loaded_procedures);
         }
         if !loaded_schedules.is_empty() {
             let executor = db.schedule_executor.write().unwrap();
@@ -762,12 +814,18 @@ impl Database {
             }
         }
 
-        info!("Database opened with custom parallelism config (cpu_cap={:.0}%)",
-              config.parallelism.cpu_cap * 100.0);
+        info!(
+            "Database opened with custom parallelism config (cpu_cap={:.0}%)",
+            config.parallelism.cpu_cap * 100.0
+        );
 
         let db_arc = Arc::new(db);
         let db_weak = Arc::downgrade(&db_arc);
-        db_arc.schedule_executor.write().unwrap().start_scheduler(db_weak)?;
+        db_arc
+            .schedule_executor
+            .write()
+            .unwrap()
+            .start_scheduler(db_weak)?;
 
         Ok(db_arc)
     }

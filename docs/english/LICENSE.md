@@ -5,37 +5,8 @@ nav_order: 100
 parent: English
 ---
 
-# DBX Dual License
-{: .no_toc }
-
-DBX is available under a **dual license model**.
-{: .fs-6 .fw-300 }
-
----
-
-## 🆓 Open Source License (MIT) — For Small Organizations
-
-**You can use DBX for free under the MIT License if:**
-- Your organization has **fewer than 100 members**, AND
-- Your annual revenue is **under $5,000,000 USD**, AND
-- Your total funding is **under $10,000,000 USD**
-
-See the full MIT License terms below.
-
----
-
-## 💼 Commercial License — For Larger Organizations
-
-**A commercial license is required if any of the following apply:**
-- Your organization has **100 or more members**, OR
-- Your annual revenue is **$5,000,000 USD or more**, OR
-- Your total funding is **$10,000,000 USD or more**
-
-**📧 Contact:** bytelogiccore@gmail.com
-
----
-
 # MIT License (Open Source)
+{: .no_toc }
 
 Copyright (c) 2026 ByteLogic Studio
 
@@ -82,4 +53,4 @@ If your organization benefits from DBX, please consider sponsoring ongoing devel
 
 ## 📦 Third-Party Dependencies
 
-DBX uses several open-source libraries. For the full list of dependencies and their licenses, see the [THIRD_PARTY_LICENSES](https://github.com/bytelogiccore-spec/DBX/blob/main/LICENSE) page on GitHub.
+DBX uses several open-source libraries. For the full list of dependencies and their licenses, see the [THIRD_PARTY_LICENSES](https://github.com/bytelogiccore-spec/DBX/blob/main/legal/english/THIRD_PARTY_LICENSES.md) page on GitHub.

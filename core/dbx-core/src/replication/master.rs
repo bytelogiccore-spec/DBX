@@ -1,7 +1,7 @@
 //! Replication Master — WAL 변경사항을 Slave로 브로드캐스트
 
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use tokio::sync::broadcast;
 
 use crate::replication::protocol::ReplicationMessage;

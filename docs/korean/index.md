@@ -26,10 +26,11 @@ description: "DBX — 고성능 임베디드 데이터베이스"
 - **컬럼형 캐시** — Apache Arrow 기반 분석 쿼리 최적화
 
 ### 🚀 성능
-- SQLite 대비 **29배 빠른** 파일 GET 속도
+- SQLite 대비 **최대 13배 빠른** GET 속도
+- **멀티코어 병렬화** — Rayon 기반 scan, insert, 집계, JOIN 자동 병렬화 (v0.1.1)
+- **`ParallelismConfig`** — [CPU 사용량과 병렬화 임계값 제어](guides/db-config)
 - **GPU 가속** — CUDA 기반 집계, 필터링, 조인
-- **SIMD 벡터화** — 최적화된 수치 연산
-- **병렬 쿼리** — Rayon 기반 병렬 JOIN, Sort, Columnar Build
+- **SIMD 벡터화** — `wide` crate stable SIMD (항상 활성)
 
 ### 🔐 보안
 - **AES-256-GCM-SIV** — 산업 표준 암호화

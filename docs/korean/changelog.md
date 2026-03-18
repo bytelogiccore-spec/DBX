@@ -14,6 +14,57 @@ DBX의 주요 변경사항을 기록합니다.
 
 ---
 
+## [0.1.1-beta] - 2026-03-18
+
+WAL 구현 및 멀티코어 병렬화 전면 적용 릴리스.
+
+### 새로운 기능
+
+- **WAL (Write-Ahead Log) sequential append** — WOS flush 시 전체 재작성 대신 WAL 파일에 순차 append. compact 조건(`wal_entries >= WAL_COMPACT_THRESHOLD`) 도달 시에만 SSTable 병합
+- **`ParallelismConfig` / `DbConfig`** — CPU 코어 사용 비율(`cpu_cap`)과 병렬화 임계값(`min_rows_for_parallel`)을 제어하는 설정 구조체
+- **`Database::open_with_config()`** — `DbConfig`를 받는 새 생성자. `conservative()` / `aggressive()` 프리셋 제공
+- **`Compactor::bypass_flush_tables()`** — 여러 테이블을 동시에 bypass_flush하는 신규 API
+
+### 성능 개선
+
+| 항목 | 내용 | 위치 |
+|------|------|------|
+| P1 | `insert_batch()` — 1,000행 이상 `par_iter()` 병렬 삽입 | `crud.rs` |
+| P2 | `get_batches()` projection — `par_iter()` 컬럼 선택 병렬화 | `columnar_cache.rs` |
+| P3 | GROUP BY 집계 — 1,000 그룹 이상 `par_iter()` 병렬 집계 | `hash_aggregate.rs` |
+| P4 | JOIN Build/Probe Phase — `into_par_iter()` (1,000행 임계값) | `join.rs` |
+| P5 | `scan()` — Delta+WOS를 `rayon::join()`으로 동시 스캔 | `crud.rs` |
+| P6 | `compact()` — 페이지 역직렬화만 `par_iter()` 병렬화 | `table_store.rs` |
+| P7 | SIMD — `wide` crate stable 전환 (nightly 제거, 항상 활성) | `simd.rs` |
+| P8 | WAL encode — 직렬화를 `par_iter()`, 파일 쓰기는 순차 유지 | `table_store.rs` |
+| P9 | Compaction — batch `Arc::clone`을 `par_iter()`으로 병렬 수집 | `compaction.rs` |
+
+### 벤치마크 결과 (병렬화 적용 전 대비)
+
+| 항목 | 개선폭 |
+|------|--------|
+| `dbx_scan_10k` | **-29.2%** (rayon::join 효과) |
+| `dbx_get_10k` | **-6.8%** |
+
+### 의존성 추가
+
+- `wide = "0.7"` — stable SIMD 추상화 crate
+
+---
+
+## [0.1.0-beta] - 2026-03-17
+
+배포 파이프라인 안정화 릴리스.
+
+### 수정
+
+- **CI 트리거** — push/PR 이벤트 트리거 및 누락된 런타임 설정 추가
+- **Cargo.lock** — workspace root에 `[profile.release]` 이동, Cargo.lock 업데이트
+- **crates.io 배포** — `--locked` 플래그 제거로 crates.io 배포 오류 해소
+- **npm 배포** — `cargo build` 대신 `napi build` 사용 (`@napi-rs/cli` v2 → v3 업그레이드)
+
+---
+
 ## [0.0.5-beta] - 2026-02-16
 
 전체 언어 바인딩 API 동기화 릴리스. ● = 기존, 🆕 = 이번 릴리스에서 추가.

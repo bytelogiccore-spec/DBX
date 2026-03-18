@@ -67,7 +67,9 @@ impl JobDag {
 
         // 노드가 jobs에 없어도 그래프에 존재하도록 초기화
         self.dependents.entry(job.to_string()).or_default();
-        self.prerequisites.entry(depends_on.to_string()).or_default();
+        self.prerequisites
+            .entry(depends_on.to_string())
+            .or_default();
     }
 
     /// Kahn's algorithm으로 위상 정렬된 실행 순서 반환.
@@ -81,10 +83,8 @@ impl JobDag {
         }
 
         // in-degree 계산 (prerequisites 수)
-        let mut in_degree: HashMap<String, usize> = all_nodes
-            .iter()
-            .map(|n| (n.clone(), 0))
-            .collect();
+        let mut in_degree: HashMap<String, usize> =
+            all_nodes.iter().map(|n| (n.clone(), 0)).collect();
 
         for (job, prereqs) in &self.prerequisites {
             *in_degree.entry(job.clone()).or_insert(0) += prereqs.len();
@@ -125,9 +125,7 @@ impl JobDag {
 
         // 순환 감지: 처리된 노드 수 != 전체 노드 수
         if order.len() != all_nodes.len() {
-            return Err(DbxError::InvalidArguments(
-                "순환 의존성 감지됨".to_string(),
-            ));
+            return Err(DbxError::InvalidArguments("순환 의존성 감지됨".to_string()));
         }
 
         Ok(order)
@@ -140,10 +138,7 @@ impl JobDag {
 
     /// 특정 작업의 선행 작업 목록
     pub fn prerequisites_of(&self, job: &str) -> Vec<String> {
-        self.prerequisites
-            .get(job)
-            .cloned()
-            .unwrap_or_default()
+        self.prerequisites.get(job).cloned().unwrap_or_default()
     }
 }
 
@@ -160,7 +155,10 @@ mod tests {
     #[test]
     fn test_job_dag_dependency_ordering() {
         let mut dag = JobDag::new();
-        dag.add_job("backup", JobSchedule::Interval(std::time::Duration::from_secs(3600)));
+        dag.add_job(
+            "backup",
+            JobSchedule::Interval(std::time::Duration::from_secs(3600)),
+        );
         dag.add_job("cleanup", JobSchedule::After("backup".to_string()));
         dag.add_dependency("cleanup", "backup");
 
@@ -176,7 +174,10 @@ mod tests {
         let mut dag = JobDag::new();
         dag.add_dependency("a", "b");
         dag.add_dependency("b", "a");
-        assert!(dag.resolve_execution_order().is_err(), "순환 의존성 감지 실패");
+        assert!(
+            dag.resolve_execution_order().is_err(),
+            "순환 의존성 감지 실패"
+        );
     }
 
     #[test]

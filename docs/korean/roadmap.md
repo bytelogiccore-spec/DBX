@@ -28,23 +28,27 @@ DBX의 미래 발전 방향과 계획된 기능들입니다.
   - CRUD Operations (Insert, Get, Delete, Count)
   - MVCC Transactions (Snapshot Isolation)
   - SQL Support (SELECT, WHERE, JOIN, GROUP BY, ORDER BY)
-  
+  - WAL (Write-Ahead Log) — native SSTable + sequential append 방식
+
 - **성능 최적화**
   - GPU Acceleration (CUDA-based aggregation, filtering, joins)
   - Bloom Filter Indexing
   - LRU Cache
-  - SIMD Vectorization
-  - **병렬 쿼리** (Rayon 기반)
-    - JOIN 연산 병렬화 (Build/Probe Phase)
-    - Sort 연산 병렬화
-    - Columnar Store 병렬 빌드
-    - 임계값: 1000행 이상 시 자동 병렬화
+  - SIMD Vectorization (`wide` crate, stable Rust, 항상 활성)
+  - **멀티코어 병렬화** (Rayon 기반, v0.1.1 전면 적용)
+    - `insert_batch()` par_iter (1,000행 임계값)
+    - `scan()` rayon::join Delta+WOS 동시 스캔
+    - GROUP BY 집계 par_iter (1,000 그룹 임계값)
+    - JOIN Build/Probe Phase par_iter (1,000행 임계값)
+    - `get_batches()` projection par_iter
+    - WAL encode par_iter (500건 임계값)
+    - `compact()` 역직렬화 par_iter (4페이지 임계값)
+    - `ParallelismConfig` — cpu_cap / min_rows_for_parallel 런타임 제어
   
 - **데이터 보호**
   - Encryption (AES-256-GCM-SIV, ChaCha20-Poly1305)
   - Compression (ZSTD)
-  - WAL (Write-Ahead Logging)
-  
+
 - **언어 바인딩**
   - Python, C#/.NET, C/C++, Node.js
 
@@ -58,6 +62,8 @@ DBX의 미래 발전 방향과 계획된 기능들입니다.
 - Stored Procedures (저장 프로시저)
 - Replication (복제)
 - Sharding (샤딩)
+
+> ⚠️ **위 목록은 v0.0.6 기준입니다.** 이후 v0.4, v0.1.1에서 여러 항목이 구현 완료되었습니다. 아래 각 Phase 제목의 ✅/❌를 참고하세요.
 
 ---
 
@@ -311,7 +317,7 @@ db.export_metrics("/metrics")?;  // Prometheus 형식
 
 ---
 
-## 🚀 Phase 1: 트리거 시스템 (Q2 2026)
+## 🚀 Phase 1: 트리거 시스템 — ✅ **구현 완료** (v0.0.4-beta)
 
 **목표**: 데이터 변경 시 자동 반응 시스템 구축
 
@@ -353,6 +359,8 @@ db.create_trigger("audit_log", TriggerEvent::AfterInsert("users"), |_, new| {
 - 100,000 TPS 이상 유지 (트리거 활성화 시)
 - 트리거 오버헤드 < 10%
 - 모든 CRUD 작업에서 트리거 정상 작동
+
+> ✅ **구현 확인**: `src/automation/trigger.rs`, `trigger_parser.rs`, `trigger_executor.rs` 존재, 424개 테스트 중 `automation::trigger` 모듈 테스트 통과 확인.
 
 ---
 
@@ -410,7 +418,7 @@ db.create_trigger("cascade_update",
 
 ---
 
-## 🔧 Phase 2: User-Defined Functions (Q3 2026)
+## 🔧 Phase 2: User-Defined Functions — ✅ **구현 완료** (v0.0.4-beta)
 
 **목표**: SQL 확장성 제공
 
@@ -476,6 +484,8 @@ db.execute_sql("SELECT median(price) FROM products GROUP BY category")?;
 ---
 
 ### 2.3 Table UDF (3주)
+
+> ✅ **구현 완료**: `src/automation/udf/` — scalar, aggregate, table UDF 전부 존재. `automation::udf::scalar`, `automation::udf::aggregate`, `automation::udf::table` 테스트 통과 확인.
 
 **구현 내용**:
 ```rust
@@ -645,7 +655,7 @@ db.enable_auto_partition("logs", AutoPartitionConfig {
 
 ---
 
-## ⏰ Phase 4: Job Scheduler (Q1 2027)
+## ⏰ Phase 4: Job Scheduler — ✅ **부분 구현 완료** (v0.0.4-beta)
 
 **목표**: 자동화 작업 실행
 
@@ -687,7 +697,9 @@ db.schedule_job("cleanup", Schedule::Daily(2, 0), || {
 
 ---
 
-### 4.2 Cron 지원 (2주)
+### 4.2 Cron 지원 — ✅ **구현 완료**
+
+> ✅ **구현 확인**: `src/automation/schedule_parser.rs`에서 Cron 표현식 파싱 지원. `automation::schedule_parser` doctests 통과 확인.
 
 **구현 내용**:
 ```rust
@@ -782,7 +794,9 @@ db.execute_sql("SELECT * FROM active_users")?;
 
 ---
 
-### 5.2 Stored Procedures (저장 프로시저)
+### 5.2 Stored Procedures (저장 프로시저) — ✅ **구현 완료** (v0.0.4-beta)
+
+> ✅ **구현 확인**: `src/automation/procedure.rs`, `procedure_parser.rs`, `procedure_executor.rs` 존재. `automation::procedure`, `automation::procedure_executor` 테스트 통과 확인.
 
 **구현 내용**:
 ```rust
@@ -852,13 +866,16 @@ db.enable_sharding(ShardingConfig {
 ## 🎯 마일스톤
 
 ```
-2026 Q2: Phase 1 (트리거) 완료
-2026 Q3: Phase 2 (UDF) 완료
-2026 Q4: Phase 3 (파티셔닝) 완료
-2027 Q1: Phase 4 (스케줄러) 완료
-2027 Q2-Q4: Phase 5 (고급 기능) 완료
+[완료] v0.0.4-beta: Phase 1 트리거 / Phase 2 UDF / Phase 4 스케줄러(Cron) / Phase 5 저장 프로시저
+[완료] v0.1.1-beta: 멀티코어 병렬화 (P1~P9), WAL sequential append, wide SIMD
 
-→ DBX v1.0 릴리스 (2027 Q4)
+미완료:
+2026 Q1: Phase 0 HTAP 최적화 (실시간 동기화, 적응형 워크로드)
+2026 Q4: Phase 3 파티셔닝 (Range / Hash / List)
+2027 Q1: Phase 4.3 작업 의존성, 4.4 재시도 모니터링
+2027 Q2-Q4: Phase 5.1 Views / 5.3 Replication / 5.4 Sharding
+
+→ DBX v1.0 목표: 2027 Q4
 ```
 
 ---

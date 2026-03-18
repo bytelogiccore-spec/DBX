@@ -8,6 +8,7 @@ use arrow::array::*;
 use arrow::compute;
 use arrow::datatypes::{DataType, Schema};
 use arrow::record_batch::RecordBatch;
+use rayon::prelude::*;
 use smallvec::{SmallVec, smallvec};
 use std::sync::Arc;
 
@@ -111,10 +112,16 @@ impl HashAggregateOperator {
             output_columns.push(take_by_indices(col, &first_indices)?);
         }
 
-        // Aggregate columns
+        // Aggregate columns — 그룹 수가 많을 때 병렬 처리
+        const PARALLEL_GROUP_THRESHOLD: usize = 1_000;
+
         for agg in &self.aggregates {
             let col = merged.column(agg.input);
-            let result = compute_aggregate_grouped(col, &agg.function, &group_keys, num_groups)?;
+            let result = if num_groups >= PARALLEL_GROUP_THRESHOLD {
+                compute_aggregate_grouped_parallel(col, &agg.function, &group_keys, num_groups)?
+            } else {
+                compute_aggregate_grouped(col, &agg.function, &group_keys, num_groups)?
+            };
             output_columns.push(result);
         }
 
@@ -255,7 +262,79 @@ fn append_value_to_key(key: &mut Vec<u8>, col: &ArrayRef, row_idx: usize) {
     }
 }
 
-/// Compute an aggregate function over groups of rows.
+/// Compute an aggregate function over groups of rows in parallel (대규모 그룹).
+///
+/// 각 그룹이 독립적이므로 `par_iter()`로 병렬 계산 후 collect()로 순서 보장.
+fn compute_aggregate_grouped_parallel(
+    col: &ArrayRef,
+    func: &AggregateFunction,
+    groups: &[Vec<usize>],
+    num_groups: usize,
+) -> DbxResult<ArrayRef> {
+    match col.data_type() {
+        DataType::Int32 => {
+            let arr = col.as_any().downcast_ref::<Int32Array>().unwrap();
+            let values: Vec<f64> = groups
+                .par_iter()
+                .map(|group_rows| {
+                    let vals: Vec<f64> = group_rows
+                        .iter()
+                        .filter(|&&i| !arr.is_null(i))
+                        .map(|&i| arr.value(i) as f64)
+                        .collect();
+                    aggregate_f64_values(&vals, func)
+                })
+                .collect();
+            Ok(Arc::new(Float64Array::from(values)))
+        }
+        DataType::Int64 => {
+            let arr = col.as_any().downcast_ref::<Int64Array>().unwrap();
+            let values: Vec<f64> = groups
+                .par_iter()
+                .map(|group_rows| {
+                    let vals: Vec<f64> = group_rows
+                        .iter()
+                        .filter(|&&i| !arr.is_null(i))
+                        .map(|&i| arr.value(i) as f64)
+                        .collect();
+                    aggregate_f64_values(&vals, func)
+                })
+                .collect();
+            Ok(Arc::new(Float64Array::from(values)))
+        }
+        DataType::Float64 => {
+            let arr = col.as_any().downcast_ref::<Float64Array>().unwrap();
+            let values: Vec<f64> = groups
+                .par_iter()
+                .map(|group_rows| {
+                    let vals: Vec<f64> = group_rows
+                        .iter()
+                        .filter(|&&i| !arr.is_null(i))
+                        .map(|&i| arr.value(i))
+                        .collect();
+                    aggregate_f64_values(&vals, func)
+                })
+                .collect();
+            Ok(Arc::new(Float64Array::from(values)))
+        }
+        _ => {
+            if matches!(func, AggregateFunction::Count) {
+                let values: Vec<f64> = groups
+                    .par_iter()
+                    .map(|group_rows| {
+                        group_rows.iter().filter(|&&i| !col.is_null(i)).count() as f64
+                    })
+                    .collect();
+                Ok(Arc::new(Float64Array::from(values)))
+            } else {
+                // fallback to sequential for unsupported types
+                compute_aggregate_grouped(col, func, groups, num_groups)
+            }
+        }
+    }
+}
+
+/// Compute an aggregate function over groups of rows (순차 처리 - 소규모 그룹).
 fn compute_aggregate_grouped(
     col: &ArrayRef,
     func: &AggregateFunction,

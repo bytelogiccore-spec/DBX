@@ -11,9 +11,9 @@
 
 use criterion::{Criterion, black_box, criterion_group, criterion_main};
 use dbx_core::Database;
-use tempfile::tempdir;
 use std::fs::OpenOptions;
 use std::io::Write;
+use tempfile::tempdir;
 
 const BASE_ROWS: usize = 10_000;
 const FLUSH_ROWS: usize = 1_000;

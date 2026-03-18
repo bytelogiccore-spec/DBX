@@ -47,6 +47,18 @@ impl PartitionValue {
     }
 }
 
+/// 파티션 라우팅 결과
+#[derive(Debug, Clone, PartialEq)]
+pub enum RouteResult {
+    /// 기존 파티션으로 정상 라우팅됨 (서브테이블 이름 반환)
+    Routed(String),
+    /// 자동 확장이 필요함 (새로운 서브테이블 이름, 추가될 범위 (low, high))
+    NeedsExpansion {
+        new_table: String,
+        new_bounds: (i64, i64),
+    },
+}
+
 /// 파티션 타입
 #[derive(Debug, Clone)]
 pub enum PartitionType {
@@ -54,6 +66,8 @@ pub enum PartitionType {
     Range {
         column: String,
         bounds: Vec<(i64, i64)>,
+        /// 자동 확장 설정: (간격, 최대 파티션 개수)
+        auto_expand_interval: Option<(i64, usize)>,
     },
     /// 해시 파티션: FNV1a 해시 후 num_partitions로 모듈러
     Hash {
@@ -128,6 +142,54 @@ impl PartitionMap {
     pub fn all_partitions(&self) -> Vec<String> {
         self.pruned_partitions(None)
     }
+
+    /// 자동 확장이 필요한지 파악하는 함수
+    pub fn route_or_expand(&self, key_value: &PartitionValue) -> RouteResult {
+        match &self.partition_type {
+            PartitionType::Range {
+                bounds,
+                auto_expand_interval,
+                ..
+            } => {
+                let v = key_value.as_i64();
+
+                // 기존 bounds 내에 있는지 확인
+                if let Some(pos) = bounds.iter().position(|(lo, hi)| v >= *lo && v < *hi) {
+                    return RouteResult::Routed(format!("{}__p_part_{}", self.table, pos));
+                }
+
+                if let Some((interval, max_parts)) = auto_expand_interval
+                    && self.num_partitions < *max_parts {
+                        // 범위를 벗어났고 확장 가능함
+                        let last_hi = bounds.last().map(|(_, hi)| *hi).unwrap_or(0);
+                        if v >= last_hi {
+                            // 현재 v를 포함할 수 있는 범위 계산
+                            let diff = v - last_hi;
+                            let steps = (diff / interval) + 1;
+                            let new_hi = last_hi + steps * interval;
+
+                            return RouteResult::NeedsExpansion {
+                                new_table: format!(
+                                    "{}__p_part_{}",
+                                    self.table, self.num_partitions
+                                ),
+                                new_bounds: (last_hi, new_hi),
+                            };
+                        } else {
+                            // v < lo (첫 파티션보다 작은 경우 -> 과거 데이터)
+                            // 현재는 가장 과거 구간 확장은 복잡하므로 MVP에서는 그대로 `Routed` 처리하거나, 확장 안됨.
+                            // 가장 가까운 0번 파티션 반환
+                            return RouteResult::Routed(format!("{}__p_part_0", self.table));
+                        }
+                    }
+
+                // 자동 확장이 켜져있지 않거나 최대 파티션에 도달한 경우 = 마지막 파티션 반환
+                let idx = self.num_partitions.saturating_sub(1);
+                RouteResult::Routed(format!("{}__p_part_{}", self.table, idx))
+            }
+            _ => RouteResult::Routed(self.route_key(key_value)),
+        }
+    }
 }
 
 /// FNV-1a 해시 (32-bit) — 결정론적, 가벼운 비암호학적 해시
@@ -158,7 +220,10 @@ mod tests {
         };
         let t0 = map.route_key(&PartitionValue::Int(0));
         let t3 = map.route_key(&PartitionValue::Int(3));
-        assert!(t0.contains("part_"), "서브테이블 이름에 part_ 포함되어야 함");
+        assert!(
+            t0.contains("part_"),
+            "서브테이블 이름에 part_ 포함되어야 함"
+        );
         // 다른 값이 다른 파티션에 라우팅된다 (항상 참은 아니지만 0,3은 다름)
         // 적어도 테이블 이름이 올바른지 확인
         assert!(t0.starts_with("users__p_part_"));
@@ -190,6 +255,7 @@ mod tests {
             partition_type: PartitionType::Range {
                 column: "amount".into(),
                 bounds: vec![(0, 100), (100, 500), (500, 10000)],
+                auto_expand_interval: None,
             },
             num_partitions: 3,
         };
@@ -209,6 +275,7 @@ mod tests {
             partition_type: PartitionType::Range {
                 column: "ts".into(),
                 bounds: vec![(0, 1000), (1000, 2000), (2000, 3000)],
+                auto_expand_interval: None,
             },
             num_partitions: 3,
         };

@@ -146,3 +146,7 @@ harness = false
 [[bench]]
 name = "wos_flush_comparison"
 harness = false
+
+[[bench]]
+name = "htap_benchmark"
+harness = false

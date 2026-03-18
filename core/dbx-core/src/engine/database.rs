@@ -2,6 +2,7 @@
 
 use crate::engine::types::{BackgroundJob, TablePersistence};
 use crate::engine::{DeltaVariant, DurabilityLevel, WosVariant};
+use crate::monitoring::DbxMetrics;
 use crate::sql::optimizer::QueryOptimizer;
 use crate::sql::parser::SqlParser;
 use crate::sql::view::ViewRegistry;
@@ -121,13 +122,26 @@ pub struct Database {
     pub(crate) view_registry: ViewRegistry,
 
     /// 파티션 매핑 정보 (테이블명 -> PartitionMap)
-    pub(crate) partition_maps: Arc<RwLock<std::collections::HashMap<String, crate::storage::partition::PartitionMap>>>,
+    pub(crate) partition_maps:
+        Arc<RwLock<std::collections::HashMap<String, crate::storage::partition::PartitionMap>>>,
 
     /// Database Configuration (Parallelism, HTAP Sync)
     pub(crate) config: crate::engine::parallel_engine::DbConfig,
 
     /// 적응형 워크로드 분석기 (HTAP/OLAP 비율 분석)
     pub(crate) workload_analyzer: Arc<RwLock<crate::engine::workload_analyzer::WorkloadAnalyzer>>,
+
+    /// Replication Master (MVP)
+    pub(crate) replication_master: Option<Arc<crate::replication::master::ReplicationMaster>>,
+
+    /// Sharding 라우터
+    pub(crate) sharding_router: Arc<crate::sharding::router::ShardRouter>,
+
+    /// Sharding 데이터 분산/수집 처리기
+    pub(crate) scatter_gather: Arc<crate::sharding::scatter_gather::ScatterGather>,
+
+    /// Metrics & Observability (Phase 0.4)
+    pub(crate) metrics: Arc<DbxMetrics>,
 }
 
 impl Database {
@@ -174,5 +188,74 @@ impl Database {
     /// 테이블에 지정된 저장소 종류를 반환합니다 (미지정 시 None).
     pub fn table_persistence(&self, table: &str) -> Option<TablePersistence> {
         self.table_persistence.get(table).map(|r| *r)
+    }
+
+    /// Replication Master를 활성화하고, WAL 변경사항을 구독할 수 있는 Receiver를 반환합니다.
+    ///
+    /// `capacity`는 브로드캐스트 채널의 버퍼 크기입니다.
+    /// 이미 활성화되어 있다면 새로운 Receiver만 생성하여 반환합니다.
+    pub fn enable_replication(
+        &mut self,
+        capacity: usize,
+    ) -> tokio::sync::broadcast::Receiver<crate::replication::protocol::ReplicationMessage> {
+        use crate::replication::master::ReplicationMaster;
+
+        if let Some(master) = &self.replication_master {
+            master.subscribe()
+        } else {
+            let (master, rx) = ReplicationMaster::new(capacity);
+            self.replication_master = Some(Arc::new(master));
+            rx
+        }
+    }
+
+    // ── Monitoring / Observability API (Phase 0.4) ────────────────────
+
+    /// Export all DBX metrics in Prometheus exposition text format.
+    ///
+    /// The returned string can be served at a `/metrics` HTTP endpoint
+    /// and consumed by Prometheus or any compatible scraper.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use dbx_core::Database;
+    ///
+    /// # fn main() -> dbx_core::DbxResult<()> {
+    /// let db = Database::open_in_memory()?;
+    /// db.insert("users", b"k1", b"v1")?;
+    /// let text = db.export_metrics();
+    /// assert!(text.contains("dbx_inserts_total 1"));
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn export_metrics(&self) -> String {
+        crate::monitoring::export_prometheus(&self.metrics)
+    }
+
+    /// Return a non-atomic snapshot of current metrics.
+    ///
+    /// Useful for programmatic inspection of counters and hit rates.
+    ///
+    /// # Example
+    ///
+    /// ```rust
+    /// use dbx_core::Database;
+    ///
+    /// # fn main() -> dbx_core::DbxResult<()> {
+    /// let db = Database::open_in_memory()?;
+    /// db.insert("users", b"k1", b"v1")?;
+    /// let snap = db.metrics_snapshot();
+    /// assert_eq!(snap.inserts_total, 1);
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn metrics_snapshot(&self) -> crate::monitoring::MetricsSnapshot {
+        self.metrics.snapshot()
+    }
+
+    /// Reset all metrics counters and histograms to zero.
+    pub fn reset_metrics(&self) {
+        self.metrics.reset();
     }
 }

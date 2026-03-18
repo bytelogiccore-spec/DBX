@@ -621,7 +621,10 @@ mod tests {
         let sql = "SELECT * FROM users WHERE txt = 'cost: $1, name: :name' AND id = $1";
         let positional = vec![ScalarValue::Int32(5)];
         let result = apply_params(sql, &positional, &[]).unwrap();
-        assert_eq!(result, "SELECT * FROM users WHERE txt = 'cost: $1, name: :name' AND id = 5");
+        assert_eq!(
+            result,
+            "SELECT * FROM users WHERE txt = 'cost: $1, name: :name' AND id = 5"
+        );
     }
 
     #[test]

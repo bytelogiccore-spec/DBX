@@ -1,7 +1,7 @@
 # DBX — High-Performance Embedded Database
 
 [![Version](https://img.shields.io/badge/version-0.1.0-blue.svg)](https://github.com/ByteLogicCore/DBX)
-[![License](https://img.shields.io/badge/license-MIT%20OR%20Commercial-green.svg)](LICENSE)
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-2024-orange.svg)](https://www.rust-lang.org)
 [![Documentation](https://img.shields.io/badge/docs-GitHub%20Pages-blue)](https://bytelogiccore-spec.github.io/DBX/)
 
@@ -137,14 +137,9 @@ DBX provides official bindings for multiple languages:
 
 ## 📄 License
 
-DBX is available under a **dual-license model**:
+DBX is completely free and open-source, licensed under the **MIT License**.
 
-- **🆓 MIT License** — Free for individuals, startups, and small organizations
-- **💼 Commercial License** — Required for large organizations (100+ employees or $5M+ revenue)
-
-📚 **[License Policy Guide](./legal/english/LICENSE-POLICY.md)** — Which license do I need?
-
-📧 **Commercial licensing:** bytelogiccore@gmail.com
+See the [LICENSE](LICENSE) file for more details.
 
 ---
 

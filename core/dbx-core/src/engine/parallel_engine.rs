@@ -86,10 +86,7 @@ impl ParallelExecutionEngine {
     /// Create a new parallel execution engine with policy and parallelism config.
     ///
     /// `config.parallelism.cpu_cap`에 따라 스레드 수를 제한합니다.
-    pub fn new_with_config(
-        policy: ParallelizationPolicy,
-        config: DbConfig,
-    ) -> DbxResult<Self> {
+    pub fn new_with_config(policy: ParallelizationPolicy, config: DbConfig) -> DbxResult<Self> {
         let cpu_cap = config.parallelism.cpu_cap.clamp(0.01, 1.0);
         let base_threads = Self::determine_thread_count(policy);
         let capped_threads = ((base_threads as f64 * cpu_cap).ceil() as usize).max(1);
@@ -299,7 +296,6 @@ pub struct DbConfig {
     /// HTAP 실시간 동기화 설정 (기본은 Threshold(10,000))
     pub sync: RealtimeSyncConfig,
 }
-
 
 #[cfg(test)]
 mod tests {

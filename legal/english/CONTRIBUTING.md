@@ -96,9 +96,7 @@ You hereby grant to ByteLogic Studio and to recipients of software distributed b
 
 ### Why Do We Need This?
 
-DBX uses a **dual-license model** (open-source MIT + commercial license). To offer commercial licenses, ByteLogic Studio needs the legal right to sublicense contributions.
-
-**Your contributions will always remain available under the MIT License** for the open-source community. The CLA simply allows us to also offer commercial licenses to fund the project's development.
+**Your contributions will always remain available under the MIT License** for the open-source community. The CLA ensures that the project can legally distribute your contributions and protects the project and its users from legal issues.
 
 ### Representation
 

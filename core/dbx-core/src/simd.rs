@@ -1,33 +1,30 @@
-//! SIMD 벡터화 프로토타입
+//! SIMD vectorized aggregates - Stable Rust implementation via `wide` crate.
 //!
-//! 간단한 집계 연산 (SUM, AVG, MIN, MAX)에 대한 SIMD 최적화
+//! P7: nightly `std::simd` 에서 stable `wide` crate으로 전환.
+//! feature flag 없이 기본 빌드에서 항상 SIMD 가속이 활성화됩니다.
 
-/// SIMD를 사용한 f64 배열 합계
-///
-/// # Safety
-///
-/// 이 함수는 안전합니다. 내부적으로 unsafe SIMD를 사용하지만,
-/// 모든 경계 검사는 수행됩니다.
+use wide::f64x4;
+
+// ──────────────────────────────────────────────────────────────────
+
+/// SIMD 가속 f64 배열 합계 (4-lane wide::f64x4 사용).
 pub fn sum_f64(values: &[f64]) -> f64 {
-    // 작은 배열은 스칼라로 처리
-    if values.len() < 8 {
+    if values.len() < 4 {
         return values.iter().sum();
     }
-
-    // SIMD 경로 (nightly 필요)
-    #[cfg(feature = "simd")]
-    {
-        sum_f64_simd(values)
+    let chunks = values.chunks_exact(4);
+    let remainder = chunks.remainder();
+    let mut acc = f64x4::splat(0.0);
+    for chunk in chunks {
+        acc += f64x4::from([chunk[0], chunk[1], chunk[2], chunk[3]]);
     }
-
-    // 폴백: 스칼라
-    #[cfg(not(feature = "simd"))]
-    {
-        values.iter().sum()
-    }
+    let lanes: [f64; 4] = acc.into();
+    let mut sum = lanes[0] + lanes[1] + lanes[2] + lanes[3];
+    sum += remainder.iter().sum::<f64>();
+    sum
 }
 
-/// SIMD를 사용한 f64 배열 평균
+/// SIMD 가속 f64 배열 평균.
 pub fn avg_f64(values: &[f64]) -> Option<f64> {
     if values.is_empty() {
         return None;
@@ -35,142 +32,60 @@ pub fn avg_f64(values: &[f64]) -> Option<f64> {
     Some(sum_f64(values) / values.len() as f64)
 }
 
-/// SIMD를 사용한 f64 배열 최소값
+/// SIMD 가속 f64 배열 최소값 (min_by_component으로 4-lane 동시 비교).
 pub fn min_f64(values: &[f64]) -> Option<f64> {
     if values.is_empty() {
         return None;
     }
-
-    // 작은 배열은 스칼라로 처리
-    if values.len() < 8 {
+    if values.len() < 4 {
         return values
             .iter()
             .copied()
             .min_by(|a, b| a.partial_cmp(b).unwrap());
     }
-
-    // SIMD 경로
-    #[cfg(feature = "simd")]
-    {
-        Some(min_f64_simd(values))
-    }
-
-    // 폴백: 스칼라
-    #[cfg(not(feature = "simd"))]
-    {
-        values
-            .iter()
-            .copied()
-            .min_by(|a, b| a.partial_cmp(b).unwrap())
-    }
-}
-
-/// SIMD를 사용한 f64 배열 최대값
-pub fn max_f64(values: &[f64]) -> Option<f64> {
-    if values.is_empty() {
-        return None;
-    }
-
-    // 작은 배열은 스칼라로 처리
-    if values.len() < 8 {
-        return values
-            .iter()
-            .copied()
-            .max_by(|a, b| a.partial_cmp(b).unwrap());
-    }
-
-    // SIMD 경로
-    #[cfg(feature = "simd")]
-    {
-        Some(max_f64_simd(values))
-    }
-
-    // 폴백: 스칼라
-    #[cfg(not(feature = "simd"))]
-    {
-        values
-            .iter()
-            .copied()
-            .max_by(|a, b| a.partial_cmp(b).unwrap())
-    }
-}
-
-// SIMD 구현 (feature = "simd" 시에만 컴파일)
-#[cfg(feature = "simd")]
-fn sum_f64_simd(values: &[f64]) -> f64 {
-    use std::simd::{f64x4, prelude::SimdFloat};
-
     let chunks = values.chunks_exact(4);
     let remainder = chunks.remainder();
-
-    // SIMD 합계
-    let mut sum_vec = f64x4::splat(0.0);
+    let mut acc = f64x4::splat(f64::INFINITY);
     for chunk in chunks {
-        let vec = f64x4::from_slice(chunk);
-        sum_vec += vec;
+        let v = f64x4::from([chunk[0], chunk[1], chunk[2], chunk[3]]);
+        acc = acc.min_by_component(v);
     }
-
-    // SIMD 결과 합산
-    let mut sum = sum_vec.reduce_sum();
-
-    // 나머지 스칼라 처리
-    sum += remainder.iter().sum::<f64>();
-
-    sum
-}
-
-#[cfg(feature = "simd")]
-fn min_f64_simd(values: &[f64]) -> f64 {
-    use std::simd::{f64x4, prelude::SimdFloat};
-
-    let chunks = values.chunks_exact(4);
-    let remainder = chunks.remainder();
-
-    // SIMD 최소값
-    let mut min_vec = f64x4::splat(f64::INFINITY);
-    for chunk in chunks {
-        let vec = f64x4::from_slice(chunk);
-        min_vec = min_vec.simd_min(vec);
-    }
-
-    // SIMD 결과 최소값
-    let mut min = min_vec.reduce_min();
-
-    // 나머지 스칼라 처리
+    let lanes: [f64; 4] = acc.into();
+    let mut min = lanes[0].min(lanes[1]).min(lanes[2]).min(lanes[3]);
     for &v in remainder {
         if v < min {
             min = v;
         }
     }
-
-    min
+    Some(min)
 }
 
-#[cfg(feature = "simd")]
-fn max_f64_simd(values: &[f64]) -> f64 {
-    use std::simd::{f64x4, prelude::SimdFloat};
-
+/// SIMD 가속 f64 배열 최대값.
+pub fn max_f64(values: &[f64]) -> Option<f64> {
+    if values.is_empty() {
+        return None;
+    }
+    if values.len() < 4 {
+        return values
+            .iter()
+            .copied()
+            .max_by(|a, b| a.partial_cmp(b).unwrap());
+    }
     let chunks = values.chunks_exact(4);
     let remainder = chunks.remainder();
-
-    // SIMD 최대값
-    let mut max_vec = f64x4::splat(f64::NEG_INFINITY);
+    let mut acc = f64x4::splat(f64::NEG_INFINITY);
     for chunk in chunks {
-        let vec = f64x4::from_slice(chunk);
-        max_vec = max_vec.simd_max(vec);
+        let v = f64x4::from([chunk[0], chunk[1], chunk[2], chunk[3]]);
+        acc = acc.max_by_component(v);
     }
-
-    // SIMD 결과 최대값
-    let mut max = max_vec.reduce_max();
-
-    // 나머지 스칼라 처리
+    let lanes: [f64; 4] = acc.into();
+    let mut max = lanes[0].max(lanes[1]).max(lanes[2]).max(lanes[3]);
     for &v in remainder {
         if v > max {
             max = v;
         }
     }
-
-    max
+    Some(max)
 }
 
 #[cfg(test)]
@@ -179,45 +94,50 @@ mod tests {
 
     #[test]
     fn test_sum_f64() {
-        let values = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        assert_eq!(sum_f64(&values), 15.0);
+        assert_eq!(sum_f64(&[1.0, 2.0, 3.0, 4.0, 5.0]), 15.0);
     }
 
     #[test]
     fn test_sum_f64_large() {
         let values: Vec<f64> = (1..=1000).map(|i| i as f64).collect();
-        let expected: f64 = (1..=1000).sum();
-        assert_eq!(sum_f64(&values), expected);
+        let expected = (1..=1000_i64).sum::<i64>() as f64;
+        assert!((sum_f64(&values) - expected).abs() < 1e-6);
     }
 
     #[test]
     fn test_avg_f64() {
-        let values = vec![1.0, 2.0, 3.0, 4.0, 5.0];
-        assert_eq!(avg_f64(&values), Some(3.0));
+        assert_eq!(avg_f64(&[1.0, 2.0, 3.0, 4.0, 5.0]), Some(3.0));
     }
 
     #[test]
     fn test_avg_f64_empty() {
-        let values: Vec<f64> = vec![];
-        assert_eq!(avg_f64(&values), None);
+        assert_eq!(avg_f64(&[]), None);
     }
 
     #[test]
     fn test_min_f64() {
-        let values = vec![5.0, 2.0, 8.0, 1.0, 9.0];
-        assert_eq!(min_f64(&values), Some(1.0));
+        assert_eq!(min_f64(&[5.0, 2.0, 8.0, 1.0, 9.0]), Some(1.0));
     }
 
     #[test]
     fn test_max_f64() {
-        let values = vec![5.0, 2.0, 8.0, 1.0, 9.0];
-        assert_eq!(max_f64(&values), Some(9.0));
+        assert_eq!(max_f64(&[5.0, 2.0, 8.0, 1.0, 9.0]), Some(9.0));
     }
 
     #[test]
     fn test_min_max_empty() {
-        let values: Vec<f64> = vec![];
-        assert_eq!(min_f64(&values), None);
-        assert_eq!(max_f64(&values), None);
+        assert_eq!(min_f64(&[]), None);
+        assert_eq!(max_f64(&[]), None);
+    }
+
+    #[test]
+    fn test_simd_matches_scalar() {
+        let values: Vec<f64> = (1..=100).map(|i| i as f64).collect();
+        let scalar_sum: f64 = values.iter().sum();
+        assert!((sum_f64(&values) - scalar_sum).abs() < 1e-9);
+        let scalar_min = values.iter().copied().fold(f64::INFINITY, f64::min);
+        assert_eq!(min_f64(&values), Some(scalar_min));
+        let scalar_max = values.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+        assert_eq!(max_f64(&values), Some(scalar_max));
     }
 }

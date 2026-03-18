@@ -30,8 +30,8 @@ fn test_basic_select() -> dbx_core::DbxResult<()> {
         .from("users_basic_select")
         .execute()?;
 
-    assert_eq!(results.len(), 1);
-    assert_eq!(results[0].num_rows(), 3);
+    let total_rows: usize = results.iter().map(|b| b.num_rows()).sum();
+    assert_eq!(total_rows, 3);
     assert_eq!(results[0].num_columns(), 2);
 
     Ok(())
@@ -62,8 +62,8 @@ fn test_where_clause() -> dbx_core::DbxResult<()> {
         .where_("age", ">", "25")
         .execute()?;
 
-    assert_eq!(results.len(), 1);
-    assert_eq!(results[0].num_rows(), 2); // Bob and Charlie
+    let total_rows: usize = results.iter().map(|b| b.num_rows()).sum();
+    assert_eq!(total_rows, 2); // Bob and Charlie
 
     Ok(())
 }
@@ -172,6 +172,7 @@ fn test_limit_offset() -> dbx_core::DbxResult<()> {
         .query_builder()
         .select(&["id", "name"])
         .from("users_limit")
+        .order_by("id", "ASC")
         .limit(5)
         .execute()?;
 
@@ -183,6 +184,7 @@ fn test_limit_offset() -> dbx_core::DbxResult<()> {
         .query_builder()
         .select(&["id", "name"])
         .from("users_limit")
+        .order_by("id", "ASC")
         .limit(3)
         .offset(5)
         .execute()?;

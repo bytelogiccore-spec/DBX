@@ -1,7 +1,7 @@
 //! Replication Slave — Master WAL 스트림을 소비하여 로컬 DB에 재생
 
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use tokio::sync::broadcast;
 
 use crate::replication::protocol::ReplicationMessage;
@@ -68,9 +68,10 @@ impl ReplicationSlave {
                 break;
             }
 
-            let msg = rx.recv().await.map_err(|e| {
-                ReplayError::ChannelError(e.to_string())
-            })?;
+            let msg = rx
+                .recv()
+                .await
+                .map_err(|e| ReplayError::ChannelError(e.to_string()))?;
 
             if let ReplicationMessage::WalEntry { lsn, data } = msg {
                 // LSN 순서 검증 (선택적)

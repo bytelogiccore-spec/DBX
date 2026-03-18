@@ -34,9 +34,7 @@ impl ViewRegistry {
         self.views
             .remove(&name.to_lowercase())
             .map(|_| ())
-            .ok_or_else(|| {
-                DbxError::InvalidArguments(format!("뷰 '{}' 를 찾을 수 없음", name))
-            })
+            .ok_or_else(|| DbxError::InvalidArguments(format!("뷰 '{}' 를 찾을 수 없음", name)))
     }
 
     /// 뷰 존재 여부 확인
@@ -89,8 +87,11 @@ mod tests {
     fn test_create_and_exists() {
         let reg = ViewRegistry::new();
         assert!(!reg.exists("active_users"));
-        reg.create("active_users", "SELECT id, name FROM users WHERE active = true")
-            .unwrap();
+        reg.create(
+            "active_users",
+            "SELECT id, name FROM users WHERE active = true",
+        )
+        .unwrap();
         assert!(reg.exists("active_users"));
     }
 
