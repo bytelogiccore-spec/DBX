@@ -1,6 +1,6 @@
 # DBX — High-Performance Embedded Database
 
-[![Version](https://img.shields.io/badge/version-0.1.0-blue.svg)](https://github.com/ByteLogicCore/DBX)
+[![Version](https://img.shields.io/badge/version-0.1.1-blue.svg)](https://github.com/ByteLogicCore/DBX)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-2024-orange.svg)](https://www.rust-lang.org)
 [![Documentation](https://img.shields.io/badge/docs-GitHub%20Pages-blue)](https://bytelogiccore-spec.github.io/DBX/)
@@ -102,6 +102,11 @@ DBX provides official bindings for multiple languages:
 - **[SQL Reference](https://bytelogiccore-spec.github.io/DBX/english/guides/sql-reference)** — Supported syntax and query optimization
 - **[Storage Layers](https://bytelogiccore-spec.github.io/DBX/english/guides/storage-layers)** — 5-Tier architecture explained
 - **[GPU Acceleration](https://bytelogiccore-spec.github.io/DBX/english/guides/gpu-acceleration)** — CUDA setup and performance tuning
+- **[DB Configuration](https://bytelogiccore-spec.github.io/DBX/english/guides/db-config)** — DbConfig, DirtyBufferMode, ParallelismConfig
+- **[Partition Management](https://bytelogiccore-spec.github.io/DBX/english/guides/partition-management)** — Auto-archiving, Hot/Cold tiering
+- **[Multi-Master Failover](https://bytelogiccore-spec.github.io/DBX/english/guides/multi-master-failover)** — Quorum election, vector clocks
+- **[QUIC Replication](https://bytelogiccore-spec.github.io/DBX/english/guides/quic-replication)** — s2n-quic based distributed replication
+- **[Cross-Node Sharding](https://bytelogiccore-spec.github.io/DBX/english/guides/cross-node-sharding)** — Consistent hashing, 2PC transactions
 
 ### 🔬 Advanced Topics
 - **[Architecture Guide](https://bytelogiccore-spec.github.io/DBX/english/architecture)** — Design principles and internals
@@ -118,7 +123,7 @@ DBX provides official bindings for multiple languages:
 - ✅ **SQL Support** — SELECT, WHERE, JOIN, GROUP BY, ORDER BY
 - ✅ **GPU Acceleration** — CUDA-based aggregation and filtering
 - ✅ **Encryption** — AES-256-GCM-SIV, ChaCha20-Poly1305
-- ✅ **Compression** — ZSTD, Brotli
+- ✅ **Compression** — ZSTD + per-partition differential levels
 - ✅ **WAL 2.0** — Partitioned WAL with async fsync
 - ✅ **Query Plan Cache** — Two-tier (memory + disk) plan caching
 - ✅ **Parallel Query** — Rayon-based parallel filter, aggregate, projection
@@ -126,11 +131,16 @@ DBX provides official bindings for multiple languages:
 - ✅ **UDF Framework** — Scalar, Aggregate, and Table user-defined functions
 - ✅ **Triggers & Scheduler** — Event-driven triggers and cron-based job scheduling
 - ✅ **Feature Flags** — Runtime feature toggle with env/file persistence
+- ✅ **Partitioning** — Hash / Range / List + Auto-expand Range
+- ✅ **Partition Lifecycle** — Fully automated archive/delete scheduler (`enable_auto_archive`)
+- ✅ **Hot/Cold Tiering** — Per-partition `PartitionTierHint` (Hot / Warm / Cold)
+- ✅ **Replication** — Multi-Master Failover, Quorum election, Vector Clock
+- ✅ **QUIC Transport** — s2n-quic TLS 1.3 inter-node communication
+- ✅ **Cross-Node Sharding** — Consistent Hashing, weight-based vnodes, 2PC transactions
+- ✅ **DbConfig** — Runtime `DirtyBufferMode`, `ParallelismConfig`, `DurabilityLevel`
 
 ### Roadmap 🚧
 - **Materialized Views** — Pre-computed query results with automatic refresh
-- **Replication** — Primary-replica data synchronization
-- **Sharding** — Horizontal partitioning across multiple nodes
 - **Streaming Ingestion** — Real-time data pipeline support
 
 ---

@@ -4,6 +4,58 @@ This document follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) f
 
 ---
 
+## [0.1.1-beta] - 2026-03-19
+
+WAL sequential append, multi-core parallelization, Multi-Master Failover, cross-node sharding, distributed transactions, and Phase 3 partitioning synergy (auto-stats, differential compression, fully automatic lifecycle scheduler, Hot/Cold tiering).
+
+### New Features
+
+#### 📊 Partitioning Synergy (Phase 3)
+
+- **INSERT auto-increments `row_count`** — per-partition `PartitionStats.row_count` updated automatically on every insert
+- **`set_partition_compression`** — per-partition ZSTD level (1–9), independent of global compression
+- **`enable_auto_archive(table, lifecycle)`** — single call spawns a background `dbx-lifecycle-scheduler` thread (1-hour interval, CAS-guaranteed single instance)
+  - `archive_after_days` → ZSTD level 9 + Cold tier hint auto-applied
+  - `delete_after_days` → metadata auto-deleted
+- **`run_partition_lifecycle` / `run_all_partition_lifecycles`** — on-demand immediate execution
+- **`set_partition_tier` / `get_partition_tier` / `list_partitions_by_tier`** — Hot / Warm / Cold tiering API
+
+#### 📦 WAL / Parallelization
+
+- **WAL sequential append** — sequential `.wal` appends; `compact()` only on `wal_entries >= 5,000`
+- **`DirtyBufferMode`** — runtime-select `BTreeMap` (default) or `DashMap` for WOS dirty buffer
+- **`Database::open_with_config()`** — `DbConfig` constructor with `conservative()` / `aggressive()` presets
+- **Parallel improvements** — `par_iter()` for insert_batch, GROUP BY, JOIN, scan, compact, WAL encode
+
+#### 🔄 Multi-Master Failover
+
+- **Quorum-based leader election** — Raft-like `term` + majority vote; Split-Brain prevention via auto-demotion
+- **Vector Clock** — causality-based conflict detection replacing LWW
+
+#### 🗂️ Cross-Node Sharding
+
+- **Weight-based vnode distribution** — `ShardNode::weight` for non-uniform allocation
+- **Data rebalancing** — automatic key migration on node add/remove
+- **2PC distributed transactions** — Prepare → Commit/Abort atomicity across shards
+
+#### 🌐 QUIC Transport
+
+- **s2n-quic QuicTransport** — TLS 1.3, HoL-blocking-free multi-stream inter-process replication
+- **Runtime config** — `ReplicationConfig::in_memory()` / `ReplicationConfig::quic(...)` switch without code changes
+
+### Internal Changes
+
+- `Database` struct: 7 new fields for partition management (`partition_stats`, `partition_compression`, `partition_lifecycle`, `partition_tier_hints`, `partition_creation_times`, `lifecycle_stop_flag`, `lifecycle_running`)
+- `crud.rs` `insert()`: partition auto-stats/timestamp hook (zero overhead for non-partitioned tables)
+
+### Dependencies Added
+
+- `wide = "0.7"` — stable SIMD
+- `s2n-quic = "1"` — AWS QUIC
+- `tokio` — `net`, `io-util` features
+
+---
+
 ## [0.0.6-beta] - 2026-02-17
 
 ### Added
