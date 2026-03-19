@@ -141,6 +141,10 @@ pub struct Database {
     pub(crate) partition_tier_hints:
         Arc<DashMap<String, crate::storage::partition::PartitionTierHint>>,
 
+    /// 파티션 서브테이블 첫 쓰기 시각 ("table__partname" → UNIX timestamp secs)
+    /// INSERT 경로에서 자동 기록 → partition_needs_archive/delete의 기준으로 활용
+    pub(crate) partition_creation_times: Arc<DashMap<String, u64>>,
+
     /// Database Configuration (Parallelism, HTAP Sync)
     pub(crate) config: crate::engine::parallel_engine::DbConfig,
 

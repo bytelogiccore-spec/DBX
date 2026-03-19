@@ -657,6 +657,111 @@ impl Database {
         Ok(now.saturating_sub(partition_created_at) >= threshold_secs)
     }
 
+    /// 테이블의 파티션 수명 주기 정책을 실제로 실행합니다.
+    ///
+    /// `partition_creation_times`에 기록된 타임스탬프를 기반으로:
+    /// - 아카이브 시점이 된 파티션 → ZSTD 레벨 9 압축 자동 적용
+    /// - 삭제 시점이 된 파티션 → sub-table 드롭
+    ///
+    /// # Returns
+    /// `(archived_count, deleted_count)` — 처리된 파티션 수
+    ///
+    /// # Example
+    /// ```rust
+    /// use dbx_core::Database;
+    /// use dbx_core::storage::partition::PartitionLifecycle;
+    ///
+    /// # fn main() -> dbx_core::DbxResult<()> {
+    /// let db = Database::open_in_memory()?;
+    /// db.enable_auto_archive("logs", PartitionLifecycle {
+    ///     archive_after_days: 90,
+    ///     delete_after_days: 365,
+    /// })?;
+    /// let (archived, deleted) = db.run_partition_lifecycle("logs")?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn run_partition_lifecycle(&self, table: &str) -> DbxResult<(usize, usize)> {
+        let _lc = self.get_partition_lifecycle(table)?;
+        let prefix = format!("{}__", table);
+
+        let mut candidates: Vec<(String, u64)> = self
+            .partition_creation_times
+            .iter()
+            .filter(|r| r.key().starts_with(&prefix))
+            .map(|r| (r.key().clone(), *r.value()))
+            .collect();
+
+        // delete 우선: 삭제 대상은 archive도 하지 않음
+        candidates.sort_by_key(|(_, ts)| *ts); // 오래된 것 먼저
+
+        let mut archived = 0usize;
+        let mut deleted = 0usize;
+
+        for (sub_table, created_at) in candidates {
+            if self.partition_needs_delete(table, created_at)? {
+                // 실제 sub-table 드롭
+                let drop_sql = format!("DROP TABLE IF EXISTS \"{}\"", sub_table);
+                let _ = self.execute_sql(&drop_sql);
+                // 관련 메타데이터 정리
+                self.partition_stats.remove(&sub_table);
+                self.partition_compression.remove(&sub_table);
+                self.partition_tier_hints.remove(&sub_table);
+                self.partition_creation_times.remove(&sub_table);
+                deleted += 1;
+            } else if self.partition_needs_archive(table, created_at)? {
+                // ZSTD 레벨 9 고압축 자동 적용
+                // ⚠️ sub_table은 이미 "table__p_part_N" 형식이므로
+                //    set_partition_compression(table, sub_table) 사용 시 이중 prefix 발생.
+                //    DashMap에 직접 삽입하여 올바른 키("table__p_part_N")를 사용.
+                self.partition_compression.insert(
+                    sub_table.clone(),
+                    crate::storage::compression::CompressionConfig::zstd_level(9),
+                );
+                self.partition_tier_hints.insert(
+                    sub_table.clone(),
+                    crate::storage::partition::PartitionTierHint::Cold,
+                );
+                archived += 1;
+            }
+        }
+
+        Ok((archived, deleted))
+    }
+
+    /// 라이프사이클 정책이 있는 모든 테이블에 대해 일괄 실행합니다.
+    ///
+    /// # Returns
+    /// 전체 `(archived_count, deleted_count)`
+    pub fn run_all_partition_lifecycles(&self) -> DbxResult<(usize, usize)> {
+        let tables: Vec<String> = self
+            .partition_lifecycle
+            .iter()
+            .map(|r| r.key().clone())
+            .collect();
+
+        let mut total_archived = 0usize;
+        let mut total_deleted = 0usize;
+
+        for table in tables {
+            let (a, d) = self.run_partition_lifecycle(&table)?;
+            total_archived += a;
+            total_deleted += d;
+        }
+
+        Ok((total_archived, total_deleted))
+    }
+
+    /// 파티션의 생성 시각을 조회합니다 (INSERT 시 자동 기록).
+    pub fn get_partition_creation_time(
+        &self,
+        partition_name: &str,
+    ) -> Option<u64> {
+        self.partition_creation_times
+            .get(partition_name)
+            .map(|r| *r)
+    }
+
     // ════════════════════════════════════════════
     // Phase 3 Synergy: PartitionTierHint API
     // ════════════════════════════════════════════

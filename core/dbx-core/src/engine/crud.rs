@@ -144,6 +144,7 @@ impl Database {
         // ════════════════════════════════════════════
         // Phase 3: 파티셔닝 (Partition Routing with Auto-Expand)
         // ════════════════════════════════════════════
+        let original_table = table; // 파티션 자동 통계 비교용 원본 이름 보존
         let key_str = String::from_utf8_lossy(key).into_owned();
         let target_table = self.route_partition_or_expand(table, &key_str);
         let table = target_table.as_str();
@@ -209,6 +210,31 @@ impl Database {
                 // 비동기 배치는 백그라운드 스레드에서 주기적으로 수행됨.
                 // 여기서는 nothing.
             }
+        }
+
+        // ════════════════════════════════════════════
+        // Phase 3 Synergy: 파티셔닝 자동 통계 갱신
+        // ════════════════════════════════════════════
+        // 파티셔닝된 테이블이면 sub-table명이 original_table과 다름
+        if table != original_table {
+            // 1) row_count 자동 증가 (원자적)
+            self.partition_stats
+                .entry(table.to_string())
+                .and_modify(|s| s.row_count += 1)
+                .or_insert_with(|| crate::storage::partition::PartitionStats {
+                    row_count: 1,
+                    ..Default::default()
+                });
+
+            // 2) 첫 쓰기 시각 자동 기록 (이미 있으면 덮어쓰지 않음)
+            self.partition_creation_times
+                .entry(table.to_string())
+                .or_insert_with(|| {
+                    std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap()
+                        .as_secs()
+                });
         }
 
         self.metrics.inc_inserts();

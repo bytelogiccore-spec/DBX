@@ -143,6 +143,7 @@ impl Database {
             partition_compression: Arc::new(DashMap::new()),
             partition_lifecycle: Arc::new(DashMap::new()),
             partition_tier_hints: Arc::new(DashMap::new()),
+            partition_creation_times: Arc::new(DashMap::new()),
             config: DbConfig::default(),
             workload_analyzer: Arc::new(RwLock::new(
                 crate::engine::workload_analyzer::WorkloadAnalyzer::default_window(),
@@ -316,6 +317,7 @@ impl Database {
             partition_compression: Arc::new(DashMap::new()),
             partition_lifecycle: Arc::new(DashMap::new()),
             partition_tier_hints: Arc::new(DashMap::new()),
+            partition_creation_times: Arc::new(DashMap::new()),
             config: DbConfig::default(),
             workload_analyzer: Arc::new(RwLock::new(
                 crate::engine::workload_analyzer::WorkloadAnalyzer::default_window(),
@@ -418,6 +420,7 @@ impl Database {
             partition_compression: Arc::new(DashMap::new()),
             partition_lifecycle: Arc::new(DashMap::new()),
             partition_tier_hints: Arc::new(DashMap::new()),
+            partition_creation_times: Arc::new(DashMap::new()),
             config: DbConfig::default(),
             workload_analyzer: Arc::new(RwLock::new(
                 crate::engine::workload_analyzer::WorkloadAnalyzer::default_window(),
@@ -494,6 +497,7 @@ impl Database {
             partition_compression: Arc::new(DashMap::new()),
             partition_lifecycle: Arc::new(DashMap::new()),
             partition_tier_hints: Arc::new(DashMap::new()),
+            partition_creation_times: Arc::new(DashMap::new()),
             config: DbConfig::default(),
             workload_analyzer: Arc::new(RwLock::new(
                 crate::engine::workload_analyzer::WorkloadAnalyzer::default_window(),
@@ -606,6 +610,7 @@ impl Database {
             partition_compression: Arc::new(DashMap::new()),
             partition_lifecycle: Arc::new(DashMap::new()),
             partition_tier_hints: Arc::new(DashMap::new()),
+            partition_creation_times: Arc::new(DashMap::new()),
             config: DbConfig::default(),
             workload_analyzer: Arc::new(RwLock::new(
                 crate::engine::workload_analyzer::WorkloadAnalyzer::default_window(),
@@ -778,6 +783,7 @@ impl Database {
             partition_compression: Arc::new(DashMap::new()),
             partition_lifecycle: Arc::new(DashMap::new()),
             partition_tier_hints: Arc::new(DashMap::new()),
+            partition_creation_times: Arc::new(DashMap::new()),
             config: config.clone(),
             workload_analyzer: Arc::new(RwLock::new(
                 crate::engine::workload_analyzer::WorkloadAnalyzer::default_window(),
