@@ -43,7 +43,6 @@ pub enum TransportMode {
     },
 }
 
-
 /// 레플리케이션 전체 설정
 ///
 /// `DbConfig::replication` 필드로 전달합니다.

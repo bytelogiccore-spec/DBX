@@ -398,4 +398,3 @@ pub enum PartitionTierHint {
     /// 오래된 데이터 — ROS, 고압축 (Tier 5)에 배치
     Cold,
 }
-
