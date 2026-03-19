@@ -164,7 +164,6 @@ Please read our [Contributing Guide](./legal/english/CONTRIBUTING.md) for detail
 ## 🙏 Acknowledgments
 
 - [Apache Arrow](https://arrow.apache.org/) - Columnar data processing
-- [sled](https://github.com/spacejam/sled) - Embedded KV store (WOS backend)
 - [cudarc](https://github.com/coreylowman/cudarc) - Rust CUDA bindings
 
 ---
