@@ -145,6 +145,13 @@ pub struct Database {
     /// INSERT 경로에서 자동 기록 → partition_needs_archive/delete의 기준으로 활용
     pub(crate) partition_creation_times: Arc<DashMap<String, u64>>,
 
+    /// Lifecycle 자동 스케줄러 중단 플래그
+    /// `true`로 설정되면 백그라운드 스레드가 자동 종료 (Database Drop 시 자동 처리)
+    pub(crate) lifecycle_stop_flag: Arc<std::sync::atomic::AtomicBool>,
+
+    /// Lifecycle 스케줄러 기동 여부 (중복 spawn 방지)
+    pub(crate) lifecycle_running: Arc<std::sync::atomic::AtomicBool>,
+
     /// Database Configuration (Parallelism, HTAP Sync)
     pub(crate) config: crate::engine::parallel_engine::DbConfig,
 

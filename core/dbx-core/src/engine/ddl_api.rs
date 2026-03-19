@@ -606,6 +606,96 @@ impl Database {
     ) -> DbxResult<()> {
         self.partition_lifecycle
             .insert(table.to_string(), lifecycle);
+
+        // ── 완전 자동화: 백그라운드 Lifecycle 스케줄러 구동 ──────────────
+        // compare_exchange: false→true 성공 시만 스레드 기동 (중복 방지)
+        use std::sync::atomic::Ordering;
+        if self.lifecycle_stop_flag.load(Ordering::Relaxed) {
+            // 이전에 stop된 경우 플래그 리셋
+            self.lifecycle_stop_flag.store(false, Ordering::SeqCst);
+        }
+
+        if self
+            .lifecycle_running
+            .compare_exchange(false, true, Ordering::SeqCst, Ordering::Relaxed)
+            .is_ok()
+        {
+            let stop = Arc::clone(&self.lifecycle_stop_flag);
+            let running = Arc::clone(&self.lifecycle_running);
+            let lifecycle_map = Arc::clone(&self.partition_lifecycle);
+            let creation_times = Arc::clone(&self.partition_creation_times);
+            let compression_map = Arc::clone(&self.partition_compression);
+            let tier_map = Arc::clone(&self.partition_tier_hints);
+            let stats_map = Arc::clone(&self.partition_stats);
+
+            std::thread::Builder::new()
+                .name("dbx-lifecycle-scheduler".into())
+                .spawn(move || {
+                    use std::sync::atomic::Ordering;
+                    let interval = std::time::Duration::from_secs(3600); // 1시간마다
+                    loop {
+                        std::thread::sleep(interval);
+                        if stop.load(Ordering::Relaxed) {
+                            running.store(false, Ordering::SeqCst);
+                            break;
+                        }
+                        let now = std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .unwrap()
+                            .as_secs();
+
+                        let tables: Vec<String> = lifecycle_map
+                            .iter()
+                            .map(|r| r.key().clone())
+                            .collect();
+
+                        for table in tables {
+                            if stop.load(Ordering::Relaxed) {
+                                break;
+                            }
+                            let lc = match lifecycle_map.get(&table) {
+                                Some(l) => l.clone(),
+                                None => continue,
+                            };
+                            let prefix = format!("{}__", table);
+                            let candidates: Vec<(String, u64)> = creation_times
+                                .iter()
+                                .filter(|r| r.key().starts_with(&prefix))
+                                .map(|r| (r.key().clone(), *r.value()))
+                                .collect();
+
+                            for (sub_table, created_at) in candidates {
+                                let age_secs = now.saturating_sub(created_at);
+                                let delete_threshold =
+                                    lc.delete_after_days as u64 * 86400;
+                                let archive_threshold =
+                                    lc.archive_after_days as u64 * 86400;
+
+                                if age_secs >= delete_threshold {
+                                    stats_map.remove(&sub_table);
+                                    compression_map.remove(&sub_table);
+                                    tier_map.remove(&sub_table);
+                                    creation_times.remove(&sub_table);
+                                } else if age_secs >= archive_threshold {
+                                    compression_map.insert(
+                                        sub_table.clone(),
+                                        crate::storage::compression::CompressionConfig::zstd_level(9),
+                                    );
+                                    tier_map.insert(
+                                        sub_table.clone(),
+                                        crate::storage::partition::PartitionTierHint::Cold,
+                                    );
+                                }
+                            }
+                        }
+                    }
+                })
+                .map_err(|e| crate::error::DbxError::InvalidOperation {
+                    message: format!("Failed to spawn lifecycle scheduler: {}", e),
+                    context: "enable_auto_archive".to_string(),
+                })?;
+        } // end if CAS
+
         Ok(())
     }
 

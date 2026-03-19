@@ -144,6 +144,8 @@ impl Database {
             partition_lifecycle: Arc::new(DashMap::new()),
             partition_tier_hints: Arc::new(DashMap::new()),
             partition_creation_times: Arc::new(DashMap::new()),
+            lifecycle_stop_flag: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            lifecycle_running: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             config: DbConfig::default(),
             workload_analyzer: Arc::new(RwLock::new(
                 crate::engine::workload_analyzer::WorkloadAnalyzer::default_window(),
@@ -318,6 +320,8 @@ impl Database {
             partition_lifecycle: Arc::new(DashMap::new()),
             partition_tier_hints: Arc::new(DashMap::new()),
             partition_creation_times: Arc::new(DashMap::new()),
+            lifecycle_stop_flag: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            lifecycle_running: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             config: DbConfig::default(),
             workload_analyzer: Arc::new(RwLock::new(
                 crate::engine::workload_analyzer::WorkloadAnalyzer::default_window(),
@@ -421,6 +425,8 @@ impl Database {
             partition_lifecycle: Arc::new(DashMap::new()),
             partition_tier_hints: Arc::new(DashMap::new()),
             partition_creation_times: Arc::new(DashMap::new()),
+            lifecycle_stop_flag: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            lifecycle_running: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             config: DbConfig::default(),
             workload_analyzer: Arc::new(RwLock::new(
                 crate::engine::workload_analyzer::WorkloadAnalyzer::default_window(),
@@ -498,6 +504,8 @@ impl Database {
             partition_lifecycle: Arc::new(DashMap::new()),
             partition_tier_hints: Arc::new(DashMap::new()),
             partition_creation_times: Arc::new(DashMap::new()),
+            lifecycle_stop_flag: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            lifecycle_running: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             config: DbConfig::default(),
             workload_analyzer: Arc::new(RwLock::new(
                 crate::engine::workload_analyzer::WorkloadAnalyzer::default_window(),
@@ -611,6 +619,8 @@ impl Database {
             partition_lifecycle: Arc::new(DashMap::new()),
             partition_tier_hints: Arc::new(DashMap::new()),
             partition_creation_times: Arc::new(DashMap::new()),
+            lifecycle_stop_flag: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            lifecycle_running: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             config: DbConfig::default(),
             workload_analyzer: Arc::new(RwLock::new(
                 crate::engine::workload_analyzer::WorkloadAnalyzer::default_window(),
@@ -784,6 +794,8 @@ impl Database {
             partition_lifecycle: Arc::new(DashMap::new()),
             partition_tier_hints: Arc::new(DashMap::new()),
             partition_creation_times: Arc::new(DashMap::new()),
+            lifecycle_stop_flag: Arc::new(std::sync::atomic::AtomicBool::new(false)),
+            lifecycle_running: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             config: config.clone(),
             workload_analyzer: Arc::new(RwLock::new(
                 crate::engine::workload_analyzer::WorkloadAnalyzer::default_window(),
