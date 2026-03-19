@@ -192,16 +192,23 @@ pub mod quic {
     //! s2n-quic 기반 실제 네트워크 Transport 구현
     //!
     //! ## 사용법
-    //! ```rust,no_run
+    //! ```rust,ignore
     //! use dbx_core::replication::transport::quic::QuicNode;
+    //! use std::path::Path;
     //!
     //! // 서버 (수신 노드)
-    //! let server = QuicNode::server("0.0.0.0:7878").await?;
-    //! tokio::spawn(async move { server.run_recv_loop(tx).await; });
+    //! let (server, handle) = QuicNode::server(
+    //!     "0.0.0.0:7878",
+    //!     Path::new("/etc/dbx/cert.pem"),
+    //!     Path::new("/etc/dbx/key.pem"),
+    //! ).await?;
+    //! tokio::spawn(handle);
     //!
     //! // 클라이언트 (발신 노드)
-    //! let client = QuicNode::client("상대노드IP:7878").await?;
-    //! client.send_msg(message).await?;
+    //! let (client, _handle) = QuicNode::client(
+    //!     "10.0.0.2:7878",
+    //!     Path::new("/etc/dbx/ca.pem"),
+    //! ).await?;
     //! ```
 
     use s2n_quic::provider::tls;

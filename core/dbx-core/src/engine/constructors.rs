@@ -714,7 +714,7 @@ impl Database {
     ///     Path::new("./data"),
     ///     DbConfig {
     ///         parallelism: ParallelismConfig::conservative(), // CPU 50%만 사용
-    ///         sync: Default::default(),
+    ///         ..Default::default()
     ///     },
     /// ).unwrap();
     /// ```
