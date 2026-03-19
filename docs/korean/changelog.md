@@ -14,58 +14,32 @@ DBX의 주요 변경사항을 기록합니다.
 
 ---
 
-## [0.1.2-beta] - 2026-03-19
+## [0.1.1-beta] - 2026-03-19
 
-파티셔닝 시너지 Phase 3 완전 구현 — 자동 통계 갱신, 차등 압축, 자동 아카이빙 스케줄러, Hot/Cold 분리.
+WAL 구현, 멀티코어 병렬화, Multi-Master Failover, 크로스-노드 샤딩 고도화, 분산 트랜잭션, 파티셔닝 시너지 Phase 3 완전 구현.
 
 ### 새로운 기능
 
-#### 📊 PartitionStats — 파티션별 통계 자동 갱신
+#### 📊 파티셔닝 시너지 (Phase 3)
 
-- **INSERT 시 row_count 자동 증가** — 파티셔닝된 테이블에 INSERT 할 때마다 해당 sub-table의 `row_count`가 자동으로 +1. `update_partition_stats()` 수동 호출 불필요
+- **INSERT 시 row_count 자동 증가** — 파티셔닝된 테이블 INSERT 시 해당 파티션 `row_count` 자동 +1. 수동 호출 불필요
 - **`update_partition_stats(table, partition, stats)`** — 쿼리 옵티마이저용 정밀 통계 수동 설정 (min/max/null/distinct)
-- **`get_partition_stats(table, partition)`** — 단일 파티션 통계 조회
-- **`all_partition_stats(table)`** — 테이블 전체 파티션 통계 HashMap 반환
-
-#### 🗜️ 파티션별 차등 압축
-
-- **`set_partition_compression(table, partition, config)`** — 파티션별 독립 압축 설정. ZSTD 레벨 1(빠름)~9(고압축) 지원
-- **`get_partition_compression(table, partition)`** — 현재 설정 조회 (미설정 시 기본값 Snappy)
-
-#### 🤖 PartitionLifecycle — 완전 자동 아카이빙 스케줄러
-
+- **`get_partition_stats` / `all_partition_stats`** — 파티션 통계 조회
+- **`set_partition_compression(table, partition, config)`** — 파티션별 독립 압축 레벨 설정 (ZSTD 1~9)
+- **`get_partition_compression`** — 현재 설정 조회 (미설정 시 기본값 Snappy)
 - **`enable_auto_archive(table, lifecycle)`** — 단 한 번 호출로 완전 자동화 활성화
-  - 호출 즉시 `dbx-lifecycle-scheduler` 백그라운드 스레드 자동 기동
-  - 1시간 주기로 모든 등록 테이블 순회 처리
+  - 호출 즉시 `dbx-lifecycle-scheduler` 백그라운드 스레드 자동 기동 (1시간 주기)
   - 여러 테이블 등록해도 스레드 1개만 유지 (CAS `compare_exchange` 보장)
   - `archive_after_days` 경과 → ZSTD 레벨 9 + Cold 티어 자동 적용
   - `delete_after_days` 경과 → 파티션 메타데이터 자동 삭제
 - **`run_partition_lifecycle(table)`** — 온디맨드 즉시 실행, `(archived, deleted)` 반환
 - **`run_all_partition_lifecycles()`** — 모든 등록 테이블 일괄 즉시 처리
-- **`get_partition_creation_time(partition)`** — INSERT 발생 시 자동 기록된 최초 쓰기 시각 조회
-- **`partition_needs_archive(table, ts)`** / **`partition_needs_delete(table, ts)`** — 수동 조건 확인
-
-#### 🌡️ PartitionTierHint — Hot/Cold 데이터 분리
-
+- **`get_partition_creation_time(partition)`** — INSERT 시 자동 기록된 최초 쓰기 시각 조회
+- **`partition_needs_archive` / `partition_needs_delete`** — 수동 조건 확인
 - **`set_partition_tier(table, partition, hint)`** — `Hot` / `Warm` / `Cold` 티어 힌트 설정
-- **`get_partition_tier(table, partition)`** — 현재 티어 조회 (미설정 시 기본값 `Hot`)
+- **`get_partition_tier`** — 현재 티어 조회 (미설정 시 기본값 `Hot`)
 - **`list_partitions_by_tier(table, hint)`** — 특정 티어의 파티션 목록 반환
 
-### 내부 변경
-
-- `Database` 구조체에 `partition_stats`, `partition_compression`, `partition_lifecycle`, `partition_tier_hints`, `partition_creation_times`, `lifecycle_stop_flag`, `lifecycle_running` 필드 추가
-- `crud.rs` `insert()` 경로에 파티션 자동 통계·타임스탬프 훅 추가 (비파티션 테이블 무비용)
-
-### 테스트
-
-신규 통합 테스트 23건 추가 (모두 통과). 기존 회귀: 통합 78건, 유닛 509건 이상 없음.
-
----
-
-## [0.1.1-beta] - 2026-03-19
-
-
-WAL 구현, 멀티코어 병렬화, Multi-Master Failover, 크로스-노드 샤딩 고도화, 분산 트랜잭션 릴리스.
 
 ### 새로운 기능
 
