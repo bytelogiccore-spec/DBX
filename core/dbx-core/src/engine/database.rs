@@ -126,8 +126,7 @@ pub struct Database {
         Arc<RwLock<std::collections::HashMap<String, crate::storage::partition::PartitionMap>>>,
 
     /// 파티션별 통계 정보 ("table__partname" → PartitionStats)
-    pub(crate) partition_stats:
-        Arc<DashMap<String, crate::storage::partition::PartitionStats>>,
+    pub(crate) partition_stats: Arc<DashMap<String, crate::storage::partition::PartitionStats>>,
 
     /// 파티션별 압축 설정 ("table__partname" → CompressionConfig)
     pub(crate) partition_compression:

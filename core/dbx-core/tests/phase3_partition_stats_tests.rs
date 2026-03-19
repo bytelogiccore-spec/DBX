@@ -101,13 +101,19 @@ fn test_partition_stats_update_overwrites() -> DbxResult<()> {
     db.update_partition_stats(
         "data",
         "data__p_part_0",
-        PartitionStats { row_count: 100, ..Default::default() },
+        PartitionStats {
+            row_count: 100,
+            ..Default::default()
+        },
     )?;
     // 덮어쓰기
     db.update_partition_stats(
         "data",
         "data__p_part_0",
-        PartitionStats { row_count: 200, ..Default::default() },
+        PartitionStats {
+            row_count: 200,
+            ..Default::default()
+        },
     )?;
 
     let stats = db.get_partition_stats("data", "data__p_part_0")?;

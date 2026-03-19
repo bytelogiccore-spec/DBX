@@ -525,7 +525,8 @@ impl Database {
     pub fn all_partition_stats(
         &self,
         table: &str,
-    ) -> DbxResult<std::collections::HashMap<String, crate::storage::partition::PartitionStats>> {
+    ) -> DbxResult<std::collections::HashMap<String, crate::storage::partition::PartitionStats>>
+    {
         let prefix = format!("{}__", table);
         let result = self
             .partition_stats
@@ -644,10 +645,8 @@ impl Database {
                             .unwrap()
                             .as_secs();
 
-                        let tables: Vec<String> = lifecycle_map
-                            .iter()
-                            .map(|r| r.key().clone())
-                            .collect();
+                        let tables: Vec<String> =
+                            lifecycle_map.iter().map(|r| r.key().clone()).collect();
 
                         for table in tables {
                             if stop.load(Ordering::Relaxed) {
@@ -666,10 +665,8 @@ impl Database {
 
                             for (sub_table, created_at) in candidates {
                                 let age_secs = now.saturating_sub(created_at);
-                                let delete_threshold =
-                                    lc.delete_after_days as u64 * 86400;
-                                let archive_threshold =
-                                    lc.archive_after_days as u64 * 86400;
+                                let delete_threshold = lc.delete_after_days as u64 * 86400;
+                                let archive_threshold = lc.archive_after_days as u64 * 86400;
 
                                 if age_secs >= delete_threshold {
                                     stats_map.remove(&sub_table);
@@ -679,7 +676,9 @@ impl Database {
                                 } else if age_secs >= archive_threshold {
                                     compression_map.insert(
                                         sub_table.clone(),
-                                        crate::storage::compression::CompressionConfig::zstd_level(9),
+                                        crate::storage::compression::CompressionConfig::zstd_level(
+                                            9,
+                                        ),
                                     );
                                     tier_map.insert(
                                         sub_table.clone(),
@@ -843,10 +842,7 @@ impl Database {
     }
 
     /// 파티션의 생성 시각을 조회합니다 (INSERT 시 자동 기록).
-    pub fn get_partition_creation_time(
-        &self,
-        partition_name: &str,
-    ) -> Option<u64> {
+    pub fn get_partition_creation_time(&self, partition_name: &str) -> Option<u64> {
         self.partition_creation_times
             .get(partition_name)
             .map(|r| *r)

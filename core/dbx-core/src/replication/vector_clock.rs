@@ -36,7 +36,9 @@ pub struct VectorClock {
 impl VectorClock {
     /// 새 빈 벡터 클록 생성
     pub fn new() -> Self {
-        Self { clocks: HashMap::new() }
+        Self {
+            clocks: HashMap::new(),
+        }
     }
 
     /// 특정 노드의 논리 클록 값 조회
@@ -73,7 +75,9 @@ impl VectorClock {
         let mut other_gt = false; // other가 더 큰 항목 존재?
 
         // 양쪽 노드 집합 합집합
-        let all_nodes: std::collections::HashSet<u32> = self.clocks.keys()
+        let all_nodes: std::collections::HashSet<u32> = self
+            .clocks
+            .keys()
             .chain(other.clocks.keys())
             .copied()
             .collect();
@@ -81,15 +85,19 @@ impl VectorClock {
         for node in all_nodes {
             let lhs = self.get(node);
             let rhs = other.get(node);
-            if lhs > rhs { self_gt = true; }
-            if rhs > lhs { other_gt = true; }
+            if lhs > rhs {
+                self_gt = true;
+            }
+            if rhs > lhs {
+                other_gt = true;
+            }
         }
 
         match (self_gt, other_gt) {
             (false, false) => VectorClockOrder::Equal,
-            (true, false)  => VectorClockOrder::HappensAfter,
-            (false, true)  => VectorClockOrder::HappensBefore,
-            (true, true)   => VectorClockOrder::Concurrent,
+            (true, false) => VectorClockOrder::HappensAfter,
+            (false, true) => VectorClockOrder::HappensBefore,
+            (true, true) => VectorClockOrder::Concurrent,
         }
     }
 
@@ -145,7 +153,8 @@ mod tests {
     #[test]
     fn test_merge() {
         let mut a = VectorClock::new();
-        a.tick(1); a.tick(1); // [1:2]
+        a.tick(1);
+        a.tick(1); // [1:2]
         let mut b = VectorClock::new();
         b.tick(2); // [2:1]
         b.merge(&a);
@@ -158,7 +167,8 @@ mod tests {
     fn test_equal_clocks() {
         let mut a = VectorClock::new();
         let mut b = VectorClock::new();
-        a.tick(1); b.tick(1);
+        a.tick(1);
+        b.tick(1);
         assert_eq!(a.compare(&b), VectorClockOrder::Equal);
     }
 }

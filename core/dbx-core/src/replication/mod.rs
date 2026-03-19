@@ -11,14 +11,14 @@
 //! TCP 구현 전에 `tokio::sync::broadcast` 인메모리 채널로 먼저 테스트합니다.
 
 pub mod master;
+pub mod node;
 pub mod protocol;
 pub mod slave;
-pub mod node;
-pub mod vector_clock;
 pub mod transport;
+pub mod vector_clock;
 
 pub use master::ReplicationMaster;
+pub use node::{NodeError, NodeRole, ReplicationNode};
 pub use protocol::ReplicationMessage;
 pub use slave::ReplicationSlave;
-pub use node::{ReplicationNode, NodeRole, NodeError};
 pub use vector_clock::{VectorClock, VectorClockOrder};

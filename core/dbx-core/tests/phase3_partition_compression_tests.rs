@@ -62,11 +62,7 @@ fn test_partition_compression_lz4() -> DbxResult<()> {
     let db = Database::open_in_memory()?;
     db.execute_sql("CREATE TABLE stream (id INT)")?;
 
-    db.set_partition_compression(
-        "stream",
-        "stream__p_part_0",
-        CompressionConfig::lz4(),
-    )?;
+    db.set_partition_compression("stream", "stream__p_part_0", CompressionConfig::lz4())?;
 
     let config = db.get_partition_compression("stream", "stream__p_part_0")?;
     assert_eq!(config.algorithm(), CompressionAlgorithm::Lz4);

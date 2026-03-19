@@ -86,9 +86,17 @@ fn test_tier_hint_overwrite() -> DbxResult<()> {
     let db = Database::open_in_memory()?;
     db.execute_sql("CREATE TABLE archive_table (id INT)")?;
 
-    db.set_partition_tier("archive_table", "archive_table__p_part_0", PartitionTierHint::Hot)?;
+    db.set_partition_tier(
+        "archive_table",
+        "archive_table__p_part_0",
+        PartitionTierHint::Hot,
+    )?;
     // Hot → Cold로 변경
-    db.set_partition_tier("archive_table", "archive_table__p_part_0", PartitionTierHint::Cold)?;
+    db.set_partition_tier(
+        "archive_table",
+        "archive_table__p_part_0",
+        PartitionTierHint::Cold,
+    )?;
 
     let tier = db.get_partition_tier("archive_table", "archive_table__p_part_0")?;
     assert_eq!(tier, PartitionTierHint::Cold, "Cold로 업데이트되어야 함");

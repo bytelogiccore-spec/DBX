@@ -22,9 +22,9 @@ use super::page::{PageEntry, WosPage};
 use super::wal::{WalRecord, replay_wal};
 use crate::engine::DirtyBufferMode;
 use crate::error::{DbxError, DbxResult};
+use dashmap::DashMap;
 #[allow(unused_imports)]
 use rayon::prelude::ParallelIterator;
-use dashmap::DashMap;
 use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::fs::{File, OpenOptions};
 use std::io::{BufReader, Read, Seek, SeekFrom, Write};
@@ -83,9 +83,10 @@ impl PageCache {
                 self.order.remove(pos);
             }
         } else if self.map.len() >= self.capacity
-            && let Some(lru) = self.order.pop_back() {
-                self.map.remove(&lru);
-            }
+            && let Some(lru) = self.order.pop_back()
+        {
+            self.map.remove(&lru);
+        }
         self.map.insert(page_idx, entries);
         self.order.push_front(page_idx);
     }
@@ -152,8 +153,12 @@ impl DirtyBuffer {
 
     fn insert_entry(&mut self, key: Vec<u8>, state: DirtyState) {
         match self {
-            Self::Btree(m) => { m.insert(key, state); }
-            Self::Dash(m) => { m.insert(key, state); }
+            Self::Btree(m) => {
+                m.insert(key, state);
+            }
+            Self::Dash(m) => {
+                m.insert(key, state);
+            }
         }
     }
 
@@ -171,10 +176,13 @@ impl DirtyBuffer {
             Self::Dash(m) => {
                 let mut out = BTreeMap::new();
                 for r in m.iter() {
-                    out.insert(r.key().clone(), match r.value() {
-                        DirtyState::Put(v) => DirtyState::Put(v.clone()),
-                        DirtyState::Delete => DirtyState::Delete,
-                    });
+                    out.insert(
+                        r.key().clone(),
+                        match r.value() {
+                            DirtyState::Put(v) => DirtyState::Put(v.clone()),
+                            DirtyState::Delete => DirtyState::Delete,
+                        },
+                    );
                 }
                 m.clear();
                 out
@@ -191,10 +199,15 @@ impl DirtyBuffer {
                 let mut items: Vec<(Vec<u8>, DirtyState)> = m
                     .iter()
                     .filter(|r| range.contains(r.key()))
-                    .map(|r| (r.key().clone(), match r.value() {
-                        DirtyState::Put(v) => DirtyState::Put(v.clone()),
-                        DirtyState::Delete => DirtyState::Delete,
-                    }))
+                    .map(|r| {
+                        (
+                            r.key().clone(),
+                            match r.value() {
+                                DirtyState::Put(v) => DirtyState::Put(v.clone()),
+                                DirtyState::Delete => DirtyState::Delete,
+                            },
+                        )
+                    })
                     .collect();
                 items.sort_by(|a, b| a.0.cmp(&b.0));
                 // 임시 소유 벡터를 반환할 수 없으므로 Btree로 복사 후 range
@@ -206,7 +219,10 @@ impl DirtyBuffer {
     }
 
     /// 범위 내 항목을 소유값으로 반환 (정렬됨). DashMap / BTreeMap 모두 지원.
-    fn owned_range_vec<R: RangeBounds<Vec<u8>>>(&self, range: R) -> Vec<(Vec<u8>, DirtyStateOwned)> {
+    fn owned_range_vec<R: RangeBounds<Vec<u8>>>(
+        &self,
+        range: R,
+    ) -> Vec<(Vec<u8>, DirtyStateOwned)> {
         match self {
             Self::Btree(m) => m
                 .range(range)
@@ -618,7 +634,8 @@ impl TableStore {
     // ──────────────────────────────────────────
 
     pub fn insert(&mut self, key: &[u8], value: &[u8]) -> DbxResult<()> {
-        self.dirty.insert_entry(key.to_vec(), DirtyState::Put(value.to_vec()));
+        self.dirty
+            .insert_entry(key.to_vec(), DirtyState::Put(value.to_vec()));
         Ok(())
     }
 
@@ -732,16 +749,24 @@ impl TableStore {
                 continue;
             }
             match state {
-                DirtyState::Put(v) => { merged.insert(k.clone(), v.clone()); }
-                DirtyState::Delete => { merged.remove(k); }
+                DirtyState::Put(v) => {
+                    merged.insert(k.clone(), v.clone());
+                }
+                DirtyState::Delete => {
+                    merged.remove(k);
+                }
             }
         }
 
         // dirty overlay
         for (k, state) in self.dirty.owned_range_vec(range) {
             match state {
-                DirtyStateOwned::Put(v) => { merged.insert(k, v); }
-                DirtyStateOwned::Delete => { merged.remove(&k); }
+                DirtyStateOwned::Put(v) => {
+                    merged.insert(k, v);
+                }
+                DirtyStateOwned::Delete => {
+                    merged.remove(&k);
+                }
             }
         }
 
@@ -783,7 +808,12 @@ impl TableStore {
                         DirtyStateOwned::Put(v) => (v.as_slice(), false),
                         DirtyStateOwned::Delete => (b"".as_ref(), true),
                     };
-                    WalRecord { key: k.to_vec(), value: val.to_vec(), deleted }.encode()
+                    WalRecord {
+                        key: k.to_vec(),
+                        value: val.to_vec(),
+                        deleted,
+                    }
+                    .encode()
                 })
                 .collect()
         } else {
@@ -794,7 +824,12 @@ impl TableStore {
                         DirtyStateOwned::Put(v) => (v.as_slice(), false),
                         DirtyStateOwned::Delete => (b"".as_ref(), true),
                     };
-                    WalRecord { key: k.to_vec(), value: val.to_vec(), deleted }.encode()
+                    WalRecord {
+                        key: k.to_vec(),
+                        value: val.to_vec(),
+                        deleted,
+                    }
+                    .encode()
                 })
                 .collect()
         };

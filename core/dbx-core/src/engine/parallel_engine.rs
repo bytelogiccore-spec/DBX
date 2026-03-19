@@ -275,8 +275,8 @@ impl Default for ParallelExecutionEngine {
     }
 }
 
-use crate::storage::realtime_sync::RealtimeSyncConfig;
 use crate::replication::transport::ReplicationConfig;
+use crate::storage::realtime_sync::RealtimeSyncConfig;
 
 /// WOS `dirty` 버퍼에 사용할 자료구조 선택.
 ///

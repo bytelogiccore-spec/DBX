@@ -54,7 +54,7 @@ impl Callable for VectorizedUDF {
                 Some(len) => {
                     if len != arr.len() {
                         return Err(DbxError::InvalidArguments(
-                            "Vectorized UDF arguments must have the same array length".to_string()
+                            "Vectorized UDF arguments must have the same array length".to_string(),
                         ));
                     }
                 }
@@ -77,7 +77,7 @@ impl Callable for VectorizedUDF {
             let res_arr = result.as_array()?;
             if res_arr.len() != expected {
                 return Err(DbxError::InvalidArguments(
-                    "Vectorized UDF result array length must match input array lengths".to_string()
+                    "Vectorized UDF result array length must match input array lengths".to_string(),
                 ));
             }
         }
@@ -124,7 +124,7 @@ mod tests {
         );
 
         let ctx = ExecutionContext::new(Arc::new(Database::open_in_memory().unwrap()));
-        
+
         let input_vals = vec![Value::Int(10), Value::Int(20), Value::Int(30)];
         let result = udf.call(&ctx, &[Value::Array(input_vals)]).unwrap();
 
@@ -148,7 +148,7 @@ mod tests {
             |args| {
                 let x_arr = args[0].as_array()?;
                 let y_arr = args[1].as_array()?;
-                
+
                 let mut result = Vec::with_capacity(x_arr.len());
                 for i in 0..x_arr.len() {
                     let x = x_arr[i].as_i64()?;
@@ -160,11 +160,13 @@ mod tests {
         );
 
         let ctx = ExecutionContext::new(Arc::new(Database::open_in_memory().unwrap()));
-        
+
         let x_vals = vec![Value::Int(1), Value::Int(2), Value::Int(3)];
         let y_vals = vec![Value::Int(10), Value::Int(20), Value::Int(30)];
-        
-        let result = udf.call(&ctx, &[Value::Array(x_vals), Value::Array(y_vals)]).unwrap();
+
+        let result = udf
+            .call(&ctx, &[Value::Array(x_vals), Value::Array(y_vals)])
+            .unwrap();
 
         let out_arr = result.as_array().unwrap();
         assert_eq!(out_arr.len(), 3);
@@ -183,16 +185,16 @@ mod tests {
                 return_type: DataType::Array,
                 is_variadic: false,
             },
-            | _args | {
+            |_args| {
                 Ok(Value::Array(vec![])) // 실제 실행 전 프레임워크 레벨에서 걸러져야 함 
             },
         );
 
         let ctx = ExecutionContext::new(Arc::new(Database::open_in_memory().unwrap()));
-        
+
         let x_vals = vec![Value::Int(1), Value::Int(2)];
         let y_vals = vec![Value::Int(10), Value::Int(20), Value::Int(30)];
-        
+
         // 길이가 다르므로 InvalidArguments 에러가 나야 함
         let result = udf.call(&ctx, &[Value::Array(x_vals), Value::Array(y_vals)]);
         assert!(result.is_err());
@@ -227,11 +229,13 @@ mod tests {
         engine.register(udf).unwrap();
 
         let ctx = ExecutionContext::new(Arc::new(Database::open_in_memory().unwrap()));
-        let result = engine.execute(
-            "vec_triple", 
-            &ctx, 
-            &[Value::Array(vec![Value::Int(5), Value::Int(10)])]
-        ).unwrap();
+        let result = engine
+            .execute(
+                "vec_triple",
+                &ctx,
+                &[Value::Array(vec![Value::Int(5), Value::Int(10)])],
+            )
+            .unwrap();
 
         let out_arr = result.as_array().unwrap();
         assert_eq!(out_arr[0].as_i64().unwrap(), 15);

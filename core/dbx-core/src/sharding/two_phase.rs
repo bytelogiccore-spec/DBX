@@ -86,7 +86,11 @@ impl TwoPhaseCoordinator {
     {
         let results = match self.pending.get(&txn_id) {
             Some(r) => r,
-            None => return CommitOutcome::Aborted { reason: "Unknown txn_id".to_string() },
+            None => {
+                return CommitOutcome::Aborted {
+                    reason: "Unknown txn_id".to_string(),
+                };
+            }
         };
 
         // 모든 노드가 Ready인지 확인
@@ -134,12 +138,18 @@ mod tests {
         let outcome = coord.commit_or_abort(
             txn,
             &nodes,
-            move |node_id, _| { c.lock().unwrap().insert(node_id); },
+            move |node_id, _| {
+                c.lock().unwrap().insert(node_id);
+            },
             |_, _| {},
         );
 
         assert_eq!(outcome, CommitOutcome::Committed);
-        assert_eq!(committed.lock().unwrap().len(), 3, "모든 노드가 커밋되어야 함");
+        assert_eq!(
+            committed.lock().unwrap().len(),
+            3,
+            "모든 노드가 커밋되어야 함"
+        );
     }
 
     #[test]
@@ -163,13 +173,19 @@ mod tests {
             txn,
             &nodes,
             |_, _| panic!("커밋되어서는 안 됨"),
-            move |node_id, _| { ab.lock().unwrap().insert(node_id); },
+            move |node_id, _| {
+                ab.lock().unwrap().insert(node_id);
+            },
         );
 
         match outcome {
             CommitOutcome::Aborted { reason } => assert_eq!(reason, "disk full"),
             _ => panic!("ABORT 결과 예상"),
         }
-        assert_eq!(aborted.lock().unwrap().len(), 3, "모든 노드가 롤백되어야 함");
+        assert_eq!(
+            aborted.lock().unwrap().len(),
+            3,
+            "모든 노드가 롤백되어야 함"
+        );
     }
 }

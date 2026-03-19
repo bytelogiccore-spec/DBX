@@ -1,7 +1,7 @@
 //! 일관된 해싱(Consistent Hashing)을 구현하는 Hash Ring (vnode 지원)
 
+use crate::sharding::router::{ShardNode, fnv1a_hash};
 use std::collections::BTreeMap;
-use crate::sharding::router::{fnv1a_hash, ShardNode};
 
 /// Consistent Hashing 구조를 담당하는 노드 링
 #[derive(Debug, Default)]
@@ -78,9 +78,21 @@ mod tests {
     #[test]
     fn test_node_ring_distribution() {
         let mut ring = NodeRing::new(300); // 노드당 300개 vnode
-        let n1 = ShardNode { id: 0, address: "1".into(), weight: 1.0 };
-        let n2 = ShardNode { id: 1, address: "2".into(), weight: 1.0 };
-        let n3 = ShardNode { id: 2, address: "3".into(), weight: 1.0 };
+        let n1 = ShardNode {
+            id: 0,
+            address: "1".into(),
+            weight: 1.0,
+        };
+        let n2 = ShardNode {
+            id: 1,
+            address: "2".into(),
+            weight: 1.0,
+        };
+        let n3 = ShardNode {
+            id: 2,
+            address: "3".into(),
+            weight: 1.0,
+        };
 
         ring.add_node(&n1);
         ring.add_node(&n2);
@@ -100,13 +112,16 @@ mod tests {
         // 각 노드가 최소 10%의 키는 가져가는지(비정상 쏠림 방지)를 MVP 기준으로 검증
         let expected = total_keys as f64 / 3.0;
         let diff = expected * 0.7; // 70% 오차 허용 (매우 느슨하게: 최소 10% 보장)
-        
+
         for i in 0..3 {
             let count = counts[i] as f64;
             assert!(
                 (count - expected).abs() <= diff,
                 "Node {} load {} is outside expected {} +- {}",
-                i, count, expected, diff
+                i,
+                count,
+                expected,
+                diff
             );
         }
     }
@@ -114,24 +129,32 @@ mod tests {
     #[test]
     fn test_node_ring_add_remove() {
         let mut ring = NodeRing::new(10);
-        let n1 = ShardNode { id: 100, address: "A".into(), weight: 1.0 };
-        let n2 = ShardNode { id: 200, address: "B".into(), weight: 1.0 };
+        let n1 = ShardNode {
+            id: 100,
+            address: "A".into(),
+            weight: 1.0,
+        };
+        let n2 = ShardNode {
+            id: 200,
+            address: "B".into(),
+            weight: 1.0,
+        };
 
         ring.add_node(&n1);
         ring.add_node(&n2);
-        
+
         // 100번 혹은 200번 노드만 반환되어야 함
         let node_id = ring.get_node(12345).unwrap();
         assert!(node_id == 100 || node_id == 200);
 
         // 노드 100 제거
         ring.remove_node(100);
-        
+
         // 이제 항상 200만 반환되어야 함
         for i in 0..10_000 {
             assert_eq!(ring.get_node(i).unwrap(), 200);
         }
-        
+
         // 노드 200 제거
         ring.remove_node(200);
         assert!(ring.is_empty());

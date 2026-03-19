@@ -106,18 +106,23 @@ impl ReplicationConfig {
         broadcast_tx: tokio::sync::broadcast::Sender<ReplicationMessage>,
     ) -> Result<Box<dyn Transport>, quic::QuicError> {
         match &self.mode {
-            TransportMode::InMemory => {
-                Ok(Box::new(InMemoryTransport::new(broadcast_tx)))
-            }
-            TransportMode::Quic { bind_addr, cert_path, key_path } => {
+            TransportMode::InMemory => Ok(Box::new(InMemoryTransport::new(broadcast_tx))),
+            TransportMode::Quic {
+                bind_addr,
+                cert_path,
+                key_path,
+            } => {
                 tracing::info!(
-                    "QUIC Transport 초기화: bind={} cert={}", bind_addr, cert_path
+                    "QUIC Transport 초기화: bind={} cert={}",
+                    bind_addr,
+                    cert_path
                 );
                 let (node, handle) = quic::QuicNode::server(
                     bind_addr,
                     std::path::Path::new(cert_path),
                     std::path::Path::new(key_path),
-                ).await?;
+                )
+                .await?;
                 // 백그라운드 수신 루프 유지
                 tokio::spawn(handle);
                 Ok(Box::new(quic::QuicTransport::new(node)))
@@ -134,9 +139,6 @@ impl ReplicationConfig {
         Box::new(InMemoryTransport::new(broadcast_tx))
     }
 }
-
-
-
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 공통 Transport Trait
@@ -207,11 +209,11 @@ pub mod quic {
     //! client.send_msg(message).await?;
     //! ```
 
+    use s2n_quic::provider::tls;
+    use s2n_quic::{Client, Server};
     use std::path::Path;
     use std::sync::Arc;
     use tokio::sync::mpsc;
-    use s2n_quic::{Client, Server};
-    use s2n_quic::provider::tls;
 
     use crate::replication::protocol::ReplicationMessage;
 
@@ -328,14 +330,16 @@ pub mod quic {
             // 백그라운드 발신 루프
             let handle = tokio::spawn(async move {
                 use tokio::io::AsyncWriteExt;
-                let connect = s2n_quic::client::Connect::new(
-                    peer.parse::<std::net::SocketAddr>().unwrap()
-                ).with_server_name("dbx-node");
+                let connect =
+                    s2n_quic::client::Connect::new(peer.parse::<std::net::SocketAddr>().unwrap())
+                        .with_server_name("dbx-node");
 
                 if let Ok(mut conn) = client.connect(connect).await {
                     conn.keep_alive(true).ok();
                     while let Some((msg, _addr)) = out_rx.recv().await {
-                        let Ok(bytes) = bincode::serialize(&msg) else { continue };
+                        let Ok(bytes) = bincode::serialize(&msg) else {
+                            continue;
+                        };
                         let len = bytes.len() as u32;
                         if let Ok(mut stream) = conn.open_bidirectional_stream().await {
                             let _ = stream.write_all(&len.to_le_bytes()).await;
@@ -431,25 +435,32 @@ pub mod quic {
 
         let status = std::process::Command::new("openssl")
             .args([
-                "req", "-x509", "-newkey", "rsa:2048",
-                "-keyout", key_path.to_str().unwrap(),
-                "-out", cert_path.to_str().unwrap(),
-                "-days", "365", "-nodes",
-                "-subj", "/CN=dbx-node",
+                "req",
+                "-x509",
+                "-newkey",
+                "rsa:2048",
+                "-keyout",
+                key_path.to_str().unwrap(),
+                "-out",
+                cert_path.to_str().unwrap(),
+                "-days",
+                "365",
+                "-nodes",
+                "-subj",
+                "/CN=dbx-node",
             ])
             .status()
             .map_err(|e| QuicError::IoError(e))?;
 
         if !status.success() {
             return Err(QuicError::ConnectionError(
-                "openssl 실행 실패 (openssl이 설치되어 있어야 함)".to_string()
+                "openssl 실행 실패 (openssl이 설치되어 있어야 함)".to_string(),
             ));
         }
 
         Ok((cert_path, key_path))
     }
 }
-
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 테스트
@@ -465,7 +476,10 @@ mod tests {
         let t1 = InMemoryTransport::new(tx.clone());
         let t2 = InMemoryTransport::new(tx.clone());
 
-        let msg = ReplicationMessage::Heartbeat { node_id: 1, lsn: 42 };
+        let msg = ReplicationMessage::Heartbeat {
+            node_id: 1,
+            lsn: 42,
+        };
         t1.send(2, msg.clone());
 
         // t2는 같은 채널을 구독하므로 메시지를 받을 수 있음

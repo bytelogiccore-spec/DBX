@@ -1,7 +1,9 @@
 use dbx_core::engine::Database;
 use dbx_core::error::DbxResult;
-use dbx_core::storage::partition::{PartitionLifecycle, PartitionMap, PartitionTierHint, PartitionType};
 use dbx_core::storage::compression::CompressionAlgorithm;
+use dbx_core::storage::partition::{
+    PartitionLifecycle, PartitionMap, PartitionTierHint, PartitionType,
+};
 
 // ─────────────────────────────────────────────
 // Limitation Fix 1: PartitionStats 자동 갱신
@@ -30,7 +32,10 @@ fn test_stats_auto_incremented_on_insert() -> DbxResult<()> {
     // 두 파티션에 대한 row_count 합산 = 10
     let all = db.all_partition_stats("events")?;
     let total: usize = all.values().map(|s| s.row_count).sum();
-    assert_eq!(total, 10, "INSERT된 행 수와 stats.row_count 합산이 일치해야 함");
+    assert_eq!(
+        total, 10,
+        "INSERT된 행 수와 stats.row_count 합산이 일치해야 함"
+    );
     assert!(!all.is_empty(), "파티션 통계가 자동으로 생성되어야 함");
     Ok(())
 }
@@ -59,7 +64,10 @@ fn test_partition_creation_time_auto_recorded() -> DbxResult<()> {
     // 적어도 하나의 파티션에 creation_time이 기록되어야 함
     let has_time = db.get_partition_creation_time("logs__p_part_0").is_some()
         || db.get_partition_creation_time("logs__p_part_1").is_some();
-    assert!(has_time, "INSERT 후 partition_creation_times에 자동 기록되어야 함");
+    assert!(
+        has_time,
+        "INSERT 후 partition_creation_times에 자동 기록되어야 함"
+    );
     Ok(())
 }
 
@@ -82,10 +90,13 @@ fn test_run_lifecycle_archives_old_partition() -> DbxResult<()> {
     };
     db.create_partition(map)?;
 
-    db.enable_auto_archive("archive_test", PartitionLifecycle {
-        archive_after_days: 0, // 즉시 아카이브 (0일)
-        delete_after_days: 3650,
-    })?;
+    db.enable_auto_archive(
+        "archive_test",
+        PartitionLifecycle {
+            archive_after_days: 0, // 즉시 아카이브 (0일)
+            delete_after_days: 3650,
+        },
+    )?;
 
     // INSERT 1건 (creation_time 자동 기록)
     db.insert("archive_test", b"0", b"data")?;
@@ -94,7 +105,11 @@ fn test_run_lifecycle_archives_old_partition() -> DbxResult<()> {
     let (archived, deleted) = db.run_partition_lifecycle("archive_test")?;
 
     // 아카이브 1개는 되어야 함 (0일이므로 즉시 대상)
-    assert!(archived >= 1, "archive_after_days=0이면 즉시 아카이브 대상. archived={}", archived);
+    assert!(
+        archived >= 1,
+        "archive_after_days=0이면 즉시 아카이브 대상. archived={}",
+        archived
+    );
     assert_eq!(deleted, 0, "delete_after_days=3650이면 삭제 없어야 함");
 
     // 아카이브된 파티션의 TierHint가 Cold이어야 함
@@ -106,7 +121,11 @@ fn test_run_lifecycle_archives_old_partition() -> DbxResult<()> {
     let cold_key = &all_cold[0];
     let part_short = cold_key.strip_prefix("archive_test__").unwrap_or(cold_key);
     let config = db.get_partition_compression("archive_test", part_short)?;
-    assert_eq!(config.algorithm(), CompressionAlgorithm::Zstd, "아카이브 파티션은 ZSTD 압축이어야 함");
+    assert_eq!(
+        config.algorithm(),
+        CompressionAlgorithm::Zstd,
+        "아카이브 파티션은 ZSTD 압축이어야 함"
+    );
     Ok(())
 }
 
@@ -128,15 +147,22 @@ fn test_run_all_lifecycles() -> DbxResult<()> {
             num_partitions: 2,
         };
         db.create_partition(map)?;
-        db.enable_auto_archive(tbl, PartitionLifecycle {
-            archive_after_days: 0, // 즉시
-            delete_after_days: 3650,
-        })?;
+        db.enable_auto_archive(
+            tbl,
+            PartitionLifecycle {
+                archive_after_days: 0, // 즉시
+                delete_after_days: 3650,
+            },
+        )?;
         db.insert(tbl, b"0", b"v")?;
     }
 
     let (archived, deleted) = db.run_all_partition_lifecycles()?;
-    assert!(archived >= 2, "두 테이블에서 각각 최소 1개 파티션 아카이브. archived={}", archived);
+    assert!(
+        archived >= 2,
+        "두 테이블에서 각각 최소 1개 파티션 아카이브. archived={}",
+        archived
+    );
     assert_eq!(deleted, 0);
     Ok(())
 }

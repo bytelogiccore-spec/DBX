@@ -159,29 +159,27 @@ impl PartitionMap {
                 }
 
                 if let Some((interval, max_parts)) = auto_expand_interval
-                    && self.num_partitions < *max_parts {
-                        // 범위를 벗어났고 확장 가능함
-                        let last_hi = bounds.last().map(|(_, hi)| *hi).unwrap_or(0);
-                        if v >= last_hi {
-                            // 현재 v를 포함할 수 있는 범위 계산
-                            let diff = v - last_hi;
-                            let steps = (diff / interval) + 1;
-                            let new_hi = last_hi + steps * interval;
+                    && self.num_partitions < *max_parts
+                {
+                    // 범위를 벗어났고 확장 가능함
+                    let last_hi = bounds.last().map(|(_, hi)| *hi).unwrap_or(0);
+                    if v >= last_hi {
+                        // 현재 v를 포함할 수 있는 범위 계산
+                        let diff = v - last_hi;
+                        let steps = (diff / interval) + 1;
+                        let new_hi = last_hi + steps * interval;
 
-                            return RouteResult::NeedsExpansion {
-                                new_table: format!(
-                                    "{}__p_part_{}",
-                                    self.table, self.num_partitions
-                                ),
-                                new_bounds: (last_hi, new_hi),
-                            };
-                        } else {
-                            // v < lo (첫 파티션보다 작은 경우 -> 과거 데이터)
-                            // 현재는 가장 과거 구간 확장은 복잡하므로 MVP에서는 그대로 `Routed` 처리하거나, 확장 안됨.
-                            // 가장 가까운 0번 파티션 반환
-                            return RouteResult::Routed(format!("{}__p_part_0", self.table));
-                        }
+                        return RouteResult::NeedsExpansion {
+                            new_table: format!("{}__p_part_{}", self.table, self.num_partitions),
+                            new_bounds: (last_hi, new_hi),
+                        };
+                    } else {
+                        // v < lo (첫 파티션보다 작은 경우 -> 과거 데이터)
+                        // 현재는 가장 과거 구간 확장은 복잡하므로 MVP에서는 그대로 `Routed` 처리하거나, 확장 안됨.
+                        // 가장 가까운 0번 파티션 반환
+                        return RouteResult::Routed(format!("{}__p_part_0", self.table));
                     }
+                }
 
                 // 자동 확장이 켜져있지 않거나 최대 파티션에 도달한 경우 = 마지막 파티션 반환
                 let idx = self.num_partitions.saturating_sub(1);

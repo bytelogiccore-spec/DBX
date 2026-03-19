@@ -65,8 +65,13 @@ impl<'a> Rebalancer<'a> {
     /// `read_fn(node_id, key)` → 데이터 조회
     /// `write_fn(node_id, key, value)` → 이관 대상에 저장
     /// `delete_fn(node_id, key)` → 이전 노드에서 삭제
-    pub fn execute<R, W, D>(&self, tasks: &[MigrationTask], mut read_fn: R, mut write_fn: W, mut delete_fn: D)
-    where
+    pub fn execute<R, W, D>(
+        &self,
+        tasks: &[MigrationTask],
+        mut read_fn: R,
+        mut write_fn: W,
+        mut delete_fn: D,
+    ) where
         R: FnMut(usize, &[u8]) -> Option<Vec<u8>>,
         W: FnMut(usize, &[u8], &[u8]),
         D: FnMut(usize, &[u8]),
@@ -113,19 +118,41 @@ mod tests {
     fn test_rebalance_on_add_node() {
         // 초기: 노드 0, 1
         let mut old_ring = NodeRing::new(50);
-        old_ring.add_node(&ShardNode { id: 0, address: "A".into(), weight: 1.0 });
-        old_ring.add_node(&ShardNode { id: 1, address: "B".into(), weight: 1.0 });
+        old_ring.add_node(&ShardNode {
+            id: 0,
+            address: "A".into(),
+            weight: 1.0,
+        });
+        old_ring.add_node(&ShardNode {
+            id: 1,
+            address: "B".into(),
+            weight: 1.0,
+        });
 
         // 새 노드 2 추가
         let mut new_ring = NodeRing::new(50);
-        new_ring.add_node(&ShardNode { id: 0, address: "A".into(), weight: 1.0 });
-        new_ring.add_node(&ShardNode { id: 1, address: "B".into(), weight: 1.0 });
-        new_ring.add_node(&ShardNode { id: 2, address: "C".into(), weight: 1.0 });
+        new_ring.add_node(&ShardNode {
+            id: 0,
+            address: "A".into(),
+            weight: 1.0,
+        });
+        new_ring.add_node(&ShardNode {
+            id: 1,
+            address: "B".into(),
+            weight: 1.0,
+        });
+        new_ring.add_node(&ShardNode {
+            id: 2,
+            address: "C".into(),
+            weight: 1.0,
+        });
 
         let rebalancer = Rebalancer::new(&old_ring, &new_ring);
 
         // 테스트용 키 목록
-        let keys: Vec<Vec<u8>> = (0..100u32).map(|i| format!("key-{}", i).into_bytes()).collect();
+        let keys: Vec<Vec<u8>> = (0..100u32)
+            .map(|i| format!("key-{}", i).into_bytes())
+            .collect();
         let tasks = rebalancer.compute_tasks(&keys);
 
         // 노드가 추가되었으므로 일부 키는 이관 대상이어야 함
@@ -140,24 +167,49 @@ mod tests {
     #[test]
     fn test_rebalance_execute() {
         let mut old_ring = NodeRing::new(50);
-        old_ring.add_node(&ShardNode { id: 0, address: "A".into(), weight: 1.0 });
-        old_ring.add_node(&ShardNode { id: 1, address: "B".into(), weight: 1.0 });
+        old_ring.add_node(&ShardNode {
+            id: 0,
+            address: "A".into(),
+            weight: 1.0,
+        });
+        old_ring.add_node(&ShardNode {
+            id: 1,
+            address: "B".into(),
+            weight: 1.0,
+        });
 
         let mut new_ring = NodeRing::new(50);
-        new_ring.add_node(&ShardNode { id: 0, address: "A".into(), weight: 1.0 });
-        new_ring.add_node(&ShardNode { id: 1, address: "B".into(), weight: 1.0 });
-        new_ring.add_node(&ShardNode { id: 2, address: "C".into(), weight: 1.0 });
+        new_ring.add_node(&ShardNode {
+            id: 0,
+            address: "A".into(),
+            weight: 1.0,
+        });
+        new_ring.add_node(&ShardNode {
+            id: 1,
+            address: "B".into(),
+            weight: 1.0,
+        });
+        new_ring.add_node(&ShardNode {
+            id: 2,
+            address: "C".into(),
+            weight: 1.0,
+        });
 
         // 시뮬레이션 스토어 (노드 ID → 키-값 맵)
         let store: Arc<Mutex<HashMap<(usize, Vec<u8>), Vec<u8>>>> =
             Arc::new(Mutex::new(HashMap::new()));
 
         // 초기 데이터 삽입
-        let keys: Vec<Vec<u8>> = (0..20u32).map(|i| format!("key-{}", i).into_bytes()).collect();
+        let keys: Vec<Vec<u8>> = (0..20u32)
+            .map(|i| format!("key-{}", i).into_bytes())
+            .collect();
         for key in &keys {
             let hash = fnv1a_hash(key);
             let node = old_ring.get_node(hash).unwrap();
-            store.lock().unwrap().insert((node, key.clone()), b"value".to_vec());
+            store
+                .lock()
+                .unwrap()
+                .insert((node, key.clone()), b"value".to_vec());
         }
 
         let rebalancer = Rebalancer::new(&old_ring, &new_ring);
@@ -169,9 +221,18 @@ mod tests {
 
         rebalancer.execute(
             &tasks,
-            move |node_id, key| store_r.lock().unwrap().get(&(node_id, key.to_vec())).cloned(),
+            move |node_id, key| {
+                store_r
+                    .lock()
+                    .unwrap()
+                    .get(&(node_id, key.to_vec()))
+                    .cloned()
+            },
             move |node_id, key, value| {
-                store_w.lock().unwrap().insert((node_id, key.to_vec()), value.to_vec());
+                store_w
+                    .lock()
+                    .unwrap()
+                    .insert((node_id, key.to_vec()), value.to_vec());
             },
             move |node_id, key| {
                 store_d.lock().unwrap().remove(&(node_id, key.to_vec()));
@@ -195,11 +256,21 @@ mod tests {
     #[test]
     fn test_no_migration_same_ring() {
         let mut ring = NodeRing::new(50);
-        ring.add_node(&ShardNode { id: 0, address: "A".into(), weight: 1.0 });
-        ring.add_node(&ShardNode { id: 1, address: "B".into(), weight: 1.0 });
+        ring.add_node(&ShardNode {
+            id: 0,
+            address: "A".into(),
+            weight: 1.0,
+        });
+        ring.add_node(&ShardNode {
+            id: 1,
+            address: "B".into(),
+            weight: 1.0,
+        });
 
         let rebalancer = Rebalancer::new(&ring, &ring);
-        let keys: Vec<Vec<u8>> = (0..50u32).map(|i| format!("k-{}", i).into_bytes()).collect();
+        let keys: Vec<Vec<u8>> = (0..50u32)
+            .map(|i| format!("k-{}", i).into_bytes())
+            .collect();
         let tasks = rebalancer.compute_tasks(&keys);
         assert!(tasks.is_empty(), "동일한 링이면 이관 없음");
     }

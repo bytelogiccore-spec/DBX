@@ -160,7 +160,12 @@ impl ReplicationNode {
             }
 
             // ── WalEntry: 복제 레코드 수신 ───────────────────────────────
-            ReplicationMessage::WalEntry { node_id, lsn, timestamp, data } => {
+            ReplicationMessage::WalEntry {
+                node_id,
+                lsn,
+                timestamp,
+                data,
+            } => {
                 if node_id == self.node_id {
                     return Ok(());
                 }
@@ -172,7 +177,11 @@ impl ReplicationNode {
             }
 
             // ── VoteRequest: 다른 노드가 투표를 요청 ─────────────────────
-            ReplicationMessage::VoteRequest { node_id: candidate_id, term, last_lsn } => {
+            ReplicationMessage::VoteRequest {
+                node_id: candidate_id,
+                term,
+                last_lsn,
+            } => {
                 if candidate_id == self.node_id {
                     return Ok(());
                 }
@@ -201,7 +210,12 @@ impl ReplicationNode {
             }
 
             // ── VoteResponse: 내가 Candidate일 때 투표 집계 ──────────────
-            ReplicationMessage::VoteResponse { node_id, voter_id: _, term, granted } => {
+            ReplicationMessage::VoteResponse {
+                node_id,
+                voter_id: _,
+                term,
+                granted,
+            } => {
                 if node_id != self.node_id {
                     return Ok(());
                 }
@@ -297,18 +311,24 @@ mod tests {
         // 자신의 VoteRequest 메시지 수신 후 VoteResponse(자가) 처리
         let msg = rx.recv().await.unwrap();
         match msg {
-            ReplicationMessage::VoteRequest { node_id, term, last_lsn } => {
+            ReplicationMessage::VoteRequest {
+                node_id,
+                term,
+                last_lsn,
+            } => {
                 assert_eq!(node_id, 1);
                 // VoteResponse 수신 처리 (자기 자신의 투표 응답 시뮬레이션)
-                let _ = node.handle_message(
-                    ReplicationMessage::VoteResponse {
-                        node_id: 1,
-                        voter_id: 1,
-                        term,
-                        granted: true,
-                    },
-                    &mut |_, _, _| Ok(()),
-                ).await;
+                let _ = node
+                    .handle_message(
+                        ReplicationMessage::VoteResponse {
+                            node_id: 1,
+                            voter_id: 1,
+                            term,
+                            granted: true,
+                        },
+                        &mut |_, _, _| Ok(()),
+                    )
+                    .await;
                 drop(last_lsn);
             }
             _ => panic!("VoteRequest 예상"),
@@ -334,8 +354,14 @@ mod tests {
                 granted: false,
             },
             &mut |_, _, _| Ok(()),
-        ).await.unwrap();
-        assert_eq!(node.role().await, NodeRole::Candidate, "아직 Candidate여야 함");
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            node.role().await,
+            NodeRole::Candidate,
+            "아직 Candidate여야 함"
+        );
 
         // 2번째 투표 (granted=true) → 과반 → Master
         node.handle_message(
@@ -346,8 +372,14 @@ mod tests {
                 granted: true,
             },
             &mut |_, _, _| Ok(()),
-        ).await.unwrap();
-        assert_eq!(node.role().await, NodeRole::Master, "과반 획득 후 Master여야 함");
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            node.role().await,
+            NodeRole::Master,
+            "과반 획득 후 Master여야 함"
+        );
     }
 
     #[tokio::test]
@@ -358,11 +390,20 @@ mod tests {
         node.current_term.store(1, Ordering::SeqCst);
 
         node.handle_message(
-            ReplicationMessage::Promotion { node_id: 2, term: 2 },
+            ReplicationMessage::Promotion {
+                node_id: 2,
+                term: 2,
+            },
             &mut |_, _, _| Ok(()),
-        ).await.unwrap();
+        )
+        .await
+        .unwrap();
 
-        assert_eq!(node.role().await, NodeRole::Slave, "더 높은 term의 Promotion → Slave 강등");
+        assert_eq!(
+            node.role().await,
+            NodeRole::Slave,
+            "더 높은 term의 Promotion → Slave 강등"
+        );
         assert_eq!(node.term(), 2);
     }
 
