@@ -125,6 +125,22 @@ pub struct Database {
     pub(crate) partition_maps:
         Arc<RwLock<std::collections::HashMap<String, crate::storage::partition::PartitionMap>>>,
 
+    /// 파티션별 통계 정보 ("table__partname" → PartitionStats)
+    pub(crate) partition_stats:
+        Arc<DashMap<String, crate::storage::partition::PartitionStats>>,
+
+    /// 파티션별 압축 설정 ("table__partname" → CompressionConfig)
+    pub(crate) partition_compression:
+        Arc<DashMap<String, crate::storage::compression::CompressionConfig>>,
+
+    /// 파티션 수명 주기 정책 (테이블명 → PartitionLifecycle)
+    pub(crate) partition_lifecycle:
+        Arc<DashMap<String, crate::storage::partition::PartitionLifecycle>>,
+
+    /// 파티션 티어 힌트 ("table__partname" → PartitionTierHint)
+    pub(crate) partition_tier_hints:
+        Arc<DashMap<String, crate::storage::partition::PartitionTierHint>>,
+
     /// Database Configuration (Parallelism, HTAP Sync)
     pub(crate) config: crate::engine::parallel_engine::DbConfig,
 

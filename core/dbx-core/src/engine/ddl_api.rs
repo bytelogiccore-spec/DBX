@@ -474,6 +474,248 @@ impl Database {
         Ok(())
     }
 
+    // ════════════════════════════════════════════
+    // Phase 3 Synergy: PartitionStats API
+    // ════════════════════════════════════════════
+
+    /// 파티션 통계를 갱신합니다.
+    ///
+    /// # Example
+    /// ```rust
+    /// use dbx_core::Database;
+    /// use dbx_core::storage::partition::PartitionStats;
+    ///
+    /// # fn main() -> dbx_core::DbxResult<()> {
+    /// let db = Database::open_in_memory()?;
+    /// db.update_partition_stats("orders", "orders__p_part_0", PartitionStats {
+    ///     row_count: 1000, min_value: 0, max_value: 999,
+    ///     null_count: 0, distinct_count: 1000,
+    /// })?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn update_partition_stats(
+        &self,
+        table: &str,
+        partition_name: &str,
+        stats: crate::storage::partition::PartitionStats,
+    ) -> DbxResult<()> {
+        let key = format!("{}__{}", table, partition_name);
+        self.partition_stats.insert(key, stats);
+        Ok(())
+    }
+
+    /// 특정 파티션의 통계를 조회합니다.
+    pub fn get_partition_stats(
+        &self,
+        table: &str,
+        partition_name: &str,
+    ) -> DbxResult<crate::storage::partition::PartitionStats> {
+        let key = format!("{}__{}", table, partition_name);
+        self.partition_stats
+            .get(&key)
+            .map(|r| r.clone())
+            .ok_or_else(|| crate::error::DbxError::InvalidOperation {
+                message: format!("No stats for partition '{}'", partition_name),
+                context: format!("Call update_partition_stats first for table '{}'", table),
+            })
+    }
+
+    /// 테이블의 모든 파티션 통계를 반환합니다.
+    pub fn all_partition_stats(
+        &self,
+        table: &str,
+    ) -> DbxResult<std::collections::HashMap<String, crate::storage::partition::PartitionStats>> {
+        let prefix = format!("{}__", table);
+        let result = self
+            .partition_stats
+            .iter()
+            .filter(|r| r.key().starts_with(&prefix))
+            .map(|r| (r.key().clone(), r.value().clone()))
+            .collect();
+        Ok(result)
+    }
+
+    // ════════════════════════════════════════════
+    // Phase 3 Synergy: Per-Partition Compression API
+    // ════════════════════════════════════════════
+
+    /// 파티션별 압축 설정을 지정합니다.
+    ///
+    /// # Example
+    /// ```rust
+    /// use dbx_core::Database;
+    /// use dbx_core::storage::compression::CompressionConfig;
+    ///
+    /// # fn main() -> dbx_core::DbxResult<()> {
+    /// let db = Database::open_in_memory()?;
+    /// // 오래된 파티션 → 고압축
+    /// db.set_partition_compression("orders", "orders__p_part_0", CompressionConfig::zstd_level(9))?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn set_partition_compression(
+        &self,
+        table: &str,
+        partition_name: &str,
+        config: crate::storage::compression::CompressionConfig,
+    ) -> DbxResult<()> {
+        let key = format!("{}__{}", table, partition_name);
+        self.partition_compression.insert(key, config);
+        Ok(())
+    }
+
+    /// 파티션 압축 설정 조회 (미설정 시 기본값 Snappy 반환).
+    pub fn get_partition_compression(
+        &self,
+        table: &str,
+        partition_name: &str,
+    ) -> DbxResult<crate::storage::compression::CompressionConfig> {
+        let key = format!("{}__{}", table, partition_name);
+        Ok(self
+            .partition_compression
+            .get(&key)
+            .map(|r| *r)
+            .unwrap_or_default())
+    }
+
+    // ════════════════════════════════════════════
+    // Phase 3 Synergy: PartitionLifecycle API
+    // ════════════════════════════════════════════
+
+    /// 테이블의 파티션 수명 주기 정책을 설정합니다.
+    ///
+    /// # Example
+    /// ```rust
+    /// use dbx_core::Database;
+    /// use dbx_core::storage::partition::PartitionLifecycle;
+    ///
+    /// # fn main() -> dbx_core::DbxResult<()> {
+    /// let db = Database::open_in_memory()?;
+    /// db.enable_auto_archive("logs", PartitionLifecycle {
+    ///     archive_after_days: 90,
+    ///     delete_after_days: 365,
+    /// })?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn enable_auto_archive(
+        &self,
+        table: &str,
+        lifecycle: crate::storage::partition::PartitionLifecycle,
+    ) -> DbxResult<()> {
+        self.partition_lifecycle
+            .insert(table.to_string(), lifecycle);
+        Ok(())
+    }
+
+    /// 테이블의 파티션 수명 주기 정책을 조회합니다.
+    pub fn get_partition_lifecycle(
+        &self,
+        table: &str,
+    ) -> DbxResult<crate::storage::partition::PartitionLifecycle> {
+        self.partition_lifecycle
+            .get(table)
+            .map(|r| r.clone())
+            .ok_or_else(|| crate::error::DbxError::InvalidOperation {
+                message: format!("No lifecycle policy for table '{}'", table),
+                context: "Call enable_auto_archive first".to_string(),
+            })
+    }
+
+    /// 파티션이 아카이브 시점이 되었는지 확인합니다.
+    ///
+    /// `partition_created_at`: UNIX timestamp (초 단위)
+    pub fn partition_needs_archive(
+        &self,
+        table: &str,
+        partition_created_at: u64,
+    ) -> DbxResult<bool> {
+        let lc = self.get_partition_lifecycle(table)?;
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        let threshold_secs = lc.archive_after_days as u64 * 24 * 3600;
+        Ok(now.saturating_sub(partition_created_at) >= threshold_secs)
+    }
+
+    /// 파티션이 삭제 시점이 되었는지 확인합니다.
+    ///
+    /// `partition_created_at`: UNIX timestamp (초 단위)
+    pub fn partition_needs_delete(
+        &self,
+        table: &str,
+        partition_created_at: u64,
+    ) -> DbxResult<bool> {
+        let lc = self.get_partition_lifecycle(table)?;
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        let threshold_secs = lc.delete_after_days as u64 * 24 * 3600;
+        Ok(now.saturating_sub(partition_created_at) >= threshold_secs)
+    }
+
+    // ════════════════════════════════════════════
+    // Phase 3 Synergy: PartitionTierHint API
+    // ════════════════════════════════════════════
+
+    /// 파티션의 스토리지 티어 힌트를 설정합니다.
+    ///
+    /// # Example
+    /// ```rust
+    /// use dbx_core::Database;
+    /// use dbx_core::storage::partition::PartitionTierHint;
+    ///
+    /// # fn main() -> dbx_core::DbxResult<()> {
+    /// let db = Database::open_in_memory()?;
+    /// db.set_partition_tier("orders", "orders__p_part_0", PartitionTierHint::Hot)?;
+    /// db.set_partition_tier("orders", "orders__p_part_1", PartitionTierHint::Cold)?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn set_partition_tier(
+        &self,
+        table: &str,
+        partition_name: &str,
+        hint: crate::storage::partition::PartitionTierHint,
+    ) -> DbxResult<()> {
+        let key = format!("{}__{}", table, partition_name);
+        self.partition_tier_hints.insert(key, hint);
+        Ok(())
+    }
+
+    /// 파티션 티어 힌트를 조회합니다 (미설정 시 Hot 반환).
+    pub fn get_partition_tier(
+        &self,
+        table: &str,
+        partition_name: &str,
+    ) -> DbxResult<crate::storage::partition::PartitionTierHint> {
+        let key = format!("{}__{}", table, partition_name);
+        Ok(self
+            .partition_tier_hints
+            .get(&key)
+            .map(|r| *r)
+            .unwrap_or_default())
+    }
+
+    /// 특정 티어에 속하는 파티션 목록을 반환합니다.
+    pub fn list_partitions_by_tier(
+        &self,
+        table: &str,
+        hint: crate::storage::partition::PartitionTierHint,
+    ) -> DbxResult<Vec<String>> {
+        let prefix = format!("{}__", table);
+        let result = self
+            .partition_tier_hints
+            .iter()
+            .filter(|r| r.key().starts_with(&prefix) && *r.value() == hint)
+            .map(|r| r.key().clone())
+            .collect();
+        Ok(result)
+    }
+
     /// 뷰를 생성합니다 (Phase 5.1).
     pub fn create_view(&self, name: &str, sql: &str) -> DbxResult<()> {
         self.view_registry.create(name, sql)

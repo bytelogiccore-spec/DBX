@@ -334,3 +334,74 @@ mod tests {
         assert_ne!(h1, h3, "다른 입력은 다른 해시");
     }
 }
+
+// ═══════════════════════════════════════════
+// Phase 3 Synergy: Stats / Lifecycle / Tier
+// ═══════════════════════════════════════════
+
+/// 파티션별 통계 정보 — 쿼리 옵티마이저에 활용
+///
+/// # 사용 예
+/// ```rust
+/// use dbx_core::storage::partition::PartitionStats;
+/// let stats = PartitionStats {
+///     row_count: 1000,
+///     min_value: 0,
+///     max_value: 999,
+///     null_count: 5,
+///     distinct_count: 990,
+/// };
+/// assert_eq!(stats.row_count, 1000);
+/// ```
+#[derive(Debug, Clone, Default)]
+pub struct PartitionStats {
+    /// 파티션 내 총 행 수
+    pub row_count: usize,
+    /// 파티션 키의 최솟값
+    pub min_value: i64,
+    /// 파티션 키의 최댓값
+    pub max_value: i64,
+    /// 파티션 키의 NULL 수
+    pub null_count: usize,
+    /// 파티션 키의 고유값 수 (Distinct count)
+    pub distinct_count: usize,
+}
+
+/// 파티션 수명 주기 정책 — 자동 아카이빙 및 삭제
+///
+/// # 사용 예
+/// ```rust
+/// use dbx_core::storage::partition::PartitionLifecycle;
+/// let lc = PartitionLifecycle { archive_after_days: 90, delete_after_days: 365 };
+/// assert_eq!(lc.archive_after_days, 90);
+/// ```
+#[derive(Debug, Clone)]
+pub struct PartitionLifecycle {
+    /// N일 이상 지난 파티션을 고압축(아카이브) 상태로 전환
+    pub archive_after_days: u32,
+    /// N일 이상 지난 파티션을 삭제
+    pub delete_after_days: u32,
+}
+
+/// 파티션의 스토리지 티어 힌트 — Hot / Warm / Cold 분류
+///
+/// # 사용 예
+/// ```rust
+/// use dbx_core::storage::partition::PartitionTierHint;
+/// assert_eq!(PartitionTierHint::default(), PartitionTierHint::Hot);
+/// ```
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PartitionTierHint {
+    /// 최근 데이터 — Delta/Cache (Tier 1-2)에 우선 배치
+    Hot,
+    /// 중간 데이터 — WOS (Tier 3)에 배치
+    Warm,
+    /// 오래된 데이터 — ROS, 고압축 (Tier 5)에 배치
+    Cold,
+}
+
+impl Default for PartitionTierHint {
+    fn default() -> Self {
+        Self::Hot
+    }
+}
