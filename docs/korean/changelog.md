@@ -14,16 +14,32 @@ DBX의 주요 변경사항을 기록합니다.
 
 ---
 
-## [0.1.1-beta] - 2026-03-18
+## [0.1.1-beta] - 2026-03-19
 
-WAL 구현 및 멀티코어 병렬화 전면 적용 릴리스.
+WAL 구현, 멀티코어 병렬화, Multi-Master Failover, 크로스-노드 샤딩 고도화, 분산 트랜잭션 릴리스.
 
 ### 새로운 기능
 
+#### 📦 WAL / 병렬화 (이전 릴리스 기준)
 - **WAL (Write-Ahead Log) sequential append** — WOS flush 시 전체 재작성 대신 WAL 파일에 순차 append. compact 조건(`wal_entries >= WAL_COMPACT_THRESHOLD`) 도달 시에만 SSTable 병합
 - **`ParallelismConfig` / `DbConfig`** — CPU 코어 사용 비율(`cpu_cap`)과 병렬화 임계값(`min_rows_for_parallel`)을 제어하는 설정 구조체
+- **`DirtyBufferMode`** — WOS `dirty` 버퍼의 자료구조를 런타임에 선택 가능. `BTreeMap`(기본, 범위 쿼리 최적) 또는 `DashMap`(동시성 최적). `DbConfig::dirty_buffer_mode`로 지정, 재시작 시 자유롭게 전환 가능
 - **`Database::open_with_config()`** — `DbConfig`를 받는 새 생성자. `conservative()` / `aggressive()` 프리셋 제공
 - **`Compactor::bypass_flush_tables()`** — 여러 테이블을 동시에 bypass_flush하는 신규 API
+
+#### 🔄 Multi-Master Failover (Phase 5.3)
+- **Quorum 기반 리더 선출** — `term` 번호와 과반 투표 집계(Raft-like)를 통해 안정적인 Master 선출. Split-Brain 방지를 위해 낮은 term의 Master를 Slave로 자동 강등 (`replication/node.rs`, `replication/protocol.rs`)
+- **벡터 클록 (Vector Clock)** — LWW 대신 인과관계 기반 충돌 감지. `HappensBefore` / `Concurrent` 판단으로 데이터 손실 없는 충돌 해결 (`replication/vector_clock.rs`)
+
+#### 🗂️ 크로스-노드 샤딩 고도화 (Phase 5.4)
+- **노드 가중치 기반 vnode 분배** — `ShardNode::weight` 필드로 노드별 데이터 할당량을 비균등 조정 (`sharding/node_ring.rs`, `sharding/router.rs`)
+- **데이터 리밸런싱** — 노드 추가/제거 시 영향받는 해시 범위의 키를 자동 이관. `compute_tasks()` + `execute()` 패턴 (`sharding/rebalancer.rs`)
+- **2PC 분산 트랜잭션** — Prepare → Commit/Abort 2단계 커밋으로 크로스-노드 원자성 보장. 하나의 Participant 실패 시 전체 롤백 (`sharding/two_phase.rs`)
+
+#### 🌐 QUIC 기반 Transport 계층 (Phase P3)
+- **s2n-quic 기반 QuicTransport** — AWS의 `s2n-quic` (v1.76)을 사용한 실제 프로세스 간 통신. TLS 1.3 기본 내장, Head-of-Line Blocking 없는 멀티스트림 전송 (`replication/transport.rs`)
+- **Transport 런타임 설정** — `ReplicationConfig::in_memory()` / `ReplicationConfig::quic(...)` 으로 코드 수정 없이 단일 프로세스 ↔ 분산 배포 전환. `DbConfig::replication` 필드로 통합
+- **QuicNode 서버/클라이언트 모드** — `QuicNode::server()` / `QuicNode::client()` 비동기 초기화. bincode 직렬화, 4바이트 길이 프리픽스 프레이밍, 자가서명 인증서 헬퍼 제공
 
 ### 성능 개선
 
@@ -49,6 +65,8 @@ WAL 구현 및 멀티코어 병렬화 전면 적용 릴리스.
 ### 의존성 추가
 
 - `wide = "0.7"` — stable SIMD 추상화 crate
+- `s2n-quic = "1"` — AWS QUIC 구현 (프로세스 간 레플리케이션용)
+- `tokio` — `net`, `io-util` feature 추가
 
 ---
 

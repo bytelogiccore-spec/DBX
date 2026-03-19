@@ -7,6 +7,11 @@
 
 pub mod router;
 pub mod scatter_gather;
+pub mod node_ring;
+pub mod rebalancer;
+pub mod two_phase;
 
 pub use router::{ShardNode, ShardRouter};
 pub use scatter_gather::ScatterGather;
+pub use node_ring::NodeRing;
+pub use rebalancer::{Rebalancer, MigrationTask, rebalancer_on_add, rebalancer_on_remove};

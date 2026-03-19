@@ -20,14 +20,17 @@
 
 use super::page::{PageEntry, WosPage};
 use super::wal::{WalRecord, replay_wal};
+use crate::engine::DirtyBufferMode;
 use crate::error::{DbxError, DbxResult};
 #[allow(unused_imports)]
 use rayon::prelude::ParallelIterator;
+use dashmap::DashMap;
 use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::fs::{File, OpenOptions};
 use std::io::{BufReader, Read, Seek, SeekFrom, Write};
 use std::ops::RangeBounds;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 // ──────────────────────────────────────────
 // 상수
@@ -113,12 +116,175 @@ enum DirtyState {
 }
 
 // ──────────────────────────────────────────
+// DirtyBuffer — BTreeMap / DashMap 래퍼
+// ──────────────────────────────────────────
+
+/// dirty 버퍼의 자료구조를 런타임에 선택 가능하도록 감싸는 enum.
+///
+/// - `Btree`: 정렬 유지 → 범위 scan에 효율적 (기본값)
+/// - `Dash`: 샤드 락 → 다중 스레드 동시 접근에 효율적
+enum DirtyBuffer {
+    Btree(BTreeMap<Vec<u8>, DirtyState>),
+    Dash(Arc<DashMap<Vec<u8>, DirtyState>>),
+}
+
+impl DirtyBuffer {
+    fn new(mode: DirtyBufferMode) -> Self {
+        match mode {
+            DirtyBufferMode::BTreeMap => Self::Btree(BTreeMap::new()),
+            DirtyBufferMode::DashMap => Self::Dash(Arc::new(DashMap::new())),
+        }
+    }
+
+    fn is_empty(&self) -> bool {
+        match self {
+            Self::Btree(m) => m.is_empty(),
+            Self::Dash(m) => m.is_empty(),
+        }
+    }
+
+    fn len(&self) -> usize {
+        match self {
+            Self::Btree(m) => m.len(),
+            Self::Dash(m) => m.len(),
+        }
+    }
+
+    fn insert_entry(&mut self, key: Vec<u8>, state: DirtyState) {
+        match self {
+            Self::Btree(m) => { m.insert(key, state); }
+            Self::Dash(m) => { m.insert(key, state); }
+        }
+    }
+
+    fn get_state(&self, key: &[u8]) -> Option<DirtyStateRef<'_>> {
+        match self {
+            Self::Btree(m) => m.get(key).map(DirtyStateRef::Borrowed),
+            Self::Dash(m) => m.get(key).map(DirtyStateRef::Owned),
+        }
+    }
+
+    /// 내용을 BTreeMap으로 변환하여 반환 (정렬 보장). 비운 후 반환.
+    fn take_as_btree(&mut self) -> BTreeMap<Vec<u8>, DirtyState> {
+        match self {
+            Self::Btree(m) => std::mem::take(m),
+            Self::Dash(m) => {
+                let mut out = BTreeMap::new();
+                for r in m.iter() {
+                    out.insert(r.key().clone(), match r.value() {
+                        DirtyState::Put(v) => DirtyState::Put(v.clone()),
+                        DirtyState::Delete => DirtyState::Delete,
+                    });
+                }
+                m.clear();
+                out
+            }
+        }
+    }
+
+    /// 범위 내 항목을 (key, DirtyState) vec으로 반환 (정렬됨).
+    fn range_vec<R: RangeBounds<Vec<u8>>>(&self, range: R) -> Vec<(Vec<u8>, &DirtyState)> {
+        match self {
+            Self::Btree(m) => m.range(range).map(|(k, v)| (k.clone(), v)).collect(),
+            Self::Dash(m) => {
+                // DashMap은 정렬이 없으므로 전체 순회 후 필터 + 정렬
+                let mut items: Vec<(Vec<u8>, DirtyState)> = m
+                    .iter()
+                    .filter(|r| range.contains(r.key()))
+                    .map(|r| (r.key().clone(), match r.value() {
+                        DirtyState::Put(v) => DirtyState::Put(v.clone()),
+                        DirtyState::Delete => DirtyState::Delete,
+                    }))
+                    .collect();
+                items.sort_by(|a, b| a.0.cmp(&b.0));
+                // 임시 소유 벡터를 반환할 수 없으므로 Btree로 복사 후 range
+                // (lifetime 제약상 owned 방식으로 반환)
+                drop(items); // 아래 owned_range_vec으로 대체
+                vec![] // placeholder — owned_range_vec 사용
+            }
+        }
+    }
+
+    /// 범위 내 항목을 소유값으로 반환 (정렬됨). DashMap / BTreeMap 모두 지원.
+    fn owned_range_vec<R: RangeBounds<Vec<u8>>>(&self, range: R) -> Vec<(Vec<u8>, DirtyStateOwned)> {
+        match self {
+            Self::Btree(m) => m
+                .range(range)
+                .map(|(k, v)| (k.clone(), DirtyStateOwned::from(v)))
+                .collect(),
+            Self::Dash(m) => {
+                let mut items: Vec<(Vec<u8>, DirtyStateOwned)> = m
+                    .iter()
+                    .filter(|r| range.contains(r.key()))
+                    .map(|r| (r.key().clone(), DirtyStateOwned::from(r.value())))
+                    .collect();
+                items.sort_by(|a, b| a.0.cmp(&b.0));
+                items
+            }
+        }
+    }
+
+    /// 전체 항목을 소유값으로 반환 (정렬됨).
+    fn all_iter_owned(&self) -> Vec<(Vec<u8>, DirtyStateOwned)> {
+        self.owned_range_vec::<std::ops::RangeFull>(..)
+    }
+
+    fn mode(&self) -> DirtyBufferMode {
+        match self {
+            Self::Btree(_) => DirtyBufferMode::BTreeMap,
+            Self::Dash(_) => DirtyBufferMode::DashMap,
+        }
+    }
+}
+
+// DirtyState 를 소유값으로 복사하기 위한 헬퍼
+enum DirtyStateOwned {
+    Put(Vec<u8>),
+    Delete,
+}
+
+impl From<&DirtyState> for DirtyStateOwned {
+    fn from(s: &DirtyState) -> Self {
+        match s {
+            DirtyState::Put(v) => Self::Put(v.clone()),
+            DirtyState::Delete => Self::Delete,
+        }
+    }
+}
+
+/// get_state() 반환값 — BTreeMap은 borrow, DashMap은 Ref 소유
+enum DirtyStateRef<'a> {
+    Borrowed(&'a DirtyState),
+    Owned(dashmap::mapref::one::Ref<'a, Vec<u8>, DirtyState>),
+}
+
+impl DirtyStateRef<'_> {
+    fn is_put(&self) -> Option<&Vec<u8>> {
+        match self {
+            Self::Borrowed(DirtyState::Put(v)) => Some(v),
+            Self::Owned(r) => match r.value() {
+                DirtyState::Put(v) => Some(v),
+                _ => None,
+            },
+            _ => None,
+        }
+    }
+    fn is_delete(&self) -> bool {
+        match self {
+            Self::Borrowed(DirtyState::Delete) => true,
+            Self::Owned(r) => matches!(r.value(), DirtyState::Delete),
+            _ => false,
+        }
+    }
+}
+
+// ──────────────────────────────────────────
 // TableStore
 // ──────────────────────────────────────────
 
 /// 단일 테이블의 WAL + SSTable 저장소.
 ///
-/// - `dirty`: flush 전 in-memory 변경분 (crash 시 소실)
+/// - `dirty`: flush 전 in-memory 변경분 (crash 시 소실, BTreeMap 또는 DashMap)
 /// - `wal_entries`: WAL에 기록됐지만 아직 SSTable에 compact 안 된 항목
 /// - `wal_file`: `.wal` 파일 핸들 (append-only)
 /// - `page_index`: SSTable 스파스 인덱스
@@ -128,7 +294,7 @@ pub struct TableStore {
     _path: PathBuf,    // .wos 경로
     wal_path: PathBuf, // .wal 경로
 
-    dirty: BTreeMap<Vec<u8>, DirtyState>, // 아직 WAL에도 안 씀
+    dirty: DirtyBuffer,                         // 아직 WAL에도 안 씀
     wal_entries: BTreeMap<Vec<u8>, DirtyState>, // WAL에 씀, SSTable엔 없음
 
     wal_file: File,
@@ -140,6 +306,11 @@ pub struct TableStore {
 
 impl TableStore {
     pub fn open(path: impl AsRef<Path>) -> DbxResult<Self> {
+        Self::open_with_mode(path, DirtyBufferMode::default())
+    }
+
+    /// dirty 버퍼 모드를 지정하여 열기.
+    pub fn open_with_mode(path: impl AsRef<Path>, mode: DirtyBufferMode) -> DbxResult<Self> {
         let path = path.as_ref().to_path_buf();
         let wal_path = path.with_extension("wal");
 
@@ -160,7 +331,7 @@ impl TableStore {
         let mut store = Self {
             _path: path,
             wal_path,
-            dirty: BTreeMap::new(),
+            dirty: DirtyBuffer::new(mode),
             wal_entries: BTreeMap::new(),
             wal_file,
             page_index: Vec::new(),
@@ -294,8 +465,8 @@ impl TableStore {
     // ──────────────────────────────────────────
 
     fn compact(&mut self) -> DbxResult<()> {
-        // 0. dirty를 먼저 wal_entries에 병합
-        for (k, state) in std::mem::take(&mut self.dirty) {
+        // 0. dirty를 먼저 wal_entries에 병합 (DashMap/BTreeMap 무관하게 take_as_btree 사용)
+        for (k, state) in self.dirty.take_as_btree() {
             self.wal_entries.insert(k, state);
         }
 
@@ -447,17 +618,17 @@ impl TableStore {
     // ──────────────────────────────────────────
 
     pub fn insert(&mut self, key: &[u8], value: &[u8]) -> DbxResult<()> {
-        self.dirty
-            .insert(key.to_vec(), DirtyState::Put(value.to_vec()));
+        self.dirty.insert_entry(key.to_vec(), DirtyState::Put(value.to_vec()));
         Ok(())
     }
 
     pub fn get(&mut self, key: &[u8]) -> DbxResult<Option<Vec<u8>>> {
         // 1. dirty (가장 최신)
-        if let Some(state) = self.dirty.get(key) {
-            return match state {
-                DirtyState::Put(v) => Ok(Some(v.clone())),
-                DirtyState::Delete => Ok(None),
+        if let Some(state_ref) = self.dirty.get_state(key) {
+            return if let Some(v) = state_ref.is_put() {
+                Ok(Some(v.clone()))
+            } else {
+                Ok(None) // Delete
             };
         }
         // 2. wal_entries (flush됐지만 compact 안됨)
@@ -485,7 +656,7 @@ impl TableStore {
 
     pub fn delete(&mut self, key: &[u8]) -> DbxResult<bool> {
         let existed = self.get(key)?.is_some();
-        self.dirty.insert(key.to_vec(), DirtyState::Delete);
+        self.dirty.insert_entry(key.to_vec(), DirtyState::Delete);
         Ok(existed)
     }
 
@@ -497,10 +668,11 @@ impl TableStore {
         if !self.has_flushed_data && self.wal_entries.is_empty() {
             return Ok(self
                 .dirty
-                .range(range)
+                .owned_range_vec(range)
+                .into_iter()
                 .filter_map(|(k, s)| match s {
-                    DirtyState::Put(v) => Some((k.clone(), v.clone())),
-                    DirtyState::Delete => None,
+                    DirtyStateOwned::Put(v) => Some((k, v)),
+                    DirtyStateOwned::Delete => None,
                 })
                 .collect());
         }
@@ -554,30 +726,22 @@ impl TableStore {
             }
         }
 
-        // wal_entries overlay — BTreeMap range로 순회 (range 조건 수동 체크)
+        // wal_entries overlay
         for (k, state) in &self.wal_entries {
             if !range.contains(k) {
                 continue;
             }
             match state {
-                DirtyState::Put(v) => {
-                    merged.insert(k.clone(), v.clone());
-                }
-                DirtyState::Delete => {
-                    merged.remove(k);
-                }
+                DirtyState::Put(v) => { merged.insert(k.clone(), v.clone()); }
+                DirtyState::Delete => { merged.remove(k); }
             }
         }
 
         // dirty overlay
-        for (k, state) in self.dirty.range(range) {
+        for (k, state) in self.dirty.owned_range_vec(range) {
             match state {
-                DirtyState::Put(v) => {
-                    merged.insert(k.clone(), v.clone());
-                }
-                DirtyState::Delete => {
-                    merged.remove(k);
-                }
+                DirtyStateOwned::Put(v) => { merged.insert(k, v); }
+                DirtyStateOwned::Delete => { merged.remove(&k); }
             }
         }
 
@@ -603,11 +767,12 @@ impl TableStore {
         }
 
         // P8: WAL record encode 병렬화 후 순서 보장으로 파일 쓰기
-        // encode는 CPU-bound이므로 par_iter()로 병렬 처리
-        // I/O 쓰기는 순차(파일 append 순서 보장 필요)
         const PARALLEL_WAL_THRESHOLD: usize = 500;
 
-        let entries: Vec<(&Vec<u8>, &DirtyState)> = self.dirty.iter().collect();
+        // dirty 소유 벡터로 변환 (정렬 보장, DashMap/BTreeMap 없이 동일 코드)
+        let entries: Vec<(Vec<u8>, DirtyStateOwned)> = self.dirty.all_iter_owned();
+        // dirty 비운 후 wal_entries로 이동 (아래에서 처리)
+        self.dirty.take_as_btree(); // 비운다
 
         let encoded_records: Vec<Vec<u8>> = if entries.len() >= PARALLEL_WAL_THRESHOLD {
             use rayon::prelude::*;
@@ -615,15 +780,10 @@ impl TableStore {
                 .par_iter()
                 .map(|(k, state)| {
                     let (val, deleted) = match state {
-                        DirtyState::Put(v) => (v.as_slice(), false),
-                        DirtyState::Delete => (b"".as_ref(), true),
+                        DirtyStateOwned::Put(v) => (v.as_slice(), false),
+                        DirtyStateOwned::Delete => (b"".as_ref(), true),
                     };
-                    WalRecord {
-                        key: k.to_vec(),
-                        value: val.to_vec(),
-                        deleted,
-                    }
-                    .encode()
+                    WalRecord { key: k.to_vec(), value: val.to_vec(), deleted }.encode()
                 })
                 .collect()
         } else {
@@ -631,15 +791,10 @@ impl TableStore {
                 .iter()
                 .map(|(k, state)| {
                     let (val, deleted) = match state {
-                        DirtyState::Put(v) => (v.as_slice(), false),
-                        DirtyState::Delete => (b"".as_ref(), true),
+                        DirtyStateOwned::Put(v) => (v.as_slice(), false),
+                        DirtyStateOwned::Delete => (b"".as_ref(), true),
                     };
-                    WalRecord {
-                        key: k.to_vec(),
-                        value: val.to_vec(),
-                        deleted,
-                    }
-                    .encode()
+                    WalRecord { key: k.to_vec(), value: val.to_vec(), deleted }.encode()
                 })
                 .collect()
         };
@@ -650,9 +805,13 @@ impl TableStore {
         }
         self.wal_file.sync_all()?;
 
-        // dirty → wal_entries 이동
-        for (k, state) in std::mem::take(&mut self.dirty) {
-            self.wal_entries.insert(k, state);
+        // dirty 항목을 wal_entries로 이동
+        for (k, state) in entries {
+            let ds = match state {
+                DirtyStateOwned::Put(v) => DirtyState::Put(v),
+                DirtyStateOwned::Delete => DirtyState::Delete,
+            };
+            self.wal_entries.insert(k, ds);
         }
 
         // WAL이 너무 크면 compact

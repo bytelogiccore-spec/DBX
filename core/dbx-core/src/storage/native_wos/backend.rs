@@ -1,6 +1,7 @@
 //! NativeWosBackend — StorageBackend 구현 (stub, Task 3에서 완성)
 
 use super::table_store::TableStore;
+use crate::engine::DirtyBufferMode;
 use crate::error::DbxResult;
 use crate::storage::StorageBackend;
 use dashmap::DashMap;
@@ -13,41 +14,52 @@ use std::sync::Mutex;
 pub struct NativeWosBackend {
     base_path: PathBuf,
     tables: DashMap<String, Mutex<TableStore>>,
+    dirty_buffer_mode: DirtyBufferMode,
     /// 임시 디렉토리 소유권 보관 (open_temporary 시 drop 방지)
     _temp_dir: Option<tempfile::TempDir>,
 }
 
 impl NativeWosBackend {
     pub fn open(base_path: &Path) -> DbxResult<Self> {
+        Self::open_with_mode(base_path, DirtyBufferMode::default())
+    }
+
+    /// dirty 버퍼 모드를 지정하여 열기.
+    pub fn open_with_mode(base_path: &Path, mode: DirtyBufferMode) -> DbxResult<Self> {
         std::fs::create_dir_all(base_path)?;
         Ok(Self {
             base_path: base_path.to_path_buf(),
             tables: DashMap::new(),
+            dirty_buffer_mode: mode,
             _temp_dir: None,
         })
     }
 
     /// 임시 백엔드 (테스트 및 in-memory 모드용)
     pub fn open_temporary() -> DbxResult<Self> {
+        Self::open_temporary_with_mode(DirtyBufferMode::default())
+    }
+
+    /// 임시 백엔드 + dirty 모드 지정
+    pub fn open_temporary_with_mode(mode: DirtyBufferMode) -> DbxResult<Self> {
         let dir = tempfile::tempdir()?;
         let path = dir.path().to_path_buf();
         Ok(Self {
             base_path: path,
             tables: DashMap::new(),
-            _temp_dir: Some(dir), // TempDir 소유권 유지 → drop 방지
+            dirty_buffer_mode: mode,
+            _temp_dir: Some(dir),
         })
     }
 
     fn get_or_open(&self, table: &str) -> DbxResult<()> {
         if !self.tables.contains_key(table) {
-            // 테이블 이름의 파일시스템 불가 문자를 '_'로 치환
             let safe_name = table.replace(['/', '\\', ':', '*', '?', '"', '<', '>', '|'], "_");
             let path = self.base_path.join(format!("{safe_name}.wos"));
-            // 중간 디렉토리 생성 (혹시 남은 경우를 대비)
             if let Some(parent) = path.parent() {
                 std::fs::create_dir_all(parent)?;
             }
-            let store = TableStore::open(&path)?;
+            let store = TableStore::open_with_mode(&path, self.dirty_buffer_mode)?;
             self.tables.insert(table.to_string(), Mutex::new(store));
         }
         Ok(())

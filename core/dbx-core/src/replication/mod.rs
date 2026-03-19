@@ -13,7 +13,12 @@
 pub mod master;
 pub mod protocol;
 pub mod slave;
+pub mod node;
+pub mod vector_clock;
+pub mod transport;
 
 pub use master::ReplicationMaster;
 pub use protocol::ReplicationMessage;
 pub use slave::ReplicationSlave;
+pub use node::{ReplicationNode, NodeRole, NodeError};
+pub use vector_clock::{VectorClock, VectorClockOrder};

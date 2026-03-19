@@ -73,7 +73,7 @@ impl ReplicationSlave {
                 .await
                 .map_err(|e| ReplayError::ChannelError(e.to_string()))?;
 
-            if let ReplicationMessage::WalEntry { lsn, data } = msg {
+            if let ReplicationMessage::WalEntry { lsn, data, .. } = msg {
                 // LSN 순서 검증 (선택적)
                 let last = self.last_applied_lsn.load(Ordering::SeqCst);
                 if last != u64::MAX && lsn <= last {

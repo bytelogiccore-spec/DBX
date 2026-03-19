@@ -33,7 +33,12 @@ impl ReplicationMaster {
     /// `data` — 직렬화된 WAL 레코드 바이트
     pub fn replicate(&self, data: Vec<u8>) -> u64 {
         let lsn = self.current_lsn.fetch_add(1, Ordering::SeqCst);
-        let msg = ReplicationMessage::WalEntry { lsn, data };
+        let msg = ReplicationMessage::WalEntry { 
+            node_id: 0,
+            lsn, 
+            timestamp: std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_micros() as u64,
+            data 
+        };
         // 수신자가 없어도 에러 무시 (Slave가 아직 연결 안 됐을 수 있음)
         let _ = self.tx.send(msg);
         lsn
@@ -42,7 +47,7 @@ impl ReplicationMaster {
     /// Heartbeat 전송
     pub fn heartbeat(&self) {
         let lsn = self.current_lsn.load(Ordering::SeqCst);
-        let _ = self.tx.send(ReplicationMessage::Heartbeat { lsn });
+        let _ = self.tx.send(ReplicationMessage::Heartbeat { node_id: 0, lsn });
     }
 
     /// 새 Slave를 위한 구독자 추가
@@ -77,7 +82,7 @@ mod tests {
         master.replicate(b"hello".to_vec());
 
         let msg = rx.recv().await.unwrap();
-        if let ReplicationMessage::WalEntry { lsn, data } = msg {
+        if let ReplicationMessage::WalEntry { lsn, data, .. } = msg {
             assert_eq!(lsn, 0);
             assert_eq!(data, b"hello");
         } else {

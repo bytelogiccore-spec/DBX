@@ -96,6 +96,7 @@ pub enum DataType {
     Bytes,
     Row,
     RecordBatch,
+    Array,
     Table,
 }
 
@@ -108,6 +109,8 @@ pub enum Value {
     Float(f64),
     String(String),
     Bytes(Vec<u8>),
+    /// 1차원 배열/콜럼
+    Array(Vec<Value>),
     /// 테이블 결과 (행 × 열)
     Table(Vec<Vec<Value>>),
 }
@@ -121,6 +124,7 @@ impl Value {
             Value::Float(_) => DataType::Float,
             Value::String(_) => DataType::String,
             Value::Bytes(_) => DataType::Bytes,
+            Value::Array(_) => DataType::Array,
             Value::Table(_) => DataType::Table,
         }
     }
@@ -192,7 +196,19 @@ impl Value {
             Value::Float(f) => *f != 0.0,
             Value::String(s) => !s.is_empty(),
             Value::Bytes(b) => !b.is_empty(),
+            Value::Array(a) => !a.is_empty(),
             Value::Table(t) => !t.is_empty(),
+        }
+    }
+
+    /// 콜럼 데이터 반환
+    pub fn as_array(&self) -> DbxResult<&Vec<Value>> {
+        match self {
+            Value::Array(a) => Ok(a),
+            _ => Err(DbxError::TypeMismatch {
+                expected: "Array".to_string(),
+                actual: format!("{:?}", self.data_type()),
+            }),
         }
     }
 

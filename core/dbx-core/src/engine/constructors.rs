@@ -705,7 +705,7 @@ impl Database {
         let wal_path = path.join("wal.log");
         let wal = Arc::new(crate::wal::WriteAheadLog::open(&wal_path)?);
 
-        let wos_backend = Arc::new(NativeWosBackend::open(&wos_path)?);
+        let wos_backend = Arc::new(NativeWosBackend::open_with_mode(&wos_path, config.dirty_buffer_mode)?);
         let db_index = Arc::new(HashIndex::new());
 
         let loaded_schemas = crate::engine::metadata::load_all_schemas(&wos_backend)?;

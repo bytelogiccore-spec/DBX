@@ -1,7 +1,7 @@
 //! Shard 라우터 — FNV1a 해시 기반 키→샤드 매핑
 
 /// FNV-1a 32-bit 해시 (결정론적, 빠른 비암호학적 해시)
-fn fnv1a_hash(data: &[u8]) -> u64 {
+pub fn fnv1a_hash(data: &[u8]) -> u64 {
     const FNV_OFFSET: u64 = 14_695_981_039_346_656_037;
     const FNV_PRIME: u64 = 1_099_511_628_211;
     let mut hash = FNV_OFFSET;
@@ -19,32 +19,49 @@ pub struct ShardNode {
     pub id: usize,
     /// 연결 주소 (예: "10.0.0.1:5432")
     pub address: String,
+    /// 노드 가중치 — 1.0이 기본
+    /// 가중치가 높을수록 vnode가 더 많이 배정되어 더 많은 데이터를 담당
+    pub weight: f64,
 }
+
+use crate::sharding::node_ring::NodeRing;
 
 /// 샤드 라우터
 ///
 /// 키를 받아 어느 ShardNode로 라우팅할지 결정합니다.
-/// `consistent_hashing = false` 이면 단순 모듈러(key_hash % n).
+/// 일관된 해싱(Consistent Hashing) 링을 통해 노드 간 부하 분산을 수행합니다.
 #[derive(Debug)]
 pub struct ShardRouter {
     shards: Vec<ShardNode>,
+    ring: NodeRing,
 }
 
 impl ShardRouter {
     /// n개의 로컬 샤드 라우터 생성 (테스트/개발용)
     pub fn new_local(n: usize) -> Self {
-        let shards = (0..n)
+        let shards: Vec<ShardNode> = (0..n)
             .map(|i| ShardNode {
                 id: i,
                 address: format!("127.0.0.1:{}", 5000 + i),
+                weight: 1.0, // 기본 가중치
             })
             .collect();
-        Self { shards }
+
+        let mut ring = NodeRing::new(100);
+        for s in &shards {
+            ring.add_node(s);
+        }
+
+        Self { shards, ring }
     }
 
     /// 커스텀 노드 목록으로 라우터 생성
     pub fn new(shards: Vec<ShardNode>) -> Self {
-        Self { shards }
+        let mut ring = NodeRing::new(100);
+        for s in &shards {
+            ring.add_node(s);
+        }
+        Self { shards, ring }
     }
 
     /// 샤드 수
@@ -52,12 +69,13 @@ impl ShardRouter {
         self.shards.len()
     }
 
-    /// key 바이트로부터 샤드 인덱스 결정 (FNV1a % N)
+    /// key 바이트로부터 물리 샤드 노드 ID 인덱스 결정 (Consistent Hashing)
     pub fn shard_index(&self, key: &[u8]) -> usize {
         if self.shards.is_empty() {
             return 0;
         }
-        (fnv1a_hash(key) % self.shards.len() as u64) as usize
+        let hash = fnv1a_hash(key);
+        self.ring.get_node(hash).unwrap_or(0)
     }
 
     /// key로부터 담당 ShardNode 반환

@@ -3,7 +3,7 @@ layout: default
 title: DB 설정 가이드
 parent: 한국어
 nav_order: 35
-description: "DbConfig, ParallelismConfig, DurabilityLevel, EncryptionConfig — DBX 전체 설정 항목 상세 가이드"
+description: "DbConfig, DirtyBufferMode, ParallelismConfig, DurabilityLevel, EncryptionConfig — DBX 전체 설정 항목 상세 가이드"
 ---
 
 # DB 설정 가이드
@@ -78,10 +78,73 @@ let db = Database::open_encrypted(Path::new("./data"), enc)?;
 ```rust
 pub struct DbConfig {
     pub parallelism: ParallelismConfig,
+    pub sync: RealtimeSyncConfig,
+    pub replication: ReplicationConfig,
+    pub dirty_buffer_mode: DirtyBufferMode,  // v0.1.2-beta 추가
 }
 ```
 
-현재 `DbConfig`에는 `parallelism` 필드만 포함되어 있습니다. 향후 WAL 설정, 캐시 크기 등이 추가될 예정입니다.
+---
+
+## `DirtyBufferMode` — WOS dirty 버퍼 자료구조 선택
+
+> **파일**: `src/engine/parallel_engine.rs`  
+> **추가**: v0.1.2-beta
+
+WOS Tier 3의 `dirty` 버퍼(flush 전 임시 메모리 저장소)에 사용할 자료구조를 선택합니다.
+
+| 값 | 기본 | 특징 | 권장 워크로드 |
+|----|:----:|------|--------------|
+| `BTreeMap` | ✅ | 키 정렬 유지 → `scan(range)` 효율적 | 범위 쿼리 많은 OLAP / 일반 OLTP |
+| `DashMap` | | 샤드 락 → 다중 스레드 동시 접근 효율적 | 단순 get/insert 위주, 쓰기 폭발적 |
+
+### 전환 안전성
+
+`dirty`는 디스크에 저장되지 않는 순수 인메모리 버퍼입니다.  
+재시작 시 항상 빈 상태로 시작하므로, 두 모드 간 자유롭게 전환해도 **기존 데이터 손상 없음**.
+
+```
+프로그램 시작
+  └─ dirty = 빈 상태 (항상, BTreeMap/DashMap 무관)
+       ↓
+  WAL 파일에서 wal_entries 복구
+       ↓
+  SSTable 인덱스 로드
+```
+
+### 사용 예시
+
+```rust
+use dbx_core::Database;
+use dbx_core::engine::parallel_engine::{DbConfig, DirtyBufferMode};
+
+// DashMap 모드 (단순 get/insert 위주 고성능 워크로드)
+let db = Database::open_with_config(
+    Path::new("./data"),
+    DbConfig {
+        dirty_buffer_mode: DirtyBufferMode::DashMap,
+        ..Default::default()
+    },
+)?;
+
+// 기본값 (BTreeMap — 범위 쿼리 최적화)
+let db = Database::open_with_config(
+    Path::new("./data"),
+    DbConfig::default(),
+)?;
+```
+
+### DashMap 모드의 트레이드오프
+
+| 연산 | BTreeMap | DashMap |
+|------|:--------:|:-------:|
+| `get(key)` 단순 조회 | 보통 | 빠름 |
+| `scan(range)` 범위 쿼리 | **빠름** | 느림 (전체 순회 후 정렬) |
+| 동시 다중 스레드 접근 | 순차 | **동시** |
+| compact 시 정렬 비용 | 없음 | 있음 (내부 정렬 1회) |
+
+> **참고**: `dirty`는 flush 전 임시 버퍼이므로 데이터가 쌓이기 전에 WAL로 이동합니다.  
+> SSTable 범위 쿼리(`scan`)에는 영향 없음 — SSTable은 항상 정렬된 상태.
 
 ---
 
@@ -286,7 +349,7 @@ Tier 1 (Delta Store)의 내부 구현체입니다.
 
 ```rust
 use dbx_core::Database;
-use dbx_core::engine::parallel_engine::{DbConfig, ParallelismConfig};
+use dbx_core::engine::parallel_engine::{DbConfig, ParallelismConfig, DirtyBufferMode};
 use dbx_core::storage::encryption::{EncryptionConfig, EncryptionAlgorithm};
 
 // 고성능 서버 환경 (모든 코어, aggressive 병렬화)
@@ -294,6 +357,7 @@ let db = Database::open_with_config(
     Path::new("./data"),
     DbConfig {
         parallelism: ParallelismConfig::aggressive(),
+        ..Default::default()
     },
 )?;
 
@@ -302,10 +366,21 @@ let db = Database::open_with_config(
     Path::new("./data"),
     DbConfig {
         parallelism: ParallelismConfig::conservative(),
+        ..Default::default()
     },
 )?;
 
-// 암호화 + 고성능 병렬화 (현재 open_encrypted는 DbConfig 미지원 — 로드맵)
+// 단순 get/insert 위주 고성능 (DashMap 모드)
+let db = Database::open_with_config(
+    Path::new("./data"),
+    DbConfig {
+        dirty_buffer_mode: DirtyBufferMode::DashMap,
+        parallelism: ParallelismConfig::aggressive(),
+        ..Default::default()
+    },
+)?;
+
+// 암호화 DB
 let enc = EncryptionConfig::from_password("secret");
 let db = Database::open_encrypted(Path::new("./data"), enc)?;
 
@@ -320,6 +395,8 @@ let db = Database::open_in_memory()?;
 | 시나리오 | 권장 설정 |
 |---------|---------|
 | 전용 서버 분석 쿼리 | `open_with_config` + `aggressive()` |
+| 범위 쿼리 많은 OLAP | `open_with_config` + `DirtyBufferMode::BTreeMap` (기본값) |
+| 단순 get/insert 고처리량 | `open_with_config` + `DirtyBufferMode::DashMap` |
 | 개발 PC / 노트북 | `open_with_config` + `conservative()` |
 | 일반 OLTP 서버 | `open()` (기본값) |
 | 데이터 보호 필요 | `open_encrypted()` |

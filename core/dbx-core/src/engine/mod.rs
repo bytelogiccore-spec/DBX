@@ -38,7 +38,7 @@ pub use delta_variant::DeltaVariant;
 pub use feature_flags::{Feature, FeatureFlags};
 pub use metadata::{FieldMetadata, IndexMetadata, SchemaMetadata};
 pub use parallel_engine::{
-    DbConfig, ParallelExecutionEngine, ParallelismConfig, ParallelizationPolicy,
+    DbConfig, DirtyBufferMode, ParallelExecutionEngine, ParallelismConfig, ParallelizationPolicy,
 };
 pub use rollback::{Checkpoint, RollbackManager};
 pub use schema_builder::SchemaBuilder;

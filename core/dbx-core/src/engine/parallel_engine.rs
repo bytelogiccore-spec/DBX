@@ -276,16 +276,35 @@ impl Default for ParallelExecutionEngine {
 }
 
 use crate::storage::realtime_sync::RealtimeSyncConfig;
+use crate::replication::transport::ReplicationConfig;
+
+/// WOS `dirty` 버퍼에 사용할 자료구조 선택.
+///
+/// | 모드 | 특징 |
+/// |------|------|
+/// | `BTreeMap` (기본) | 키 정렬 유지 → 범위 쿼리(scan) 효율적 |
+/// | `DashMap` | 샤드 락 → 다중 스레드 동시 접근 효율적 |
+///
+/// `dirty`는 재시작 시 항상 빈 상태로 초기화되므로 두 모드 간 자유롭게 전환 가능.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum DirtyBufferMode {
+    /// 기본값: BTreeMap — 범위 쿼리 최적화, 정렬 유지
+    #[default]
+    BTreeMap,
+    /// DashMap — 동시성 최적화 (단순 get/insert 위주 워크로드)
+    DashMap,
+}
 
 /// 데이터베이스 전체 설정
 ///
-/// `Database::open_with_config()`에 전달하여 병렬 처리 등을 제어합니다.
+/// `Database::open_with_config()`에 전달하여 동작을 제어합니다.
 ///
 /// # 예시
 /// ```rust
-/// use dbx_core::engine::parallel_engine::{DbConfig, ParallelismConfig};
+/// use dbx_core::engine::parallel_engine::{DbConfig, ParallelismConfig, DirtyBufferMode};
 /// let config = DbConfig {
 ///     parallelism: ParallelismConfig::conservative(),
+///     dirty_buffer_mode: DirtyBufferMode::DashMap,
 ///     ..Default::default()
 /// };
 /// ```
@@ -295,6 +314,10 @@ pub struct DbConfig {
     pub parallelism: ParallelismConfig,
     /// HTAP 실시간 동기화 설정 (기본은 Threshold(10,000))
     pub sync: RealtimeSyncConfig,
+    /// 레플리케이션 / Transport 설정 (기본은 인메모리)
+    pub replication: ReplicationConfig,
+    /// dirty 버퍼 자료구조 선택 (기본: BTreeMap)
+    pub dirty_buffer_mode: DirtyBufferMode,
 }
 
 #[cfg(test)]
