@@ -14,6 +14,88 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.1-beta] - 2026-03-19
+
+WAL sequential append, multi-core parallelization, Multi-Master Failover, cross-node sharding enhancements, distributed transactions, and Phase 3 partitioning synergy.
+
+### New Features
+
+#### 📊 Partitioning Synergy (Phase 3)
+
+- **INSERT auto-increments row_count** — Every INSERT into a partitioned table automatically increments `row_count` for the target partition. No manual call needed
+- **`update_partition_stats(table, partition, stats)`** — Manual precision stats for the query optimizer (min/max/null/distinct)
+- **`get_partition_stats` / `all_partition_stats`** — Per-partition statistics queries
+- **`set_partition_compression(table, partition, config)`** — Per-partition independent compression level (ZSTD 1–9)
+- **`get_partition_compression`** — Query current setting (returns Snappy default if unset)
+- **`enable_auto_archive(table, lifecycle)`** — Single call activates full automation
+  - Immediately spawns `dbx-lifecycle-scheduler` background thread (1-hour interval)
+  - Only one thread regardless of how many tables are registered (CAS `compare_exchange` guarantee)
+  - `archive_after_days` elapsed → ZSTD level 9 + Cold tier auto-applied
+  - `delete_after_days` elapsed → partition metadata auto-deleted
+- **`run_partition_lifecycle(table)`** — On-demand immediate execution, returns `(archived, deleted)`
+- **`run_all_partition_lifecycles()`** — Batch immediate execution for all registered tables
+- **`get_partition_creation_time(partition)`** — Auto-recorded first-write timestamp (set on INSERT)
+- **`partition_needs_archive` / `partition_needs_delete`** — Manual condition checks
+- **`set_partition_tier(table, partition, hint)`** — Set `Hot` / `Warm` / `Cold` tier hint
+- **`get_partition_tier`** — Query current tier (returns `Hot` default if unset)
+- **`list_partitions_by_tier(table, hint)`** — List partitions of a given tier
+
+#### 📦 WAL / Parallelization
+
+- **WAL sequential append** — Sequential appends to WAL file instead of full rewrite on WOS flush. `compact()` triggered only when `wal_entries >= WAL_COMPACT_THRESHOLD`
+- **`ParallelismConfig` / `DbConfig`** — Control CPU core usage ratio (`cpu_cap`) and parallelization threshold (`min_rows_for_parallel`)
+- **`DirtyBufferMode`** — Runtime-selectable data structure for WOS `dirty` buffer: `BTreeMap` (default, range query optimal) or `DashMap` (concurrent optimal). Freely switchable between restarts
+- **`Database::open_with_config()`** — New constructor accepting `DbConfig`. Provides `conservative()` / `aggressive()` presets
+- **`Compactor::bypass_flush_tables()`** — New API to bypass_flush multiple tables simultaneously
+
+#### 🔄 Multi-Master Failover
+
+- **Quorum-based leader election** — Stable master election via `term` numbers and majority vote counting (Raft-like). Lower-term masters auto-demoted to Slave to prevent Split-Brain (`replication/node.rs`, `replication/protocol.rs`)
+- **Vector Clock** — Causality-based conflict detection replacing LWW. `HappensBefore` / `Concurrent` determination for lossless conflict resolution (`replication/vector_clock.rs`)
+
+#### 🗂️ Cross-Node Sharding Enhancements
+
+- **Weight-based vnode distribution** — `ShardNode::weight` field for non-uniform data allocation per node (`sharding/node_ring.rs`, `sharding/router.rs`)
+- **Data rebalancing** — Automatic key migration for affected hash ranges when adding/removing nodes. `compute_tasks()` + `execute()` pattern (`sharding/rebalancer.rs`)
+- **2PC distributed transactions** — Two-phase commit (Prepare → Commit/Abort) for cross-node atomicity. Full rollback if any participant fails (`sharding/two_phase.rs`)
+
+#### 🌐 QUIC-based Transport Layer
+
+- **s2n-quic QuicTransport** — Real inter-process communication using AWS `s2n-quic` (v1.76). Built-in TLS 1.3, Head-of-Line Blocking-free multi-stream (`replication/transport.rs`)
+- **Runtime transport config** — Switch between single-process ↔ distributed without code changes via `ReplicationConfig::in_memory()` / `ReplicationConfig::quic(...)`
+- **QuicNode server/client mode** — Async `QuicNode::server()` / `QuicNode::client()` initialization with bincode serialization, 4-byte length-prefix framing, and self-signed certificate helper
+
+### Performance Improvements
+
+| Item | Detail | File |
+|------|---------|------|
+| P1 | `insert_batch()` — parallel insertion via `par_iter()` for 1,000+ rows | `crud.rs` |
+| P2 | `get_batches()` projection — parallel column selection via `par_iter()` | `columnar_cache.rs` |
+| P3 | GROUP BY aggregation — parallel aggregation via `par_iter()` for 1,000+ groups | `hash_aggregate.rs` |
+| P4 | JOIN build/probe — `into_par_iter()` (1,000-row threshold) | `join.rs` |
+| P5 | `scan()` — concurrent Delta+WOS scan via `rayon::join()` | `crud.rs` |
+| P6 | `compact()` — page deserialization parallelized via `par_iter()` | `table_store.rs` |
+| P7 | SIMD — switched to `wide` crate stable (nightly removed, always active) | `simd.rs` |
+| P8 | WAL encode — serialization via `par_iter()`, file writes sequential | `table_store.rs` |
+| P9 | Compaction — batch `Arc::clone` collected in parallel via `par_iter()` | `compaction.rs` |
+
+### Internal Changes
+
+- `Database` struct: added `partition_stats`, `partition_compression`, `partition_lifecycle`, `partition_tier_hints`, `partition_creation_times`, `lifecycle_stop_flag`, `lifecycle_running` fields
+- `crud.rs` `insert()`: added partition auto-stats/timestamp hook (zero overhead for non-partitioned tables)
+
+### Dependencies Added
+
+- `wide = "0.7"` — stable SIMD abstraction crate
+- `s2n-quic = "1"` — AWS QUIC implementation (inter-process replication)
+- `tokio` — added `net`, `io-util` features
+
+### Tests
+
+23 new integration tests added (all passing). Existing regression: 78 integration, 509 unit tests — no regressions.
+
+---
+
 ## [0.0.4-beta] - 2026-02-15
 
 First feature release. Full query execution pipeline optimization.
