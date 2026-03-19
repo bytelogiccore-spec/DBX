@@ -16,10 +16,9 @@ on:
   workflow_dispatch:
 
 jobs:
-  rust:
-    name: Rust 코어 빌드 및 테스트
+  check:
+    name: 포맷 & Lint
     runs-on: windows-latest
-
     steps:
       - uses: actions/checkout@v4
 
@@ -30,6 +29,8 @@ jobs:
 
       - name: Rust 캐시
         uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: 포맷 검사
         run: cargo fmt --all -- --check
@@ -37,17 +38,28 @@ jobs:
       - name: Lint 검사 (dbx-core)
         run: cargo clippy -p dbx-core -- -D warnings
 
-      - name: 빌드 (dbx-core)
-        run: cargo build -p dbx-core --locked
+  build-and-test:
+    name: 빌드 & 테스트
+    runs-on: windows-latest
+    needs: check
+    steps:
+      - uses: actions/checkout@v4
 
-      - name: 테스트 (dbx-core)
-        run: cargo test -p dbx-core --locked
+      - name: Rust 설치
+        uses: dtolnay/rust-toolchain@stable
 
-      - name: 빌드 (dbx-ffi)
-        run: cargo build -p dbx-ffi --locked
+      - name: Rust 캐시
+        uses: Swatinem/rust-cache@v2
 
-      - name: 빌드 (dbx-csharp)
-        run: cargo build -p dbx-csharp --locked
+      - name: 빌드 & 테스트 (dbx-core)
+        run: |
+          cargo build -p dbx-core --locked
+          cargo test -p dbx-core --locked
+
+      - name: 빌드 (dbx-ffi, dbx-csharp)
+        run: |
+          cargo build -p dbx-ffi --locked
+          cargo build -p dbx-csharp --locked
 
       - name: Node.js 설치
         uses: actions/setup-node@v4
