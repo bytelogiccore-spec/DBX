@@ -144,6 +144,7 @@ impl DirtyBuffer {
         }
     }
 
+    #[allow(dead_code)]
     fn len(&self) -> usize {
         match self {
             Self::Btree(m) => m.len(),
@@ -191,6 +192,7 @@ impl DirtyBuffer {
     }
 
     /// 범위 내 항목을 (key, DirtyState) vec으로 반환 (정렬됨).
+    #[allow(dead_code)]
     fn range_vec<R: RangeBounds<Vec<u8>>>(&self, range: R) -> Vec<(Vec<u8>, &DirtyState)> {
         match self {
             Self::Btree(m) => m.range(range).map(|(k, v)| (k.clone(), v)).collect(),
@@ -245,6 +247,7 @@ impl DirtyBuffer {
         self.owned_range_vec::<std::ops::RangeFull>(..)
     }
 
+    #[allow(dead_code)]
     fn mode(&self) -> DirtyBufferMode {
         match self {
             Self::Btree(_) => DirtyBufferMode::BTreeMap,
@@ -285,6 +288,7 @@ impl DirtyStateRef<'_> {
             _ => None,
         }
     }
+    #[allow(dead_code)]
     fn is_delete(&self) -> bool {
         match self {
             Self::Borrowed(DirtyState::Delete) => true,

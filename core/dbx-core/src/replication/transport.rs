@@ -27,9 +27,10 @@ use crate::replication::protocol::ReplicationMessage;
 // ─────────────────────────────────────────────────────────────────────────────
 
 /// Transport 동작 모드
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub enum TransportMode {
     /// 단일 프로세스 내 인메모리 통신 (기본)
+    #[default]
     InMemory,
     /// QUIC 기반 네트워크 통신 (프로세스 간 / 분산 배포)
     Quic {
@@ -42,11 +43,6 @@ pub enum TransportMode {
     },
 }
 
-impl Default for TransportMode {
-    fn default() -> Self {
-        TransportMode::InMemory
-    }
-}
 
 /// 레플리케이션 전체 설정
 ///
@@ -450,7 +446,7 @@ pub mod quic {
                 "/CN=dbx-node",
             ])
             .status()
-            .map_err(|e| QuicError::IoError(e))?;
+            .map_err(QuicError::IoError)?;
 
         if !status.success() {
             return Err(QuicError::ConnectionError(

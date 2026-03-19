@@ -24,6 +24,7 @@ pub enum PrepareResult {
 /// 2PC Coordinator
 ///
 /// - `participants`: 참여 노드 집합 (node_id → 준비 콜백)
+#[derive(Default)]
 pub struct TwoPhaseCoordinator {
     /// 다음에 발급할 트랜잭션 ID
     next_txn_id: TxnId,
@@ -40,10 +41,7 @@ pub enum CommitOutcome {
 
 impl TwoPhaseCoordinator {
     pub fn new() -> Self {
-        Self {
-            next_txn_id: 1,
-            pending: HashMap::new(),
-        }
+        Self::default()
     }
 
     /// 새 트랜잭션 ID 발급

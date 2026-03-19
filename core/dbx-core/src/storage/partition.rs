@@ -388,9 +388,10 @@ pub struct PartitionLifecycle {
 /// use dbx_core::storage::partition::PartitionTierHint;
 /// assert_eq!(PartitionTierHint::default(), PartitionTierHint::Hot);
 /// ```
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum PartitionTierHint {
     /// 최근 데이터 — Delta/Cache (Tier 1-2)에 우선 배치
+    #[default]
     Hot,
     /// 중간 데이터 — WOS (Tier 3)에 배치
     Warm,
@@ -398,8 +399,3 @@ pub enum PartitionTierHint {
     Cold,
 }
 
-impl Default for PartitionTierHint {
-    fn default() -> Self {
-        Self::Hot
-    }
-}
