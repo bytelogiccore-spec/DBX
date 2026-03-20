@@ -138,10 +138,8 @@ DBX provides official bindings for multiple languages:
 - ✅ **QUIC Transport** — s2n-quic TLS 1.3 inter-node communication
 - ✅ **Cross-Node Sharding** — Consistent Hashing, weight-based vnodes, 2PC transactions
 - ✅ **DbConfig** — Runtime `DirtyBufferMode`, `ParallelismConfig`, `DurabilityLevel`
-
-### Roadmap 🚧
-- **Materialized Views** — Pre-computed query results with automatic refresh
-- **Streaming Ingestion** — Real-time data pipeline support
+- ✅ **Materialized Views** — Pre-computed query result cache with automatic background refresh (60s)
+- ✅ **Streaming Ingestion** — Channel-based INSERT/UPDATE/DELETE CDC pipeline
 
 ---
 
@@ -157,7 +155,7 @@ See the [LICENSE](LICENSE) file for more details.
 
 Issues and PRs are always welcome!
 
-Please read our [Contributing Guide](./legal/english/CONTRIBUTING.md) for details on our code of conduct and the process for submitting pull requests.
+Please read our [Contributing Guide](./legal/english/CONTRIBUTING.md) for details on our code of conduct, the process for submitting pull requests, and **build optimization tips (Windows LLD, Linux mold, Defender exclusions, etc.)**.
 
 ---
 

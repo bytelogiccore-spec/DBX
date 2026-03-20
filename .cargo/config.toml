@@ -1,0 +1,8 @@
+# Windows 환경 (로컬, publish-*.yml, release.yml)용 LLD 최적화
+[target.x86_64-pc-windows-msvc]
+linker = "rust-lld.exe"
+
+# Linux 환경 (로컬, ci.yml)용 mold 최적화
+[target.x86_64-unknown-linux-gnu]
+linker = "clang"
+rustflags = ["-C", "link-arg=-fuse-ld=mold"]

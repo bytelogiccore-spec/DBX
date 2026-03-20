@@ -337,6 +337,24 @@ impl Database {
             return self.handle_drop_view(sql_trimmed);
         }
 
+        // Materialized View 인터셀트 (CREATE/DROP/REFRESH)
+        if sql_upper.starts_with("CREATE MATERIALIZED VIEW") {
+            return self.handle_create_materialized_view(sql_trimmed);
+        }
+        if sql_upper.starts_with("DROP MATERIALIZED VIEW") {
+            return self.handle_drop_materialized_view(sql_trimmed);
+        }
+        if sql_upper.starts_with("REFRESH MATERIALIZED VIEW") {
+            return self.handle_refresh_materialized_view(sql_trimmed);
+        }
+
+        // SELECT 시 Materialized View 캐시 히트 확인
+        if sql_upper.starts_with("SELECT") {
+            if let Some(cached) = self.try_matview_cache(sql_trimmed) {
+                return Ok(cached);
+            }
+        }
+
         // Step 0b: Expand views in FROM clauses
         let expanded = self.view_registry.expand(sql_trimmed);
         let sql = expanded.as_str();
@@ -411,8 +429,91 @@ impl Database {
         self.one_row_affected_batch()
     }
 
+    // ────────────────────────────────────────────────────────────────────────
+    // Materialized View Handlers
+    // ────────────────────────────────────────────────────────────────────────
+
+    /// CREATE MATERIALIZED VIEW <name> [REFRESH EVERY <secs>] AS <select_sql>
+    fn handle_create_materialized_view(&self, sql: &str) -> DbxResult<Vec<RecordBatch>> {
+        let upper = sql.to_uppercase();
+
+        // 뷰 이름 / SQL 추출 (VIEW 키워드 이후)
+        let after_view = sql[upper.find("VIEW").unwrap() + 4..].trim_start().to_owned();
+        let after_upper = after_view.to_uppercase();
+
+        // "REFRESH EVERY <n> AS ..." 패턴 감지 (선택적)
+        let (refresh_interval_secs, body) = if let Some(re_pos) = after_upper.find("REFRESH EVERY") {
+            // 이름은 REFRESH EVERY 이전
+            let name_part = after_view[..re_pos].trim().to_string();
+            let rest = after_view[re_pos + 13..].trim_start().to_string();
+            let as_pos = rest.to_uppercase().find(" AS ").ok_or_else(|| DbxError::SqlParse {
+                message: "CREATE MATERIALIZED VIEW ... REFRESH EVERY <n> AS <sql>".to_string(),
+                sql: sql.to_string(),
+            })?;
+            let interval_str = rest[..as_pos].trim();
+            let interval_secs: u64 = interval_str.parse().map_err(|_| DbxError::SqlParse {
+                message: format!("REFRESH EVERY requires integer seconds, got '{}'", interval_str),
+                sql: sql.to_string(),
+            })?;
+            let view_sql = rest[as_pos + 4..].trim().to_string();
+            (Some(interval_secs), (name_part, view_sql))
+        } else {
+            let as_pos = after_upper.find(" AS ").ok_or_else(|| DbxError::SqlParse {
+                message: "CREATE MATERIALIZED VIEW requires AS".to_string(),
+                sql: sql.to_string(),
+            })?;
+            let name = after_view[..as_pos].trim().to_string();
+            let view_sql = after_view[as_pos + 4..].trim().to_string();
+            (None, (name, view_sql))
+        };
+
+        self.mat_view_registry.create(&body.0, &body.1, refresh_interval_secs)?;
+        self.one_row_affected_batch()
+    }
+
+    /// DROP MATERIALIZED VIEW <name>
+    fn handle_drop_materialized_view(&self, sql: &str) -> DbxResult<Vec<RecordBatch>> {
+        let upper = sql.to_uppercase();
+        let name = sql[upper.find("VIEW").unwrap() + 4..].trim();
+        self.mat_view_registry.remove(name)?;
+        self.one_row_affected_batch()
+    }
+
+    /// REFRESH MATERIALIZED VIEW <name>
+    fn handle_refresh_materialized_view(&self, sql: &str) -> DbxResult<Vec<RecordBatch>> {
+        let upper = sql.to_uppercase();
+        let name = sql[upper.find("VIEW").unwrap() + 4..].trim().to_lowercase();
+        let view_sql = self.mat_view_registry.get_sql(&name).ok_or_else(|| {
+            DbxError::InvalidArguments(format!("'{}' 구체화된 뷰를 찾을 수 없음", name))
+        })?;
+        // 뷰 쿼리 실행 후 캐시 저장
+        let batches = self.execute_sql(&view_sql)?;
+        self.mat_view_registry.set_cache(&name, batches)?;
+        self.one_row_affected_batch()
+    }
+
+    /// SELECT 쿼리에서 Materialized View 캐시 히트 확인
+    ///
+    /// "SELECT ... FROM <mv_name>" 패턴에서 FROM 다음 토큰이 등록된 MV이고
+    /// 캐시가 fresh하면 캐시를 반환합니다.
+    fn try_matview_cache(&self, sql: &str) -> Option<Vec<RecordBatch>> {
+        let upper = sql.to_uppercase();
+        let from_pos = upper.find(" FROM ")?;
+        let after_from = sql[from_pos + 6..].trim();
+        // 첫 번째 토큰 (공백/세미콜론/닫는 괄호 기준)
+        let name = after_from
+            .split(|c: char| c.is_whitespace() || c == ';' || c == ')')
+            .next()?;
+        if self.mat_view_registry.is_fresh(name) {
+            self.mat_view_registry.get_cache(name)
+        } else {
+            None
+        }
+    }
+
     /// Helper: single-row `rows_affected = 1` result batch
     fn one_row_affected_batch(&self) -> DbxResult<Vec<RecordBatch>> {
+
         use arrow::array::Int64Array;
         use arrow::datatypes::{DataType, Field, Schema};
         let schema = Arc::new(Schema::new(vec![Field::new(

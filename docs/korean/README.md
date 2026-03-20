@@ -129,12 +129,15 @@ DBX는 다양한 언어를 위한 공식 바인딩을 제공합니다:
 - ✅ **UDF 프레임워크** — 스칼라, 집계, 테이블 사용자 정의 함수
 - ✅ **트리거 & 스케줄러** — 이벤트 기반 트리거 및 Cron 작업 스케줄링
 - ✅ **기능 플래그** — 런타임 기능 토글 (환경변수/파일 영속화)
-
-### 로드맵 🚧
-- **구체화된 뷰** — 사전 계산된 쿼리 결과 및 자동 갱신
-- **복제(Replication)** — 프라이머리-레플리카 데이터 동기화
-- **샤딩(Sharding)** — 다중 노드 수평 파티셔닝
-- **스트리밍 수집** — 실시간 데이터 파이프라인 지원
+- ✅ **파티셔닝** — 해시(Hash) / 범위(Range) / 리스트(List) + 자동 확장 범위
+- ✅ **파티션 수명 주기** — 완전 자동화된 보관/삭제 스케줄러 (`enable_auto_archive`)
+- ✅ **Hot/Cold 티어링** — 파티션별 `PartitionTierHint` (Hot / Warm / Cold 지원)
+- ✅ **복제(Replication)** — 다중 마스터 장애 조치, 쿼럼 기반 리더 선출, 벡터 클럭
+- ✅ **QUIC 통신** — s2n-quic 기반 TLS 1.3 노드 간 통신
+- ✅ **교차 노드 샤딩(Sharding)** — 안정 해시(Consistent Hashing), 가중치 기반 가상 노드, 2PC 트랜잭션
+- ✅ **DB 설정(DbConfig)** — 런타임 `DirtyBufferMode`, `ParallelismConfig`, `DurabilityLevel` 동적 변경
+- ✅ **구체화된 뷰(Materialized Views)** — 사전 계산된 쿼리 결과 캐시·자동 갱신 (60초 백그라운드)
+- ✅ **스트리밍 수집(Streaming Ingestion)** — 채널 기반 INSERT/UPDATE/DELETE CDC 파이프라인
 
 ---
 
@@ -150,7 +153,7 @@ DBX는 완전한 무료 오픈 소스 프로젝트이며, **MIT 라이선스**�
 
 이슈 제보와 풀 리퀘스트는 언제나 환영합니다!
 
-코드 규약 및 PR 제출 프로세스에 대한 자세한 내용은 [기여 가이드](https://github.com/bytelogiccore-spec/DBX/blob/main/legal/korean/CONTRIBUTING.md)를 확인해 주세요.
+코드 규약, PR 제출 프로세스, 그리고 **빌드 속도 최적화 팁(Windows LLD, Linux mold, 디펜더 예외 지정 등)**에 대한 자세한 내용은 [기여 가이드](https://github.com/bytelogiccore-spec/DBX/blob/main/legal/korean/CONTRIBUTING.md)를 확인해 주세요.
 
 ---
 

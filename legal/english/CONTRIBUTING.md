@@ -76,6 +76,22 @@ cd testing/benchmarks
 cargo bench
 ```
 
+### Build Optimization Tips (Recommended)
+
+DBX is a large and complex project. You can maximize your compilation speed with the following setups:
+
+#### Windows Environment (MSVC)
+1. **Use LLD Linker**: The project's `.cargo/config.toml` is pre-configured to use `rust-lld.exe`.
+2. **Windows Defender Exclusions (Important)**: Exclude the `DBX` project folder and `~/.cargo` folder from real-time scanning. This prevents severe bottlenecks caused by Defender scanning thousands of temporary files during compilation.
+3. **Disk I/O**: An NVMe SSD is strongly recommended for smooth and fast building.
+
+#### Linux and WSL2 Environment
+1. **Use mold Linker**: We strongly recommend using `mold`, the fastest linker available.
+   ```bash
+   sudo apt-get install -y mold clang
+   ```
+   (The project's `.cargo/config.toml` is already configured to automatically use `mold` once installed.)
+
 ---
 
 ## 📝 Contributor License Agreement (CLA)

@@ -5,7 +5,7 @@ use crate::engine::{DeltaVariant, DurabilityLevel, WosVariant};
 use crate::monitoring::DbxMetrics;
 use crate::sql::optimizer::QueryOptimizer;
 use crate::sql::parser::SqlParser;
-use crate::sql::view::ViewRegistry;
+use crate::sql::view::{ViewRegistry, MaterializedViewRegistry, SharedMaterializedViewRegistry};
 use crate::storage::encryption::EncryptionConfig;
 use crate::transaction::mvcc::manager::TransactionManager;
 use arrow::array::RecordBatch;
@@ -120,6 +120,9 @@ pub struct Database {
 
     /// SQL View Registry — CREATE/DROP VIEW 지원
     pub(crate) view_registry: ViewRegistry,
+
+    /// Materialized View Registry — CREATE/REFRESH/DROP MATERIALIZED VIEW 지원
+    pub mat_view_registry: SharedMaterializedViewRegistry,
 
     /// 파티션 매핑 정보 (테이블명 -> PartitionMap)
     pub(crate) partition_maps:
@@ -283,5 +286,44 @@ impl Database {
     /// Reset all metrics counters and histograms to zero.
     pub fn reset_metrics(&self) {
         self.metrics.reset();
+    }
+
+    // ── Streaming Ingestion API ──────────────────────────────────────────────
+
+    /// 채널 기반 스트리밍 수집 파이프라인 생성
+    ///
+    /// INSERT / UPDATE / DELETE 이벤트를 [`StreamEvent`](crate::engine::StreamEvent)로
+    /// 전송하면 백그라운드에서 자동 배치 처리합니다.
+    ///
+    /// # 인수
+    ///
+    /// * `table` - 이벤트를 적용할 테이블 이름
+    /// * `batch_size` - 이 이벤트 수에 도달하면 즉시 flush
+    /// * `max_latency_ms` - 버퍼가 차지 않아도 이 밀리초마다 강제 flush
+    ///
+    /// # 예시
+    ///
+    /// ```rust,no_run
+    /// use dbx_core::{Database, engine::{StreamIngester, StreamEvent}};
+    /// use std::{sync::Arc, time::Duration};
+    ///
+    /// let db = Arc::new(Database::open_in_memory().unwrap());
+    /// let ingester = db.create_stream_ingester("orders", 1000, 100);
+    /// let tx = ingester.sender();
+    /// tx.send(vec![StreamEvent::Insert { key: "1".into(), value: b"data".to_vec() }]).unwrap();
+    /// ingester.flush().unwrap();
+    /// ```
+    pub fn create_stream_ingester(
+        self: &Arc<Self>,
+        table: &str,
+        batch_size: usize,
+        max_latency_ms: u64,
+    ) -> crate::engine::StreamIngester {
+        crate::engine::StreamIngester::new(
+            Arc::clone(self),
+            table,
+            batch_size,
+            std::time::Duration::from_millis(max_latency_ms),
+        )
     }
 }

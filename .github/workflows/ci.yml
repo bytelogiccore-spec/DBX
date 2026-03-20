@@ -18,9 +18,12 @@ on:
 jobs:
   check:
     name: 포맷 & Lint
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: mold 링커 설치
+        run: sudo apt-get update && sudo apt-get install -y mold clang
 
       - name: Rust 설치
         uses: dtolnay/rust-toolchain@stable
@@ -40,10 +43,13 @@ jobs:
 
   build-and-test:
     name: 빌드 & 테스트
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
     needs: check
     steps:
       - uses: actions/checkout@v4
+
+      - name: mold 링커 설치
+        run: sudo apt-get update && sudo apt-get install -y mold clang
 
       - name: Rust 설치
         uses: dtolnay/rust-toolchain@stable

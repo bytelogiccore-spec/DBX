@@ -6,7 +6,7 @@ use crate::error::DbxResult;
 use crate::index::HashIndex;
 use crate::sql::optimizer::QueryOptimizer;
 use crate::sql::parser::SqlParser;
-use crate::sql::view::ViewRegistry;
+use crate::sql::view::{MaterializedViewRegistry, ViewRegistry};
 use crate::storage::StorageBackend; // Add this for trait methods
 use crate::storage::delta_store::DeltaStore;
 use crate::storage::encryption::EncryptionConfig;
@@ -138,6 +138,7 @@ impl Database {
                     .expect("Failed to create parallel engine"),
             ),
             view_registry: ViewRegistry::new(),
+            mat_view_registry: Arc::new(MaterializedViewRegistry::new()),
             partition_maps: Arc::new(RwLock::new(HashMap::new())),
             partition_stats: Arc::new(DashMap::new()),
             partition_compression: Arc::new(DashMap::new()),
@@ -234,6 +235,32 @@ impl Database {
             .unwrap()
             .start_scheduler(db_weak)?;
 
+        // Start Materialized View auto-refresh thread (60초마다 stale MV를 갱신)
+        let mv_reg = Arc::clone(&db_arc.mat_view_registry);
+        let db_mv_weak = Arc::downgrade(&db_arc);
+        std::thread::Builder::new()
+            .name("dbx-mv-refresh".into())
+            .spawn(move || {
+                let interval = std::time::Duration::from_secs(60);
+                loop {
+                    std::thread::sleep(interval);
+                    for name in mv_reg.list() {
+                        if !mv_reg.is_fresh(&name) {
+                            if let Some(db) = db_mv_weak.upgrade() {
+                                let _ = db.execute_sql(&format!(
+                                    "REFRESH MATERIALIZED VIEW {}",
+                                    name
+                                ));
+                            } else {
+                                // DB가 Drop됨 — 스레드 종료
+                                return;
+                            }
+                        }
+                    }
+                }
+            })
+            .ok(); // 스레드 spawn 실패는 무시 (기능 선택적)
+
         Ok(db_arc)
     }
 
@@ -314,6 +341,7 @@ impl Database {
                     .expect("Failed to create parallel engine"),
             ),
             view_registry: ViewRegistry::new(),
+            mat_view_registry: Arc::new(MaterializedViewRegistry::new()),
             partition_maps: Arc::new(RwLock::new(HashMap::new())),
             partition_stats: Arc::new(DashMap::new()),
             partition_compression: Arc::new(DashMap::new()),
@@ -419,6 +447,7 @@ impl Database {
                     .expect("Failed to create parallel engine"),
             ),
             view_registry: ViewRegistry::new(),
+            mat_view_registry: Arc::new(MaterializedViewRegistry::new()),
             partition_maps: Arc::new(RwLock::new(HashMap::new())),
             partition_stats: Arc::new(DashMap::new()),
             partition_compression: Arc::new(DashMap::new()),
@@ -498,6 +527,7 @@ impl Database {
                     .expect("Failed to create parallel engine"),
             ),
             view_registry: ViewRegistry::new(),
+            mat_view_registry: Arc::new(MaterializedViewRegistry::new()),
             partition_maps: Arc::new(RwLock::new(HashMap::new())),
             partition_stats: Arc::new(DashMap::new()),
             partition_compression: Arc::new(DashMap::new()),
@@ -613,6 +643,7 @@ impl Database {
                     .expect("Failed to create parallel engine"),
             ),
             view_registry: ViewRegistry::new(),
+            mat_view_registry: Arc::new(MaterializedViewRegistry::new()),
             partition_maps: Arc::new(RwLock::new(HashMap::new())),
             partition_stats: Arc::new(DashMap::new()),
             partition_compression: Arc::new(DashMap::new()),
@@ -694,10 +725,35 @@ impl Database {
             .unwrap()
             .start_scheduler(db_weak)?;
 
+        // Materialized View 자동 갱신 백그라운드 스레드
+        let mv_reg = Arc::clone(&db_arc.mat_view_registry);
+        let db_mv_weak = Arc::downgrade(&db_arc);
+        std::thread::Builder::new()
+            .name("dbx-mv-refresh".into())
+            .spawn(move || {
+                let interval = std::time::Duration::from_secs(60);
+                loop {
+                    std::thread::sleep(interval);
+                    for name in mv_reg.list() {
+                        if !mv_reg.is_fresh(&name) {
+                            if let Some(db) = db_mv_weak.upgrade() {
+                                let _ = db.execute_sql(&format!(
+                                    "REFRESH MATERIALIZED VIEW {}",
+                                    name
+                                ));
+                            } else {
+                                return;
+                            }
+                        }
+                    }
+                }
+            })
+            .ok();
+
         Ok(db_arc)
     }
 }
-/// open_with_config: DbConfig를 받는 새 생성자 그룹
+
 impl Database {
     /// `DbConfig`를 사용하여 데이터베이스를 엽니다.
     ///
@@ -791,6 +847,7 @@ impl Database {
             schedule_executor: Arc::new(RwLock::new(crate::automation::ScheduleExecutor::new())),
             parallel_engine,
             view_registry: ViewRegistry::new(),
+            mat_view_registry: Arc::new(MaterializedViewRegistry::new()),
             partition_maps: Arc::new(RwLock::new(HashMap::new())),
             partition_stats: Arc::new(DashMap::new()),
             partition_compression: Arc::new(DashMap::new()),
