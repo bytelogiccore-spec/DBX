@@ -6,6 +6,19 @@
 [![Rust](https://img.shields.io/badge/rust-2024-orange.svg)](https://www.rust-lang.org)
 [![Documentation](https://img.shields.io/badge/docs-GitHub%20Pages-blue)](https://bytelogiccore-spec.github.io/DBX/)
 
+### 💖 Support This Project
+If you find DBX useful, please consider supporting its development!
+
+[<img src="https://ko-fi.com/img/githubbutton_sm.svg" alt="ko-fi" height="36">](https://ko-fi.com/YOUR_KO_FI_LINK)
+
+Your support helps with:
+- 🚀 New features and performance optimizations
+- 🐛 Bug fixes and stability improvements
+- 📚 Documentation and tutorials
+- 💻 Test infrastructure and CI/CD maintenance
+
+---
+
 **DBX** is a high-performance, embedded database designed for modern **HTAP (Hybrid Transactional/Analytical Processing)** workloads. Built with a unique **5-Tier Hybrid Storage** architecture, it bridges the gap between ultra-fast in-memory transactions and massive-scale columnar analytics.
 {: .fs-6 .fw-300 }
 

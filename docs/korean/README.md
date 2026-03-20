@@ -13,6 +13,19 @@ parent: 한국어
 [![Rust](https://img.shields.io/badge/rust-2024-orange.svg)](https://www.rust-lang.org)
 [![Documentation](https://img.shields.io/badge/docs-GitHub%20Pages-blue)](https://bytelogiccore-spec.github.io/DBX/)
 
+### 💖 Support This Project
+If you find DBX useful, please consider supporting its development!
+
+[<img src="https://ko-fi.com/img/githubbutton_sm.svg" alt="ko-fi" height="36">](https://ko-fi.com/YOUR_KO_FI_LINK)
+
+Your support helps with:
+- 🚀 New features and performance optimizations
+- 🐛 Bug fixes and stability improvements
+- 📚 Documentation and tutorials
+- 💻 Test infrastructure and CI/CD maintenance
+
+---
+
 **DBX**는 현대적인 **HTAP(Hybrid Transactional/Analytical Processing)** 워크로드를 위해 설계된 고성능 임베디드 데이터베이스입니다. 고유한 **5계층 하이브리드 스토리지(5-Tier Hybrid Storage)** 아키텍처를 통해 초고속 인메모리 트랜잭션과 대규모 컬럼형 분석의 간극을 완벽하게 메웁니다.
 {: .fs-6 .fw-300 }
 
