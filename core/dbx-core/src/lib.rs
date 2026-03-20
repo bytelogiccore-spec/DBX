@@ -60,7 +60,7 @@
 //!
 //! 1. **Delta Store** (DashMap) — In-memory write buffer, lock-free concurrency
 //! 2. **Cache** (LRU) — Read cache for frequently accessed data
-//! 3. **WOS** (sled) — Write-Optimized Store, persistent storage
+//! 3. **WOS** (native_wos) — Write-Optimized Store, persistent storage
 //! 4. **Index** (Bloom Filter) — Fast existence checks
 //! 5. **ROS** (Parquet) — Read-Optimized Store, columnar compression
 //!
@@ -94,8 +94,6 @@ pub mod transaction;
 pub mod wal;
 
 // ===== Re-exports =====
-#[cfg(feature = "simd")]
-pub mod simd;
 
 // Logging utilities
 pub mod logging;

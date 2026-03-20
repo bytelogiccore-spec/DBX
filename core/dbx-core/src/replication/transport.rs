@@ -20,6 +20,8 @@
 //! };
 //! ```
 
+use std::time::Duration;
+
 use crate::replication::protocol::ReplicationMessage;
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -46,7 +48,7 @@ pub enum TransportMode {
 /// 레플리케이션 전체 설정
 ///
 /// `DbConfig::replication` 필드로 전달합니다.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub struct ReplicationConfig {
     /// Transport 모드: `InMemory`(default) 또는 `Quic`
     pub mode: TransportMode,
@@ -54,6 +56,21 @@ pub struct ReplicationConfig {
     pub cluster_size: usize,
     /// 레플리케이션 활성화 여부 (기본 false)
     pub enabled: bool,
+    /// Quorum Write 타임아웃 (기본 5초)
+    ///
+    /// Master가 이 시간 내에 quorum ACK를 받지 못하면 `replicate()` 에러 반환.
+    pub quorum_write_timeout: Duration,
+}
+
+impl Default for ReplicationConfig {
+    fn default() -> Self {
+        Self {
+            mode: TransportMode::InMemory,
+            cluster_size: 1,
+            enabled: false,
+            quorum_write_timeout: Duration::from_secs(5),
+        }
+    }
 }
 
 impl ReplicationConfig {
@@ -63,6 +80,7 @@ impl ReplicationConfig {
             mode: TransportMode::InMemory,
             cluster_size,
             enabled: true,
+            quorum_write_timeout: Duration::from_secs(5),
         }
     }
 
@@ -81,6 +99,7 @@ impl ReplicationConfig {
             },
             cluster_size,
             enabled: true,
+            quorum_write_timeout: Duration::from_secs(5),
         }
     }
 

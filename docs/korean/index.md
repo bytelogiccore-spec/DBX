@@ -27,7 +27,7 @@ description: "DBX — 고성능 임베디드 데이터베이스"
 
 ### 🚀 성능
 - SQLite 대비 **최대 13배 빠른** GET 속도
-- **멀티코어 병렬화** — Rayon 기반 scan, insert, 집계, JOIN 자동 병렬화 (v0.1.1)
+- **멀티코어 병렬화** — Rayon 기반 scan, insert, 집계, JOIN 자동 병렬화 (v0.1.2-beta)
 - **`ParallelismConfig`** — [CPU 사용량과 병렬화 임계값 제어](guides/db-config)
 - **GPU 가속** — CUDA 기반 집계, 필터링, 조인
 - **SIMD 벡터화** — `wide` crate stable SIMD (항상 활성)

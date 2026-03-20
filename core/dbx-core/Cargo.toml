@@ -1,6 +1,6 @@
 [package]
 name = "dbx-core"
-version = "0.1.1-beta"
+version = "0.1.2-beta"
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
@@ -75,9 +75,8 @@ default = ["wal", "mvcc", "index"]
 wal = []
 mvcc = []
 index = []
-minimal = []
-simd = []
-jit = []
+minimal = []  # 미구현 예약 feature
+jit = []      # 미구현 예약 feature
 gpu = ["cudarc"]
 logging = ["tracing-subscriber"]
 

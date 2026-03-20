@@ -10,8 +10,9 @@
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
+use dashmap::DashMap;
 use tokio::sync::broadcast;
-use tokio::sync::{Mutex, RwLock};
+use tokio::sync::{Mutex, RwLock, oneshot};
 
 use crate::replication::protocol::ReplicationMessage;
 
@@ -51,7 +52,63 @@ pub struct ReplicationNode {
     votes_received: Arc<Mutex<u32>>,
     /// 마지막으로 마스터 Heartbeat를 수신한 시간
     last_heartbeat: Arc<RwLock<Instant>>,
+    /// Quorum Write ACK 추적기
+    quorum_tracker: Arc<QuorumAckTracker>,
+    /// Quorum Write 타임아웃 (기본 5초, ReplicationConfig에서 설정 가능)
+    pub quorum_write_timeout: Duration,
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Quorum ACK 추적기
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// Quorum Write ACK 추적기
+///
+/// `replicate()` 호출 시 해당 LSN에 대한 대기자(oneshot Sender)를 등록하고,
+/// Slave로부터 `Acknowledge` 수신 시 카운터를 올려 quorum 달성 시 wakeup한다.
+struct QuorumAckTracker {
+    /// LSN → (받은 ACK 수, 대기 중 caller 목록)
+    pending: DashMap<u64, (u32, Vec<oneshot::Sender<()>>)>,
+}
+
+impl QuorumAckTracker {
+    fn new() -> Self {
+        Self {
+            pending: DashMap::new(),
+        }
+    }
+
+    /// LSN에 대한 대기자를 등록하고 Receiver를 반환.
+    /// Quorum 달성 시 Sender로 signal → Receiver가 즉시 완료.
+    fn register(&self, lsn: u64) -> oneshot::Receiver<()> {
+        let (tx, rx) = oneshot::channel();
+        self.pending
+            .entry(lsn)
+            .or_insert_with(|| (0, Vec::new()))
+            .1
+            .push(tx);
+        rx
+    }
+
+    /// ACK 수신 처리. quorum 달성 시 대기 중인 모든 caller를 깨운다.
+    fn ack(&self, lsn: u64, quorum: u32) {
+        if let Some(mut entry) = self.pending.get_mut(&lsn) {
+            entry.0 += 1;
+            if entry.0 >= quorum {
+                let senders: Vec<_> = entry.1.drain(..).collect();
+                drop(entry);
+                self.pending.remove(&lsn);
+                for s in senders {
+                    let _ = s.send(());
+                }
+            }
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ReplicationNode impl
+// ─────────────────────────────────────────────────────────────────────────────
 
 impl ReplicationNode {
     /// 새로운 노드 생성
@@ -71,7 +128,23 @@ impl ReplicationNode {
             voted_for: Arc::new(Mutex::new(None)),
             votes_received: Arc::new(Mutex::new(0)),
             last_heartbeat: Arc::new(RwLock::new(Instant::now())),
+            quorum_tracker: Arc::new(QuorumAckTracker::new()),
+            quorum_write_timeout: Duration::from_secs(5),
         }
+    }
+
+    /// [`ReplicationConfig`]에서 timeout을 읽어 노드를 생성하는 편의 팩토리
+    ///
+    /// `DbConfig::replication`을 통해 `quorum_write_timeout`을 설정하려면 이 메서드를 사용하세요.
+    pub fn new_from_config(
+        node_id: u32,
+        initial_role: NodeRole,
+        tx: broadcast::Sender<ReplicationMessage>,
+        config: &crate::replication::transport::ReplicationConfig,
+    ) -> Self {
+        let mut node = Self::new(node_id, config.cluster_size, initial_role, tx);
+        node.quorum_write_timeout = config.quorum_write_timeout;
+        node
     }
 
     /// Quorum 수 (과반) — `cluster_size / 2 + 1`
@@ -89,7 +162,11 @@ impl ReplicationNode {
         self.current_term.load(Ordering::SeqCst)
     }
 
-    /// (Master 용) WAL 레코드 발행
+    /// (Master 용) WAL 레코드 발행 — Quorum Write
+    ///
+    /// `cluster_size == 1` (또는 quorum == 1) 이면 기존과 동일하게 즉시 반환.
+    /// 그 외에는 quorum 수만큼의 Slave ACK를 받은 뒤 반환한다.
+    /// `quorum_write_timeout` 내에 ACK를 받지 못하면 Err를 반환한다.
     pub async fn replicate(&self, data: Vec<u8>) -> Result<u64, String> {
         let role = self.role().await;
         if role != NodeRole::Master {
@@ -106,7 +183,24 @@ impl ReplicationNode {
                 .as_micros() as u64,
             data,
         };
+
+        // cluster_size == 1 이면 Slave가 없으므로 즉시 반환 (하위 호환)
+        if self.quorum() <= 1 {
+            let _ = self.tx.send(msg);
+            return Ok(lsn);
+        }
+
+        // Quorum > 1: ACK 대기 등록 후 브로드캐스트
+        // register → send 순서를 지켜야 ACK를 놓치지 않는다.
+        let ack_rx = self.quorum_tracker.register(lsn);
         let _ = self.tx.send(msg);
+
+        // 타임아웃 내에 quorum ACK 수신 대기
+        tokio::time::timeout(self.quorum_write_timeout, ack_rx)
+            .await
+            .map_err(|_| format!("quorum write timeout for LSN {lsn}"))?
+            .map_err(|_| format!("quorum tracker channel dropped for LSN {lsn}"))?;
+
         Ok(lsn)
     }
 
@@ -173,6 +267,11 @@ impl ReplicationNode {
                 if lsn > local_lsn {
                     apply_fn(lsn, timestamp, &data).map_err(NodeError::ApplyError)?;
                     self.last_lsn.store(lsn, Ordering::SeqCst);
+                    // Slave → Master ACK 전송
+                    let _ = self.tx.send(ReplicationMessage::Acknowledge {
+                        node_id: self.node_id,
+                        lsn,
+                    });
                 }
             }
 
@@ -252,6 +351,11 @@ impl ReplicationNode {
                     *role = NodeRole::Slave;
                     *self.last_heartbeat.write().await = Instant::now();
                 }
+            }
+
+            // ── Acknowledge: Slave ACK 수신 → Quorum Write 추적 ──────────
+            ReplicationMessage::Acknowledge { lsn, .. } => {
+                self.quorum_tracker.ack(lsn, self.quorum());
             }
 
             _ => {}
@@ -413,5 +517,93 @@ mod tests {
         let node = ReplicationNode::new(1, 1, NodeRole::Slave, tx.clone());
         let result = node.replicate(b"data".to_vec()).await;
         assert!(result.is_err(), "Slave는 복제 불가");
+    }
+
+    // ── Quorum Write 테스트 ──────────────────────────────────────────────────
+
+    /// cluster_size = 1 → quorum = 1 → 즉시 반환 (이전 동작과 동일)
+    #[tokio::test]
+    async fn test_quorum_write_single_node() {
+        let (tx, _rx) = broadcast::channel(16);
+        let node = ReplicationNode::new(1, 1, NodeRole::Master, tx.clone());
+
+        let lsn = node.replicate(b"data".to_vec()).await;
+        assert_eq!(lsn, Ok(1), "단일 노드: quorum = 1 → 즉시 Ok(1)");
+    }
+
+    /// cluster_size = 3, Slave 2개가 ACK를 보내면 quorum(=2) 달성 → 반환
+    #[tokio::test]
+    async fn test_quorum_write_three_nodes() {
+        let (tx, _rx) = broadcast::channel(32);
+
+        // Node 1 = Master
+        let master = Arc::new(ReplicationNode::new(1, 3, NodeRole::Master, tx.clone()));
+        // Node 2, 3 = Slave
+        let slave2 = Arc::new(ReplicationNode::new(2, 3, NodeRole::Slave, tx.clone()));
+        let slave3 = Arc::new(ReplicationNode::new(3, 3, NodeRole::Slave, tx.clone()));
+
+        // Master: Slave의 Acknowledge 메시지를 수신하기 위한 receiver loop
+        let master_rx_loop = Arc::clone(&master);
+        let rx_master = tx.subscribe();
+        tokio::spawn(async move {
+            master_rx_loop
+                .run_receiver_loop(rx_master, |_, _, _| Ok(()))
+                .await
+                .ok();
+        });
+
+        // Slave 2: WalEntry 수신 후 Acknowledge 전송
+        let slave2_clone = Arc::clone(&slave2);
+        let rx2 = tx.subscribe();
+        tokio::spawn(async move {
+            slave2_clone
+                .run_receiver_loop(rx2, |_, _, _| Ok(()))
+                .await
+                .ok();
+        });
+
+        // Slave 3: WalEntry 수신 후 Acknowledge 전송
+        let slave3_clone = Arc::clone(&slave3);
+        let rx3 = tx.subscribe();
+        tokio::spawn(async move {
+            slave3_clone
+                .run_receiver_loop(rx3, |_, _, _| Ok(()))
+                .await
+                .ok();
+        });
+
+        // replicate() — quorum 달성 후 반환
+        let lsn = master.replicate(b"quorum_data".to_vec()).await;
+        assert_eq!(lsn, Ok(1), "quorum 달성 후 LSN 1 반환");
+    }
+
+    /// cluster_size = 3, Slave 없음 → timeout 내 ACK 없으면 Err 반환
+    #[tokio::test]
+    async fn test_quorum_write_timeout() {
+        let (tx, _rx) = broadcast::channel(16);
+        let mut node = ReplicationNode::new(1, 3, NodeRole::Master, tx.clone());
+        // 빠른 테스트를 위해 타임아웃 단축
+        node.quorum_write_timeout = Duration::from_millis(50);
+
+        let result = node.replicate(b"data".to_vec()).await;
+        assert!(result.is_err(), "timeout → Err 반환 필요");
+        assert!(
+            result.unwrap_err().contains("quorum write timeout"),
+            "에러 메시지에 'quorum write timeout' 포함되어야 함"
+        );
+    }
+
+    /// new_from_config()으로 생성 시 timeout이 config에서 주입됨
+    #[tokio::test]
+    async fn test_new_from_config_injects_timeout() {
+        use crate::replication::transport::ReplicationConfig;
+
+        let config = ReplicationConfig {
+            quorum_write_timeout: Duration::from_millis(123),
+            ..ReplicationConfig::default()
+        };
+        let (tx, _rx) = broadcast::channel(16);
+        let node = ReplicationNode::new_from_config(1, NodeRole::Master, tx, &config);
+        assert_eq!(node.quorum_write_timeout, Duration::from_millis(123));
     }
 }

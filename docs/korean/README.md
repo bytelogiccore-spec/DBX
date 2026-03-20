@@ -5,158 +5,109 @@ nav_order: 0
 parent: 한국어
 ---
 
-# DBX — 고성능 임베디드 데이터베이스
+# DBX — 차세대 HTAP 임베디드 데이터베이스
 {: .fs-9 }
 
-SQLite보다 29배 빠른 파일 GET 속도 • 순수 Rust 구현 • GPU 가속 지원 • MVCC 트랜잭션
+[![Version](https://img.shields.io/badge/version-0.1.2--beta-blue.svg)](https://github.com/ByteLogicCore/DBX)
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![Rust](https://img.shields.io/badge/rust-2024-orange.svg)](https://www.rust-lang.org)
+[![Documentation](https://img.shields.io/badge/docs-GitHub%20Pages-blue)](https://bytelogiccore-spec.github.io/DBX/)
+
+**DBX**는 현대적인 **HTAP(Hybrid Transactional/Analytical Processing)** 워크로드를 위해 설계된 고성능 임베디드 데이터베이스입니다. 고유한 **5계층 하이브리드 스토리지(5-Tier Hybrid Storage)** 아키텍처를 통해 초고속 인메모리 트랜잭션과 대규모 컬럼형 분석의 간극을 완벽하게 메웁니다.
 {: .fs-6 .fw-300 }
 
-**DBX**는 현대적인 HTAP(Hybrid Transactional/Analytical Processing) 워크로드를 위해 설계된 **5계층 하이브리드 스토리지(5-Tier Hybrid Storage)** 아키텍처 기반의 차세대 임베디드 데이터베이스입니다.
+---
+
+## ⚡ 왜 DBX인가? 핵심 강점
+
+### 🚄 1. 무한 확장성 (5계층 아키텍처)
+속도와 용량 사이에서 고민할 필요가 없습니다. DBX는 데이터를 5개의 특화된 계층으로 유연하게 흐르게 합니다:
+- **Tier 1 (Delta)**: 밀리초 미만의 쓰기를 위한 초고속 BTreeMap.
+- **Tier 2 (Cache)**: 즉각적인 OLAP 분석을 위한 Apache Arrow 기반 컬럼형 캐시.
+- **Tier 3 (WOS)**: 스냅샷 격리를 위한 SSD 최적화 MVCC 저장소.
+- **Tier 4 (Index)**: 레이턴시 없는 조회를 위한 고속 Bloom 필터.
+- **Tier 5 (ROS)**: 페타바이트급 아카이브를 위한 고압축 Parquet 저장소.
+
+### 🏎️ 2. 압도적인 성능
+10,000건 기준 벤치마크 결과, DBX는 업계 표준을 월등히 앞섭니다:
+- **파일 GET**: SQLite 대비 **29배 빠름** (17ms vs 497ms) 🔥
+- **메모리 INSERT**: SQLite 대비 **1.16배 빠름** (25ms vs 29ms) ✅
+
+### 🧠 3. 네이티브 GPU 가속
+DBX는 **CUDA 가속**을 기본 지원하는 업계 최초의 임베디드 데이터베이스입니다.
+- 대규모 데이터셋 필터링 및 집계 시 **최대 4.5배 가속**.
+- 무거운 JOIN 및 GROUP BY 연산을 GPU로 투명하게 오프로드.
+
+### 🛡️ 4. 잠금 없는 동시성 (MVCC)
+차단(Blocking) 없이 대규모 동시 워크로드를 처리합니다.
+- **스냅샷 격리**: 읽기 작업이 쓰기를 방해하지 않으며, 그 반대도 마찬가지입니다.
+- **ACID 준수**: WAL 2.0을 통한 완벽한 트랜잭션 무결성 보장.
 
 ---
 
-## 💖 프로젝트 후원하기
+## 📦 현대적인 주요 기능
 
-DBX가 유용하다고 생각하신다면 개발을 지원해 주세요!
+### 💎 구체화된 뷰 (Materialized Views)
+복잡한 분석 쿼리를 미리 계산하여 즉각적인 응답을 제공합니다.
+- **자동 갱신**: 백그라운드 스레드가 60초마다 결과를 최신 상태로 유지합니다.
+- **투명한 캐싱**: SQL 실행 시 자동으로 캐시를 확인하여 즉시 결과를 반환합니다.
 
-[![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/Q5Q41TDHWG)
-
-여러분의 후원은 다음에 사용됩니다:
-- 🚀 새로운 기능 추가 및 성능 최적화
-- 🐛 버그 수정 및 안정성 향상
-- 📚 문서화 및 튜토리얼 제작
-- 💻 테스트 인프라 및 CI/CD 유지보수
-
----
-
-## ⚡ 왜 DBX인가요?
-
-### 🏆 압도적인 성능
-
-**최신 벤치마크 결과 (10,000건 기준):**
-
-| 항목 | DBX | SQLite | 성능 향상 |
-|-----------|-----|--------|---------|
-| **메모리 INSERT** | 25.37 ms | 29.50 ms | **1.16배 빠름** ✅ |
-| **파일 GET** | 17.28 ms | 497.64 ms | **28.8배 빠름** 🔥🔥🔥 |
-
-### 🎯 주요 장점
-
-- **🚀 5계층 하이브리드 스토리지** — OLTP와 OLAP 워크로드 모두에 최적화
-- **🎮 GPU 가속** — CUDA 기반 분석 연산 (필터링 최대 4.5배 가속)
-- **🔒 MVCC 트랜잭션** — 잠금 없는 읽기를 위한 스냅샷 격리
-- **💾 컬럼형 캐시** — Apache Arrow 기반의 쿼리 최적화
-- **🔐 엔터프라이즈급 보안** — AES-256-GCM-SIV 암호화, ZSTD 압축 지원
-- **🦀 순수 Rust 구현** — 보장된 메모리 안전성 및 제로 코스트 추상화
-
-📊 **[전체 벤치마크 보고서](https://bytelogiccore-spec.github.io/DBX/korean/benchmarks)** — SQLite, Sled, Redb 상세 비교
+### 🌊 실시간 스트리밍 수집 (CDC)
+고처리량 데이터 파이프라인을 위한 `StreamIngester`를 내장하고 있습니다.
+- **MPSC 파이프라인**: 수만 개의 프로듀서로부터 동시에 데이터를 수집합니다.
+- **Full DML 지원**: 실시간 INSERT, UPDATE, DELETE 처리를 지원합니다.
 
 ---
 
-## 📦 5계층 하이브리드 스토리지 아키텍처
+## 🏗️ 아키텍처 시각화
 
-```
-┌─────────────────────────────────────────┐
-│  Tier 1: Delta Store (BTreeMap)         │  ← 인메모리 쓰기 버퍼 (52.8만 건/초)
-└─────────────────┬───────────────────────┘
-                  │ Flush
-┌─────────────────▼───────────────────────┐
-│  Tier 2: Columnar Cache (Arrow)         │  ← OLAP 최적화 (Projection Pushdown)
-└─────────────────┬───────────────────────┘
-                  │
-┌─────────────────▼───────────────────────┐
-│  Tier 3: WOS (sled)                     │  ← MVCC 스냅샷 격리
-└─────────────────┬───────────────────────┘
-                  │ Compaction
-┌─────────────────▼───────────────────────┐
-│  Tier 4: Index (Bloom Filter)           │  ← 빠른 존재 여부 확인
-└─────────────────┬───────────────────────┘
-                  │
-┌─────────────────▼───────────────────────┐
-│  Tier 5: ROS (Parquet)                  │  ← 컬럼형 압축 저장
-└─────────────────────────────────────────┘
-
-                  선택 사항: GPU 가속 (CUDA)
+```mermaid
+graph TD
+    A[Application] -->|Write| B[Tier 1: Delta Store]
+    B -->|Flush| C[Tier 2: Columnar Cache]
+    C -->|Persist| D[Tier 3: WOS - SSD]
+    D -->|Compact| E[Tier 4: Index]
+    E -->|Archive| F[Tier 5: ROS - Parquet]
+    
+    G[GPU 가속] -.->|가속화| C
+    G -.->|가속화| F
+    
+    style B fill:#f9f,stroke:#333,stroke-width:2px
+    style C fill:#bbf,stroke:#333,stroke-width:2px
+    style F fill:#bfb,stroke:#333,stroke-width:2px
 ```
 
-🏗️ **[아키텍처 심층 분석](https://bytelogiccore-spec.github.io/DBX/korean/architecture)** — DBX가 6.7배의 성능을 달성하는 방법
+---
+
+## 🚀 빠른 시작 (Rust)
+
+```rust
+use dbx_core::Database;
+
+fn main() -> dbx_core::DbxResult<()> {
+    // 메모리 또는 디스크에 데이터베이스 오픈
+    let db = Database::open_in_memory()?;
+
+    // 초고속 CRUD
+    db.insert("users", b"user:123", b"{\"name\": \"Alice\", \"age\": 30}")?;
+    let val = db.get("users", b"user:123")?;
+
+    // 강력한 HTAP SQL 지원
+    let results = db.execute_sql("SELECT name, AVG(age) FROM users GROUP BY name")?;
+
+    Ok(())
+}
+```
 
 ---
 
-## 🌐 언어 바인딩 (Language Bindings)
+## 🤝 후원 및 기여
 
-DBX는 다양한 언어를 위한 공식 바인딩을 제공합니다:
-
-- **Python** - Context Manager를 지원하는 파이썬다운 API
-- **C#/.NET** - 고성능 .NET 바인딩
-- **C/C++** - 저수준 C API 및 현대적인 C++17 래퍼
-- **Node.js** - 네이티브 N-API 바인딩
-
-**[언어 바인딩 가이드 보기 →](https://bytelogiccore-spec.github.io/DBX/korean/guides/language-bindings)**
+DBX는 커뮤니티의 힘으로 성장하는 오픈 소스 프로젝트입니다.
+- ⭐️ **Star**를 눌러 프로젝트를 응원해 주세요!
+- 🐛 **이슈 제보** 및 기능 제안은 언제나 환영합니다.
+- 🛠️ **기여하기**: [기여 가이드](./legal/korean/CONTRIBUTING.md)에서 빌드 최적화 팁(LLD, mold 등)을 확인하세요.
 
 ---
 
-## 📚 문서 (Documentation)
-
-### 🎓 시작하기
-- **[빠른 시작 가이드](https://bytelogiccore-spec.github.io/DBX/korean/getting-started)** — 설치 및 첫 쿼리 실행
-- **[초보자 튜토리얼](https://bytelogiccore-spec.github.io/DBX/korean/tutorials/beginner)** — 단계별 학습 경로
-
-### 📖 기능 가이드
-- **[CRUD 작업](https://bytelogiccore-spec.github.io/DBX/korean/guides/crud-operations)** — 삽입, 조회, 삭제, 배치 작업
-- **[트랜잭션](https://bytelogiccore-spec.github.io/DBX/korean/guides/transactions)** — MVCC, 스냅샷 격리, 동시성 제어
-- **[SQL 레퍼런스](https://bytelogiccore-spec.github.io/DBX/korean/guides/sql-reference)** — 지원 구문 및 쿼리 최적화
-- **[구체화된 뷰](https://bytelogiccore-spec.github.io/DBX/korean/guides/materialized-views)** — 사전 계산된 쿼리 결과 캐싱 및 자동 갱신
-- **[스트리밍 수집](https://bytelogiccore-spec.github.io/DBX/korean/guides/streaming-ingestion)** — 고성능 실시간 데이터 파이프라인 (CDC)
-- **[쿼리 빌더](https://bytelogiccore-spec.github.io/DBX/korean/guides/query-builder)** — 타입 안전한 파라미터 바인딩 및 Fluent 쿼리 빌더 API
-- **[스키마 빌더](https://bytelogiccore-spec.github.io/DBX/korean/guides/schema-builder)** — Arrow 스키마 생성을 위한 Fluent API
-- **[저장소 계층](https://bytelogiccore-spec.github.io/DBX/korean/guides/storage-layers)** — 5계층 아키텍처 상세 설명
-- **[GPU 가속](https://bytelogiccore-spec.github.io/DBX/korean/guides/gpu-acceleration)** — CUDA 설정 및 성능 튜닝
-
----
-
-## ✨ 주요 기능 및 로드맵
-
-### 핵심 기능 ✅
-- ✅ **5계층 하이브리드 스토리지** — Delta → Cache → WOS → Index → ROS
-- ✅ **MVCC 트랜잭션** — 스냅샷 격리, 가비지 컬렉션
-- ✅ **SQL 지원** — SELECT, WHERE, JOIN, GROUP BY, ORDER BY
-- ✅ **GPU 가속** — CUDA 기반 집계 및 필터링
-- ✅ **암호화** — AES-256-GCM-SIV, ChaCha20-Poly1305
-- ✅ **압축** — ZSTD, Brotli
-- ✅ **WAL 2.0** — 테이블별 파티셔닝 및 비동기 fsync
-- ✅ **쿼리 플랜 캐시** — 2계층(메모리 + 디스크) 플랜 캐싱
-- ✅ **병렬 쿼리** — Rayon 기반 병렬 필터, 집계, 프로젝션
-- ✅ **스키마 버저닝** — 무중단 DDL 및 롤백 지원
-- ✅ **UDF 프레임워크** — 스칼라, 집계, 테이블 사용자 정의 함수
-- ✅ **트리거 & 스케줄러** — 이벤트 기반 트리거 및 Cron 작업 스케줄링
-- ✅ **기능 플래그** — 런타임 기능 토글 (환경변수/파일 영속화)
-- ✅ **파티셔닝** — 해시(Hash) / 범위(Range) / 리스트(List) + 자동 확장 범위
-- ✅ **파티션 수명 주기** — 완전 자동화된 보관/삭제 스케줄러 (`enable_auto_archive`)
-- ✅ **Hot/Cold 티어링** — 파티션별 `PartitionTierHint` (Hot / Warm / Cold 지원)
-- ✅ **복제(Replication)** — 다중 마스터 장애 조치, 쿼럼 기반 리더 선출, 벡터 클럭
-- ✅ **QUIC 통신** — s2n-quic 기반 TLS 1.3 노드 간 통신
-- ✅ **교차 노드 샤딩(Sharding)** — 안정 해시(Consistent Hashing), 가중치 기반 가상 노드, 2PC 트랜잭션
-- ✅ **DB 설정(DbConfig)** — 런타임 `DirtyBufferMode`, `ParallelismConfig`, `DurabilityLevel` 동적 변경
-- ✅ **구체화된 뷰(Materialized Views)** — 사전 계산된 쿼리 결과 캐시·자동 갱신 (60초 백그라운드)
-- ✅ **스트리밍 수집(Streaming Ingestion)** — 채널 기반 INSERT/UPDATE/DELETE CDC 파이프라인
-
----
-
-## 📄 라이선스
-
-DBX는 완전한 무료 오픈 소스 프로젝트이며, **MIT 라이선스**에 따라 배포됩니다.
-
-자세한 내용은 [라이선스](https://bytelogiccore-spec.github.io/DBX/korean/license) 페이지를 참고해 주세요.
-
----
-
-## 🤝 기여하기
-
-이슈 제보와 풀 리퀘스트는 언제나 환영합니다!
-
-코드 규약, PR 제출 프로세스, 그리고 **빌드 속도 최적화 팁(Windows LLD, Linux mold, 디펜더 예외 지정 등)**에 대한 자세한 내용은 [기여 가이드](https://github.com/bytelogiccore-spec/DBX/blob/main/legal/korean/CONTRIBUTING.md)를 확인해 주세요.
-
----
-
-**Made with ❤️ in Rust**
+**데이터의 미래를 위한 Rust의 열정으로 만들어졌습니다.**

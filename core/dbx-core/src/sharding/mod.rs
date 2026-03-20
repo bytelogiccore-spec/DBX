@@ -9,7 +9,7 @@ pub mod node_ring;
 pub mod rebalancer;
 pub mod router;
 pub mod scatter_gather;
-pub mod two_phase;
+
 
 pub use node_ring::NodeRing;
 pub use rebalancer::{MigrationTask, Rebalancer, rebalancer_on_add, rebalancer_on_remove};
