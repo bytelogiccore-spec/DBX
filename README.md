@@ -31,10 +31,23 @@ DBX is the first embedded database to offer **first-class CUDA acceleration**.
 - **4.5x faster** filtering and aggregation on large datasets.
 - Seamlessly offload heavy JOINs and GROUP BY operations to the GPU.
 
-### 🛡️ 4. Zero-Lock Concurrency (MVCC)
-Handle massive concurrent workloads without blocking.
-- **Snapshot Isolation**: Readers never block writers, and writers never block readers.
-- **ACID Compliant**: Full transactional integrity with WAL 2.0.
+### ⚡ Zero-Lock Concurrency (MVCC) + Distributed Locks (DLM)
+Readers never block writers, and writers never block readers.
+Equipped with a **Network-Aware Distributed Lock Manager (DLM)** that uses Fencing Tokens and Adaptive Leases via `GridDatabaseAsync`, while strictly preserving single-node HTAP latency.
+- Built-in absolute **Atomic CAS operations** (`insert_if_not_exists`, `compare_and_swap`).
+- Super-fast 1024-Striped **Row-level Latch Lock Manager**, removing heavy table mutexes from the main data store. (Providing blazing-fast concurrent operations across 5 tiers without table-level bottlenecks).
+  *(Disclaimer: Secondary Index updates currently utilize standard `RwLock` for tree integrity, resulting in brief column-level locks during write-heavy index operations.)*
+
+### 🌐 5. Distributed Grid Architecture (Grid Engine)
+A **Data Grid** is a distributed computing architecture where multiple machines connected over a network act as **one unified database**. DBX has this grid engine built-in, allowing you to start as a single-node embedded DB and — without any code changes — scale horizontally across networked nodes.
+
+> **💡 Why Grid?** Traditional embedded databases (SQLite, Sled, etc.) are confined to a single process. DBX is the **only embedded database** capable of real-time data replication and distribution across nodes over the network.
+
+- **Network Replication (QUIC Transport)**: Ultra-low latency data replication between nodes via TLS 1.3 QUIC protocol. Zero Head-of-Line Blocking ensures stability even in large clusters.
+- **Quorum-based High Availability**: Raft-like leader election with majority ACK approval ensures data consistency and service continuity even when some nodes go down.
+- **Multi-Master Failover**: Automatic leader election on failure with Vector Clock-based conflict resolution to maintain data integrity.
+- **Auto-Sharding (Cross-Node)**: Data is automatically distributed across nodes. Adding a node triggers automatic rebalancing, scaling capacity and throughput linearly.
+- **Distributed Transactions (2PC)**: Transactions spanning multiple nodes are guaranteed atomic via Two-Phase Commit.
 
 ---
 
@@ -49,6 +62,14 @@ Define complex analytical queries and let DBX handle the heavy lifting.
 Built-in `StreamIngester` for high-throughput data pipelines.
 - **MPSC Pipeline**: Concurrently ingest from thousands of producers.
 - **Full DML Support**: Real-time INSERT, UPDATE, and DELETE processing.
+
+---
+
+## 🦀 Rust Ecosystem Compatibility
+
+DBX is designed to integrate seamlessly with the modern Rust data ecosystem.
+- **Native Serde Support**: Store and retrieve custom Rust `struct`s directly without manual byte conversions via the `DatabaseSerde` trait.
+- **Async First Driver**: A non-blocking wrapper `DatabaseAsync` seamlessly offloads heavy I/O to `tokio::task::spawn_blocking`, making it perfect for heavily concurrent async web servers.
 
 ---
 

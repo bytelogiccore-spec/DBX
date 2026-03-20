@@ -14,6 +14,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.1.2-beta] - 2026-03-21
+
+Phase 1 & Ecosystem Compatibility Update: Atomic CAS Operations, Row-level Striped Locks, Native Serde, Async First Driver, and Network-Aware Distributed Lock Manager.
+
+### New Features
+
+#### 🛡️ Atomic CAS & Concurrency (Phase 1)
+- **Atomic CAS API** — Added `insert_if_not_exists`, `compare_and_swap`, `update_if_exists`, and `delete_if_equals` methods to `DatabaseCore`.
+- **Row-level Latch Manager (Lock Striping)** — Replaced table-level mutexes with a high-performance, 1024-striped `RowLockManager` ensuring zero contention for concurrent CAS operations on different keys.
+
+#### 🌐 Grid Engine & Distributed Locks
+- **Network-Aware Distributed Lock Manager (DLM)** — Added `DistributedLockManager` with Fencing Tokens, Adaptive Leases, Heartbeat renewals, and Passive Eviction for massive grid concurrency.
+- **Connection Multiplexing (`GridRouter`)** — Replaced `ReplicationMessage` with a generic `GridMessage` to route replication and lock traffic through a single QUIC connection without loopbacks.
+- **`GridDatabaseAsync` Wrapper** — Introduced the "Separated Explicit Mode" wrapper avoiding DLM overhead for purely local node ops, completely preserving raw HTAP performance.
+
+#### 🦀 Rust Ecosystem Compatibility
+- **Native Serde Support** — Introduced `DatabaseSerde` trait with `insert_struct` and `get_struct` for seamless serialization of Rust structs (via `bincode`).
+- **Async First Driver** — Added `DatabaseAsync` tokio-compatible non-blocking wrapper, offloading heavy I/O to `spawn_blocking` for massive async/await concurrency.
+
+---
+
 ## [0.1.1-beta] - 2026-03-19
 
 WAL sequential append, multi-core parallelization, Multi-Master Failover, cross-node sharding enhancements, distributed transactions, and Phase 3 partitioning synergy.

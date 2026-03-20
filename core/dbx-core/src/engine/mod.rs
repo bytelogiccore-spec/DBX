@@ -1,5 +1,6 @@
 //! Database Engine Module
 
+pub mod async_api;
 pub mod automation_api;
 pub mod benchmark;
 pub mod compaction;
@@ -31,7 +32,13 @@ pub mod workload_analyzer;
 pub mod wos_variant;
 
 #[cfg(test)]
+mod async_tests;
+#[cfg(test)]
+mod cas_tests;
+#[cfg(test)]
 mod parallel_engine_tests;
+#[cfg(test)]
+mod serde_tests;
 
 pub use benchmark::{BenchmarkResult, BenchmarkRunner};
 pub use database::Database;

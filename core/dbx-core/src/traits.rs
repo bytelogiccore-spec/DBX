@@ -28,6 +28,24 @@ pub trait DatabaseCore {
 
     /// 배치 삽입
     fn insert_batch(&self, table: &str, entries: Vec<(Vec<u8>, Vec<u8>)>) -> DbxResult<()>;
+
+    /// 값이 없을 때만 삽입 (Atomic CAS)
+    fn insert_if_not_exists(&self, table: &str, key: &[u8], value: &[u8]) -> DbxResult<bool>;
+
+    /// 기존 값과 비교하여 일치할 때만 새로운 값으로 교체 (Atomic CAS)
+    fn compare_and_swap(
+        &self,
+        table: &str,
+        key: &[u8],
+        expected: &[u8],
+        new_value: &[u8],
+    ) -> DbxResult<bool>;
+
+    /// 기존 값이 존재할 때만 업데이트 (Atomic CAS)
+    fn update_if_exists(&self, table: &str, key: &[u8], value: &[u8]) -> DbxResult<bool>;
+
+    /// 기존 값과 일치할 때만 삭제 (Atomic CAS)
+    fn delete_if_equals(&self, table: &str, key: &[u8], expected: &[u8]) -> DbxResult<bool>;
 }
 
 // ════════════════════════════════════════════
@@ -81,4 +99,26 @@ pub trait DatabaseSnapshot {
     fn load_from_file(path: &str) -> DbxResult<Self>
     where
         Self: Sized;
+}
+
+// ════════════════════════════════════════════
+// Native Serde Support
+// ════════════════════════════════════════════
+
+/// `serde` 기반의 구조체 직접 입출력을 지원하는 Trait
+pub trait DatabaseSerde {
+    /// 구조체를 직렬화하여 삽입
+    fn insert_struct<T: serde::Serialize>(
+        &self,
+        table: &str,
+        key: &[u8],
+        data: &T,
+    ) -> DbxResult<()>;
+
+    /// 데이터를 조회하여 구조체로 역직렬화
+    fn get_struct<T: serde::de::DeserializeOwned>(
+        &self,
+        table: &str,
+        key: &[u8],
+    ) -> DbxResult<Option<T>>;
 }

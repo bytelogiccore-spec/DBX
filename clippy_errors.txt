@@ -1,0 +1,101 @@
+    Checking dbx-core v0.1.2-beta (D:\ByteLogicCore\DBX\core\dbx-core)
+error: unused import: `DlmError`
+   --> core\dbx-core\src\engine\async_api.rs:102:48
+    |
+102 | use crate::grid::dlm::{DistributedLockManager, DlmError};
+    |                                                ^^^^^^^^
+    |
+    = note: `-D unused-imports` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(unused_imports)]`
+
+error: unused import: `crate::traits::DatabaseCore`
+ --> core\dbx-core\src\engine\async_api.rs:3:5
+  |
+3 | use crate::traits::DatabaseCore;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error: this `if` statement can be collapsed
+   --> core\dbx-core\src\engine\crud.rs:789:9
+    |
+789 | /         if let Some(current) = self.get(table, key)? {
+790 | |             if current == expected {
+791 | |                 self.insert(table, key, new_value)?;
+792 | |                 return Ok(true);
+793 | |             }
+794 | |         }
+    | |_________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.92.0/index.html#collapsible_if
+    = note: `-D clippy::collapsible-if` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::collapsible_if)]`
+help: collapse nested if block
+    |
+789 ~         if let Some(current) = self.get(table, key)?
+790 ~             && current == expected {
+791 |                 self.insert(table, key, new_value)?;
+792 |                 return Ok(true);
+793 ~             }
+    |
+
+error: this `if` statement can be collapsed
+   --> core\dbx-core\src\engine\crud.rs:814:9
+    |
+814 | /         if let Some(current) = self.get(table, key)? {
+815 | |             if current == expected {
+816 | |                 self.delete(table, key)?;
+817 | |                 return Ok(true);
+818 | |             }
+819 | |         }
+    | |_________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.92.0/index.html#collapsible_if
+help: collapse nested if block
+    |
+814 ~         if let Some(current) = self.get(table, key)?
+815 ~             && current == expected {
+816 |                 self.delete(table, key)?;
+817 |                 return Ok(true);
+818 ~             }
+    |
+
+error: this `if` statement can be collapsed
+   --> core\dbx-core\src\grid\dlm.rs:189:25
+    |
+189 | /                         if let Some(entry) = self.granted_locks.get(&lock_key) {
+190 | |                             if entry.0 == node_id && entry.1 == fencing_token {
+191 | |                                 drop(entry);
+192 | |                                 self.granted_locks.remove(&lock_key);
+193 | |                             }
+194 | |                         }
+    | |_________________________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.92.0/index.html#collapsible_if
+help: collapse nested if block
+    |
+189 ~                         if let Some(entry) = self.granted_locks.get(&lock_key)
+190 ~                             && entry.0 == node_id && entry.1 == fencing_token {
+191 |                                 drop(entry);
+192 |                                 self.granted_locks.remove(&lock_key);
+193 ~                             }
+    |
+
+error: this `if` statement can be collapsed
+   --> core\dbx-core\src\sql\interface.rs:352:9
+    |
+352 | /         if sql_upper.starts_with("SELECT") {
+353 | |             if let Some(cached) = self.try_matview_cache(sql_trimmed) {
+354 | |                 return Ok(cached);
+355 | |             }
+356 | |         }
+    | |_________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.92.0/index.html#collapsible_if
+help: collapse nested if block
+    |
+352 ~         if sql_upper.starts_with("SELECT")
+353 ~             && let Some(cached) = self.try_matview_cache(sql_trimmed) {
+354 |                 return Ok(cached);
+355 ~             }
+    |
+
+error: could not compile `dbx-core` (lib) due to 6 previous errors

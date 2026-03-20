@@ -237,6 +237,9 @@ impl Database {
                 });
         }
 
+        // Event-driven MV 갱신 알림 (MV가 없으면 zero overhead)
+        self.mat_view_registry.notify_change(table);
+
         self.metrics.inc_inserts();
         Ok(())
     }
@@ -306,6 +309,9 @@ impl Database {
             }
             SyncMode::AsyncBatch { .. } => {}
         }
+
+        // Event-driven MV 갱신 알림
+        self.mat_view_registry.notify_change(table);
 
         Ok(())
     }
@@ -658,6 +664,9 @@ impl Database {
             self.insert_versioned(table, key, None, commit_ts)?;
         }
 
+        // Event-driven MV 갱신 알림
+        self.mat_view_registry.notify_change(table);
+
         self.metrics.inc_deletes();
         Ok(delta_deleted || wos_deleted)
     }
@@ -750,6 +759,66 @@ impl Database {
             cpu_op()
         }
     }
+
+    // ════════════════════════════════════════════
+    // CAS (Compare-And-Swap) Operations
+    // ════════════════════════════════════════════
+
+    /// 값이 없을 때만 삽입 (Atomic CAS)
+    pub fn insert_if_not_exists(&self, table: &str, key: &[u8], value: &[u8]) -> DbxResult<bool> {
+        let _guard = self.cas_locks.lock(table, key);
+
+        if self.get(table, key)?.is_none() {
+            self.insert(table, key, value)?;
+            Ok(true)
+        } else {
+            Ok(false)
+        }
+    }
+
+    /// 기존 값과 비교하여 일치할 때만 새로운 값으로 교체 (Atomic CAS)
+    pub fn compare_and_swap(
+        &self,
+        table: &str,
+        key: &[u8],
+        expected: &[u8],
+        new_value: &[u8],
+    ) -> DbxResult<bool> {
+        let _guard = self.cas_locks.lock(table, key);
+
+        if let Some(current) = self.get(table, key)?
+            && current == expected
+        {
+            self.insert(table, key, new_value)?;
+            return Ok(true);
+        }
+        Ok(false)
+    }
+
+    /// 기존 값이 존재할 때만 업데이트 (Atomic CAS)
+    pub fn update_if_exists(&self, table: &str, key: &[u8], value: &[u8]) -> DbxResult<bool> {
+        let _guard = self.cas_locks.lock(table, key);
+
+        if self.get(table, key)?.is_some() {
+            self.insert(table, key, value)?;
+            Ok(true)
+        } else {
+            Ok(false)
+        }
+    }
+
+    /// 기존 값과 일치할 때만 삭제 (Atomic CAS)
+    pub fn delete_if_equals(&self, table: &str, key: &[u8], expected: &[u8]) -> DbxResult<bool> {
+        let _guard = self.cas_locks.lock(table, key);
+
+        if let Some(current) = self.get(table, key)?
+            && current == expected
+        {
+            self.delete(table, key)?;
+            return Ok(true);
+        }
+        Ok(false)
+    }
 }
 
 // ════════════════════════════════════════════
@@ -785,5 +854,63 @@ impl crate::traits::DatabaseCore for Database {
     fn insert_batch(&self, table: &str, entries: Vec<(Vec<u8>, Vec<u8>)>) -> DbxResult<()> {
         // Reuse existing implementation
         Database::insert_batch(self, table, entries)
+    }
+
+    fn insert_if_not_exists(&self, table: &str, key: &[u8], value: &[u8]) -> DbxResult<bool> {
+        Database::insert_if_not_exists(self, table, key, value)
+    }
+
+    fn compare_and_swap(
+        &self,
+        table: &str,
+        key: &[u8],
+        expected: &[u8],
+        new_value: &[u8],
+    ) -> DbxResult<bool> {
+        Database::compare_and_swap(self, table, key, expected, new_value)
+    }
+
+    fn update_if_exists(&self, table: &str, key: &[u8], value: &[u8]) -> DbxResult<bool> {
+        Database::update_if_exists(self, table, key, value)
+    }
+
+    fn delete_if_equals(&self, table: &str, key: &[u8], expected: &[u8]) -> DbxResult<bool> {
+        Database::delete_if_equals(self, table, key, expected)
+    }
+}
+
+// ════════════════════════════════════════════
+// DatabaseSerde Trait Implementation
+// ════════════════════════════════════════════
+
+impl crate::traits::DatabaseSerde for Database {
+    fn insert_struct<T: serde::Serialize>(
+        &self,
+        table: &str,
+        key: &[u8],
+        data: &T,
+    ) -> DbxResult<()> {
+        let serialized = bincode::serialize(data).map_err(|e| {
+            crate::error::DbxError::Serialization(format!("Failed to serialize struct: {}", e))
+        })?;
+        self.insert(table, key, &serialized)
+    }
+
+    fn get_struct<T: serde::de::DeserializeOwned>(
+        &self,
+        table: &str,
+        key: &[u8],
+    ) -> DbxResult<Option<T>> {
+        if let Some(bytes) = self.get(table, key)? {
+            let deserialized = bincode::deserialize(&bytes).map_err(|e| {
+                crate::error::DbxError::Serialization(format!(
+                    "Failed to deserialize struct: {}",
+                    e
+                ))
+            })?;
+            Ok(Some(deserialized))
+        } else {
+            Ok(None)
+        }
     }
 }

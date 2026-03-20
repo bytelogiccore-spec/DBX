@@ -14,6 +14,27 @@ DBX의 주요 변경사항을 기록합니다.
 
 ---
 
+## [0.1.2-beta] - 2026-03-21
+
+Phase 1 원자적 연산 처리 및 그리드 분산 락, 네이티브 생태계 호환성 업데이트.
+
+### 새로운 기능
+
+#### 🛡️ Atomic CAS & 동시성 (Phase 1)
+- **Atomic CAS API** — `insert_if_not_exists`, `compare_and_swap` 등의 무잠금 원자적 연산 내장.
+- **Row-level Latch Lock Manager** — 무거운 테이블 단위 Mutex를 제거하고 1024-Striped 기반의 초고속 분산 키 락커 추가.
+
+#### 🌐 분산 그리드 아키텍처 (Grid Engine DLM)
+- **Network-Aware Distributed Lock Manager (DLM)** — Fencing Token 및 Lease 주기(타임아웃) 기반의 네트워크 분산 락(DLM) 코디네이터 탑재. (Heartbeat 및 탈취 자동화)
+- **채널 멀티플렉서 (GridRouter)** — `GridMessage` 프로토콜을 생성하여 복제 트래픽과 Lock 트래픽을 단일 QUIC 포트로 전송하는 무환도 라우팅 구현.
+- **수동 락 스위칭 래퍼 (GridDatabaseAsync)** — 로컬의 초고속 성능 훼손 방지를 위해 분산 환경용 비동기 명시적 락 연동 모듈 분리.
+
+#### 🦀 생태계 및 비동기 지원
+- **Native Serde 지원** — `insert_struct`, `get_struct` 등 비용 없는 Bincode 바인딩 공식 지원.
+- **Async First Driver** — 대용량 I/O 블로킹 방지를 위한 `tokio` 기반 `DatabaseAsync` 비동기 래퍼 모델 탑재.
+
+---
+
 ## [0.1.1-beta] - 2026-03-19
 
 WAL 구현, 멀티코어 병렬화, Multi-Master Failover, 크로스-노드 샤딩 고도화, 분산 트랜잭션, 파티셔닝 시너지 Phase 3 완전 구현.

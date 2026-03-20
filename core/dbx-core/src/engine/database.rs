@@ -5,7 +5,7 @@ use crate::engine::{DeltaVariant, DurabilityLevel, WosVariant};
 use crate::monitoring::DbxMetrics;
 use crate::sql::optimizer::QueryOptimizer;
 use crate::sql::parser::SqlParser;
-use crate::sql::view::{ViewRegistry, MaterializedViewRegistry, SharedMaterializedViewRegistry};
+use crate::sql::view::{SharedMaterializedViewRegistry, ViewRegistry};
 use crate::storage::encryption::EncryptionConfig;
 use crate::transaction::mvcc::manager::TransactionManager;
 use arrow::array::RecordBatch;
@@ -13,6 +13,42 @@ use arrow::datatypes::Schema;
 use dashmap::DashMap;
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
+
+// ════════════════════════════════════════════
+// CAS (Compare-And-Swap) Row Latch Lock Manager
+// ════════════════════════════════════════════
+
+/// A Lock Striping mechanism to provide fine-grained, row-level locks
+/// for concurrent CAS operations without memory bloat.
+pub struct RowLockManager {
+    stripes: Vec<std::sync::Mutex<()>>,
+    mask: usize,
+}
+
+impl RowLockManager {
+    /// Creates a new RowLockManager with `1 << power_of_two` stripes.
+    /// E.g., `power_of_two = 10` gives 1024 locks.
+    pub fn new(power_of_two: usize) -> Self {
+        let size = 1 << power_of_two;
+        let mut stripes = Vec::with_capacity(size);
+        for _ in 0..size {
+            stripes.push(std::sync::Mutex::new(()));
+        }
+        Self {
+            stripes,
+            mask: size - 1,
+        }
+    }
+
+    /// Acquires a lock for a specific (table, key) combination.
+    pub fn lock<'a>(&'a self, table: &str, key: &[u8]) -> std::sync::MutexGuard<'a, ()> {
+        let mut hasher = ahash::AHasher::default();
+        std::hash::Hash::hash(&table, &mut hasher);
+        std::hash::Hash::hash(&key, &mut hasher);
+        let hash = std::hash::Hasher::finish(&hasher) as usize;
+        self.stripes[hash & self.mask].lock().unwrap()
+    }
+}
 
 /// DBX 데이터베이스 엔진
 ///
@@ -171,6 +207,9 @@ pub struct Database {
 
     /// Metrics & Observability (Phase 0.4)
     pub(crate) metrics: Arc<DbxMetrics>,
+
+    /// Atomic CAS operations를 위한 Row-level Latch 매니저 (Phase 1.1)
+    pub(crate) cas_locks: Arc<RowLockManager>,
 }
 
 impl Database {

@@ -22,7 +22,7 @@
 
 use std::time::Duration;
 
-use crate::replication::protocol::ReplicationMessage;
+use crate::grid::protocol::GridMessage;
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 런타임 Transport 설정
@@ -117,7 +117,7 @@ impl ReplicationConfig {
     /// - `Quic`    → s2n-quic 서버 소켓을 열고 QuicTransport 반환
     pub async fn build_transport_async(
         &self,
-        broadcast_tx: tokio::sync::broadcast::Sender<ReplicationMessage>,
+        broadcast_tx: tokio::sync::broadcast::Sender<GridMessage>,
     ) -> Result<Box<dyn Transport>, quic::QuicError> {
         match &self.mode {
             TransportMode::InMemory => Ok(Box::new(InMemoryTransport::new(broadcast_tx))),
@@ -148,7 +148,7 @@ impl ReplicationConfig {
     ///
     /// Quic 모드에서는 `build_transport_async()`를 사용하세요.
     pub fn build_inmemory(
-        broadcast_tx: tokio::sync::broadcast::Sender<ReplicationMessage>,
+        broadcast_tx: tokio::sync::broadcast::Sender<GridMessage>,
     ) -> Box<dyn Transport> {
         Box::new(InMemoryTransport::new(broadcast_tx))
     }
@@ -164,10 +164,10 @@ impl ReplicationConfig {
 /// 이 trait을 구현하므로 상위 코드는 Transport 구현체를 교체해도 수정 불필요.
 pub trait Transport: Send + Sync {
     /// 특정 노드에게 메시지 전송
-    fn send(&self, target_node_id: u32, msg: ReplicationMessage);
+    fn send(&self, target_node_id: u32, msg: GridMessage);
 
     /// 메시지 수신 (비블로킹, 없으면 None)  
-    fn recv(&self) -> Option<ReplicationMessage>;
+    fn recv(&self) -> Option<GridMessage>;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -179,12 +179,12 @@ pub trait Transport: Send + Sync {
 /// 테스트 및 단일 서버 시나리오에서 사용합니다.
 /// `QuicTransport`로 교체 시 이 구조체만 대체하면 됩니다.
 pub struct InMemoryTransport {
-    sender: tokio::sync::broadcast::Sender<ReplicationMessage>,
-    receiver: std::sync::Mutex<tokio::sync::broadcast::Receiver<ReplicationMessage>>,
+    sender: tokio::sync::broadcast::Sender<GridMessage>,
+    receiver: std::sync::Mutex<tokio::sync::broadcast::Receiver<GridMessage>>,
 }
 
 impl InMemoryTransport {
-    pub fn new(sender: tokio::sync::broadcast::Sender<ReplicationMessage>) -> Self {
+    pub fn new(sender: tokio::sync::broadcast::Sender<GridMessage>) -> Self {
         let receiver = sender.subscribe();
         Self {
             sender,
@@ -194,11 +194,11 @@ impl InMemoryTransport {
 }
 
 impl Transport for InMemoryTransport {
-    fn send(&self, _target_node_id: u32, msg: ReplicationMessage) {
+    fn send(&self, _target_node_id: u32, msg: GridMessage) {
         let _ = self.sender.send(msg);
     }
 
-    fn recv(&self) -> Option<ReplicationMessage> {
+    fn recv(&self) -> Option<GridMessage> {
         self.receiver.lock().unwrap().try_recv().ok()
     }
 }
@@ -236,7 +236,7 @@ pub mod quic {
     use std::sync::Arc;
     use tokio::sync::mpsc;
 
-    use crate::replication::protocol::ReplicationMessage;
+    use crate::grid::protocol::GridMessage;
 
     /// 메시지 길이 프리픽스 크기 (4바이트 little-endian u32)
     const LEN_PREFIX_BYTES: usize = 4;
@@ -255,9 +255,9 @@ pub mod quic {
     /// QUIC 기반 노드 (Server/Client 겸용)
     pub struct QuicNode {
         /// 수신 채널 (recv_loop에서 디코딩된 메시지가 들어옴)
-        rx: Arc<tokio::sync::Mutex<mpsc::Receiver<ReplicationMessage>>>,
+        rx: Arc<tokio::sync::Mutex<mpsc::Receiver<GridMessage>>>,
         /// 발신 채널 (send_msg를 통해 메시지 전송)
-        tx_out: mpsc::Sender<(ReplicationMessage, String)>,
+        tx_out: mpsc::Sender<(GridMessage, String)>,
     }
 
     impl QuicNode {
@@ -270,8 +270,8 @@ pub mod quic {
             cert_pem: &Path,
             key_pem: &Path,
         ) -> Result<(Self, tokio::task::JoinHandle<()>), QuicError> {
-            let (msg_tx, msg_rx) = mpsc::channel::<ReplicationMessage>(256);
-            let (out_tx, _out_rx) = mpsc::channel::<(ReplicationMessage, String)>(256);
+            let (msg_tx, msg_rx) = mpsc::channel::<GridMessage>(256);
+            let (out_tx, _out_rx) = mpsc::channel::<(GridMessage, String)>(256);
 
             let tls = tls::default::Server::builder()
                 .with_certificate(cert_pem, key_pem)
@@ -304,7 +304,7 @@ pub mod quic {
                             if stream.read_exact(&mut buf).await.is_err() {
                                 break;
                             }
-                            if let Ok(msg) = bincode::deserialize::<ReplicationMessage>(&buf) {
+                            if let Ok(msg) = bincode::deserialize::<GridMessage>(&buf) {
                                 let _ = msg_tx.send(msg).await;
                             }
                         }
@@ -329,8 +329,8 @@ pub mod quic {
             peer_addr: &str,
             ca_cert_pem: &Path,
         ) -> Result<(Self, tokio::task::JoinHandle<()>), QuicError> {
-            let (msg_tx, msg_rx) = mpsc::channel::<ReplicationMessage>(256);
-            let (out_tx, mut out_rx) = mpsc::channel::<(ReplicationMessage, String)>(256);
+            let (msg_tx, msg_rx) = mpsc::channel::<GridMessage>(256);
+            let (out_tx, mut out_rx) = mpsc::channel::<(GridMessage, String)>(256);
 
             let tls = tls::default::Client::builder()
                 .with_certificate(ca_cert_pem)
@@ -382,12 +382,12 @@ pub mod quic {
         }
 
         /// 메시지 발송 (비동기)
-        pub async fn send_msg(&self, msg: ReplicationMessage, peer_addr: String) {
+        pub async fn send_msg(&self, msg: GridMessage, peer_addr: String) {
             let _ = self.tx_out.send((msg, peer_addr)).await;
         }
 
         /// 메시지 수신 (비블로킹)
-        pub async fn try_recv(&self) -> Option<ReplicationMessage> {
+        pub async fn try_recv(&self) -> Option<GridMessage> {
             self.rx.lock().await.try_recv().ok()
         }
     }
@@ -427,7 +427,7 @@ pub mod quic {
     }
 
     impl crate::replication::transport::Transport for QuicTransport {
-        fn send(&self, _target_node_id: u32, msg: ReplicationMessage) {
+        fn send(&self, _target_node_id: u32, msg: GridMessage) {
             let node = Arc::clone(&self.node);
             let addr = self.peer_addr.clone();
             self.rt.spawn(async move {
@@ -435,7 +435,7 @@ pub mod quic {
             });
         }
 
-        fn recv(&self) -> Option<ReplicationMessage> {
+        fn recv(&self) -> Option<GridMessage> {
             let node = Arc::clone(&self.node);
             self.rt.block_on(async move { node.try_recv().await })
         }
@@ -497,10 +497,12 @@ mod tests {
         let t1 = InMemoryTransport::new(tx.clone());
         let t2 = InMemoryTransport::new(tx.clone());
 
-        let msg = ReplicationMessage::Heartbeat {
-            node_id: 1,
-            lsn: 42,
-        };
+        let msg = GridMessage::Replication(
+            crate::replication::protocol::ReplicationMessage::Heartbeat {
+                node_id: 1,
+                lsn: 42,
+            },
+        );
         t1.send(2, msg.clone());
 
         // t2는 같은 채널을 구독하므로 메시지를 받을 수 있음
@@ -513,7 +515,7 @@ mod tests {
     #[test]
     fn test_transport_trait_object() {
         // Transport trait object로 사용 가능한지 컴파일 타임 검증
-        let (tx, _) = tokio::sync::broadcast::channel::<ReplicationMessage>(16);
+        let (tx, _) = tokio::sync::broadcast::channel::<GridMessage>(16);
         let _t: Box<dyn Transport> = Box::new(InMemoryTransport::new(tx));
     }
 }

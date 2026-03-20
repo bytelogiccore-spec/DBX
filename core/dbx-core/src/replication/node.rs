@@ -7,10 +7,10 @@
 //! - `Promotion` 메시지에 `term` 포함 → 구버전 Master를 Slave로 강등
 //! - Split-Brain 방어: 자신보다 높은 term의 Promotion 수신 시 Slave 강등
 
+use dashmap::DashMap;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
-use dashmap::DashMap;
 use tokio::sync::broadcast;
 use tokio::sync::{Mutex, RwLock, oneshot};
 

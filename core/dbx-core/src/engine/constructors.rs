@@ -157,6 +157,7 @@ impl Database {
                 Arc::new(crate::sharding::router::ShardRouter::new_local(4)),
             )),
             metrics: Arc::new(crate::monitoring::DbxMetrics::new()),
+            cas_locks: Arc::new(crate::engine::database::RowLockManager::new(10)),
         };
 
         // Perform crash recovery
@@ -235,26 +236,25 @@ impl Database {
             .unwrap()
             .start_scheduler(db_weak)?;
 
-        // Start Materialized View auto-refresh thread (60초마다 stale MV를 갱신)
+        // Start Materialized View event-driven refresh thread
         let mv_reg = Arc::clone(&db_arc.mat_view_registry);
         let db_mv_weak = Arc::downgrade(&db_arc);
         std::thread::Builder::new()
             .name("dbx-mv-refresh".into())
             .spawn(move || {
-                let interval = std::time::Duration::from_secs(60);
                 loop {
-                    std::thread::sleep(interval);
-                    for name in mv_reg.list() {
-                        if !mv_reg.is_fresh(&name) {
-                            if let Some(db) = db_mv_weak.upgrade() {
-                                let _ = db.execute_sql(&format!(
-                                    "REFRESH MATERIALIZED VIEW {}",
-                                    name
-                                ));
-                            } else {
-                                // DB가 Drop됨 — 스레드 종료
-                                return;
-                            }
+                    // Condvar 블로킹: DML notify_change()가 호출될 때까지 대기
+                    let dirty = mv_reg.wait_and_take_dirty();
+                    // debounce: min_refresh_interval만큼 추가 대기 후 나머지 dirty도 수집
+                    std::thread::sleep(mv_reg.min_refresh_interval());
+                    let mut all_dirty = dirty;
+                    all_dirty.extend(mv_reg.take_dirty());
+                    for name in all_dirty {
+                        if let Some(db) = db_mv_weak.upgrade() {
+                            let _ = db.execute_sql(&format!("REFRESH MATERIALIZED VIEW {}", name));
+                        } else {
+                            // DB가 Drop됨 — 스레드 종료
+                            return;
                         }
                     }
                 }
@@ -360,6 +360,7 @@ impl Database {
                 Arc::new(crate::sharding::router::ShardRouter::new_local(4)),
             )),
             metrics: Arc::new(crate::monitoring::DbxMetrics::new()),
+            cas_locks: Arc::new(crate::engine::database::RowLockManager::new(10)),
         };
         let records = encrypted_wal.replay()?;
         let mut recovered_count = 0;
@@ -466,6 +467,7 @@ impl Database {
                 Arc::new(crate::sharding::router::ShardRouter::new_local(4)),
             )),
             metrics: Arc::new(crate::monitoring::DbxMetrics::new()),
+            cas_locks: Arc::new(crate::engine::database::RowLockManager::new(10)),
         })
     }
 
@@ -546,6 +548,7 @@ impl Database {
                 Arc::new(crate::sharding::router::ShardRouter::new_local(4)),
             )),
             metrics: Arc::new(crate::monitoring::DbxMetrics::new()),
+            cas_locks: Arc::new(crate::engine::database::RowLockManager::new(10)),
         })
     }
 
@@ -662,6 +665,7 @@ impl Database {
                 Arc::new(crate::sharding::router::ShardRouter::new_local(4)),
             )),
             metrics: Arc::new(crate::monitoring::DbxMetrics::new()),
+            cas_locks: Arc::new(crate::engine::database::RowLockManager::new(10)),
         };
 
         // Crash recovery
@@ -725,25 +729,22 @@ impl Database {
             .unwrap()
             .start_scheduler(db_weak)?;
 
-        // Materialized View 자동 갱신 백그라운드 스레드
+        // Materialized View 이벤트 기반 갱신 백그라운드 스레드
         let mv_reg = Arc::clone(&db_arc.mat_view_registry);
         let db_mv_weak = Arc::downgrade(&db_arc);
         std::thread::Builder::new()
             .name("dbx-mv-refresh".into())
             .spawn(move || {
-                let interval = std::time::Duration::from_secs(60);
                 loop {
-                    std::thread::sleep(interval);
-                    for name in mv_reg.list() {
-                        if !mv_reg.is_fresh(&name) {
-                            if let Some(db) = db_mv_weak.upgrade() {
-                                let _ = db.execute_sql(&format!(
-                                    "REFRESH MATERIALIZED VIEW {}",
-                                    name
-                                ));
-                            } else {
-                                return;
-                            }
+                    let dirty = mv_reg.wait_and_take_dirty();
+                    std::thread::sleep(mv_reg.min_refresh_interval());
+                    let mut all_dirty = dirty;
+                    all_dirty.extend(mv_reg.take_dirty());
+                    for name in all_dirty {
+                        if let Some(db) = db_mv_weak.upgrade() {
+                            let _ = db.execute_sql(&format!("REFRESH MATERIALIZED VIEW {}", name));
+                        } else {
+                            return;
                         }
                     }
                 }
@@ -866,6 +867,7 @@ impl Database {
                 Arc::new(crate::sharding::router::ShardRouter::new_local(4)),
             )),
             metrics: Arc::new(crate::monitoring::DbxMetrics::new()),
+            cas_locks: Arc::new(crate::engine::database::RowLockManager::new(10)),
         };
 
         // Crash recovery

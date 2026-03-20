@@ -349,10 +349,10 @@ impl Database {
         }
 
         // SELECT 시 Materialized View 캐시 히트 확인
-        if sql_upper.starts_with("SELECT") {
-            if let Some(cached) = self.try_matview_cache(sql_trimmed) {
-                return Ok(cached);
-            }
+        if sql_upper.starts_with("SELECT")
+            && let Some(cached) = self.try_matview_cache(sql_trimmed)
+        {
+            return Ok(cached);
         }
 
         // Step 0b: Expand views in FROM clauses
@@ -438,21 +438,30 @@ impl Database {
         let upper = sql.to_uppercase();
 
         // 뷰 이름 / SQL 추출 (VIEW 키워드 이후)
-        let after_view = sql[upper.find("VIEW").unwrap() + 4..].trim_start().to_owned();
+        let after_view = sql[upper.find("VIEW").unwrap() + 4..]
+            .trim_start()
+            .to_owned();
         let after_upper = after_view.to_uppercase();
 
         // "REFRESH EVERY <n> AS ..." 패턴 감지 (선택적)
-        let (refresh_interval_secs, body) = if let Some(re_pos) = after_upper.find("REFRESH EVERY") {
+        let (refresh_interval_secs, body) = if let Some(re_pos) = after_upper.find("REFRESH EVERY")
+        {
             // 이름은 REFRESH EVERY 이전
             let name_part = after_view[..re_pos].trim().to_string();
             let rest = after_view[re_pos + 13..].trim_start().to_string();
-            let as_pos = rest.to_uppercase().find(" AS ").ok_or_else(|| DbxError::SqlParse {
-                message: "CREATE MATERIALIZED VIEW ... REFRESH EVERY <n> AS <sql>".to_string(),
-                sql: sql.to_string(),
-            })?;
+            let as_pos = rest
+                .to_uppercase()
+                .find(" AS ")
+                .ok_or_else(|| DbxError::SqlParse {
+                    message: "CREATE MATERIALIZED VIEW ... REFRESH EVERY <n> AS <sql>".to_string(),
+                    sql: sql.to_string(),
+                })?;
             let interval_str = rest[..as_pos].trim();
             let interval_secs: u64 = interval_str.parse().map_err(|_| DbxError::SqlParse {
-                message: format!("REFRESH EVERY requires integer seconds, got '{}'", interval_str),
+                message: format!(
+                    "REFRESH EVERY requires integer seconds, got '{}'",
+                    interval_str
+                ),
                 sql: sql.to_string(),
             })?;
             let view_sql = rest[as_pos + 4..].trim().to_string();
@@ -467,7 +476,8 @@ impl Database {
             (None, (name, view_sql))
         };
 
-        self.mat_view_registry.create(&body.0, &body.1, refresh_interval_secs)?;
+        self.mat_view_registry
+            .create(&body.0, &body.1, refresh_interval_secs)?;
         self.one_row_affected_batch()
     }
 
@@ -513,7 +523,6 @@ impl Database {
 
     /// Helper: single-row `rows_affected = 1` result batch
     fn one_row_affected_batch(&self) -> DbxResult<Vec<RecordBatch>> {
-
         use arrow::array::Int64Array;
         use arrow::datatypes::{DataType, Field, Schema};
         let schema = Arc::new(Schema::new(vec![Field::new(

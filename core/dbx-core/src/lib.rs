@@ -83,6 +83,7 @@ pub mod api;
 pub mod automation;
 pub mod engine;
 pub mod error;
+pub mod grid;
 pub mod index;
 pub mod monitoring;
 pub mod replication;

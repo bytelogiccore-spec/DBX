@@ -27,7 +27,7 @@
 
 use crate::engine::Database;
 use crate::error::DbxResult;
-use std::sync::{mpsc, Arc};
+use std::sync::{Arc, mpsc};
 use std::thread;
 use std::time::Duration;
 
@@ -68,12 +68,7 @@ impl StreamIngester {
     /// * `table` - 이벤트를 적용할 테이블 이름
     /// * `batch_size` - 이 이벤트 수에 도달하면 즉시 flush
     /// * `max_latency` - 버퍼가 차지 않아도 이 시간마다 강제 flush
-    pub fn new(
-        db: Arc<Database>,
-        table: &str,
-        batch_size: usize,
-        max_latency: Duration,
-    ) -> Self {
+    pub fn new(db: Arc<Database>, table: &str, batch_size: usize, max_latency: Duration) -> Self {
         let (tx, rx) = mpsc::sync_channel::<Vec<StreamEvent>>(batch_size * 4);
         let table = table.to_string();
 
@@ -162,18 +157,27 @@ mod tests {
 
         // INSERT 2건
         tx.send(vec![
-            StreamEvent::Insert { key: "k1".into(), value: b"v1".to_vec() },
-            StreamEvent::Insert { key: "k2".into(), value: b"v2".to_vec() },
-        ]).unwrap();
+            StreamEvent::Insert {
+                key: "k1".into(),
+                value: b"v1".to_vec(),
+            },
+            StreamEvent::Insert {
+                key: "k2".into(),
+                value: b"v2".to_vec(),
+            },
+        ])
+        .unwrap();
 
         // UPDATE k1
         tx.send(vec![StreamEvent::Update {
             key: "k1".into(),
             value: b"v1-updated".to_vec(),
-        }]).unwrap();
+        }])
+        .unwrap();
 
         // DELETE k2
-        tx.send(vec![StreamEvent::Delete { key: "k2".into() }]).unwrap();
+        tx.send(vec![StreamEvent::Delete { key: "k2".into() }])
+            .unwrap();
 
         // ⚠️ [핵심 원인 해결]
         // `tx`가 아직 살아있으면 백그라운드 스레드는 채널이 닫혔다고 판단하지 않고
@@ -195,7 +199,10 @@ mod tests {
     fn test_stream_ingester_high_throughput() {
         let db = make_db();
         let ingester = StreamIngester::new(
-            Arc::clone(&db), "telemetry", 500, Duration::from_millis(100),
+            Arc::clone(&db),
+            "telemetry",
+            500,
+            Duration::from_millis(100),
         );
         let tx = ingester.sender();
 
@@ -227,9 +234,8 @@ mod tests {
     #[test]
     fn test_stream_ingester_mixed_dml() {
         let db = make_db();
-        let ingester = StreamIngester::new(
-            Arc::clone(&db), "inventory", 500, Duration::from_millis(50),
-        );
+        let ingester =
+            StreamIngester::new(Arc::clone(&db), "inventory", 500, Duration::from_millis(50));
         let tx = ingester.sender();
 
         // 100건 INSERT
@@ -244,7 +250,9 @@ mod tests {
         // 짝수 key DELETE (0,2,4,6,8 → 5건)
         let deletes: Vec<StreamEvent> = (0u32..100)
             .filter(|i| i % 2 == 0)
-            .map(|i| StreamEvent::Delete { key: format!("item_{}", i) })
+            .map(|i| StreamEvent::Delete {
+                key: format!("item_{}", i),
+            })
             .collect();
         tx.send(deletes).unwrap();
 
