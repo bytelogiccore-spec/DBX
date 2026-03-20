@@ -106,6 +106,8 @@ DBX는 다양한 언어를 위한 공식 바인딩을 제공합니다:
 - **[CRUD 작업](https://bytelogiccore-spec.github.io/DBX/korean/guides/crud-operations)** — 삽입, 조회, 삭제, 배치 작업
 - **[트랜잭션](https://bytelogiccore-spec.github.io/DBX/korean/guides/transactions)** — MVCC, 스냅샷 격리, 동시성 제어
 - **[SQL 레퍼런스](https://bytelogiccore-spec.github.io/DBX/korean/guides/sql-reference)** — 지원 구문 및 쿼리 최적화
+- **[구체화된 뷰](https://bytelogiccore-spec.github.io/DBX/korean/guides/materialized-views)** — 사전 계산된 쿼리 결과 캐싱 및 자동 갱신
+- **[스트리밍 수집](https://bytelogiccore-spec.github.io/DBX/korean/guides/streaming-ingestion)** — 고성능 실시간 데이터 파이프라인 (CDC)
 - **[쿼리 빌더](https://bytelogiccore-spec.github.io/DBX/korean/guides/query-builder)** — 타입 안전한 파라미터 바인딩 및 Fluent 쿼리 빌더 API
 - **[스키마 빌더](https://bytelogiccore-spec.github.io/DBX/korean/guides/schema-builder)** — Arrow 스키마 생성을 위한 Fluent API
 - **[저장소 계층](https://bytelogiccore-spec.github.io/DBX/korean/guides/storage-layers)** — 5계층 아키텍처 상세 설명

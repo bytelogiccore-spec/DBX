@@ -100,6 +100,8 @@ DBX provides official bindings for multiple languages:
 - **[CRUD Operations](https://bytelogiccore-spec.github.io/DBX/english/guides/crud-operations)** — Insert, read, delete, batch operations
 - **[Transactions](https://bytelogiccore-spec.github.io/DBX/english/guides/transactions)** — MVCC, Snapshot Isolation, concurrency
 - **[SQL Reference](https://bytelogiccore-spec.github.io/DBX/english/guides/sql-reference)** — Supported syntax and query optimization
+- **[Materialized Views](https://bytelogiccore-spec.github.io/DBX/english/guides/materialized-views)** — Pre-computed query result caching and auto-refresh
+- **[Streaming Ingestion](https://bytelogiccore-spec.github.io/DBX/english/guides/streaming-ingestion)** — High-performance real-time data pipelines (CDC)
 - **[Storage Layers](https://bytelogiccore-spec.github.io/DBX/english/guides/storage-layers)** — 5-Tier architecture explained
 - **[GPU Acceleration](https://bytelogiccore-spec.github.io/DBX/english/guides/gpu-acceleration)** — CUDA setup and performance tuning
 - **[DB Configuration](https://bytelogiccore-spec.github.io/DBX/english/guides/db-config)** — DbConfig, DirtyBufferMode, ParallelismConfig
