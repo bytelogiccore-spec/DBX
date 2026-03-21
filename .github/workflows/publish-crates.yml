@@ -10,6 +10,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      
+      - name: mold 링커 설치
+        run: sudo apt-get update && sudo apt-get install -y mold clang
+
       - uses: dtolnay/rust-toolchain@stable
 
       - name: Publish dbx-core

@@ -99,6 +99,11 @@ jobs:
         with:
           key: ${{ matrix.platform }}
 
+      # Linux x64 빌드 도구 (mold 링커) 설치
+      - name: Linux x64 빌드 도구 설치
+        if: matrix.platform == 'linux-x64'
+        run: sudo apt-get update && sudo apt-get install -y mold clang
+
       # Linux ARM 크로스 컴파일 도구 설치
       - name: ARM 크로스 컴파일 도구 설치
         if: matrix.platform == 'linux-arm64' || matrix.platform == 'linux-arm32'
