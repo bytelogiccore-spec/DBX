@@ -47,26 +47,97 @@ impl ViewRegistry {
     /// 예: `SELECT * FROM active_users`
     ///   → `SELECT * FROM (SELECT id, name FROM users WHERE active = true) AS active_users`
     pub fn expand(&self, sql: &str) -> String {
-        let mut result = sql.to_string();
-        for entry in self.views.iter() {
-            let name = entry.key();
-            let view_sql = entry.value();
+        if self.views.is_empty() {
+            return sql.to_string();
+        }
 
-            // "FROM <name>" 패턴 치환 (대소문자 무시)
-            let pattern = format!("from {}", name);
-            let replacement = format!("FROM ({}) AS {}", view_sql, name);
+        let mut result = String::with_capacity(sql.len() * 2);
+        let mut tokens = Vec::new();
+        let mut current_token = String::new();
+        let mut start_idx = 0;
+        let mut in_quotes = false;
+        let mut quote_char = ' ';
 
-            // 대소문자 유지하면서 치환
-            let lower = result.to_lowercase();
-            if let Some(pos) = lower.find(&pattern) {
-                result = format!(
-                    "{}{}{}",
-                    &result[..pos],
-                    replacement,
-                    &result[pos + pattern.len()..]
-                );
+        // Simple tokenizer that handles quotes and basic delimiters
+        for (i, c) in sql.char_indices() {
+            if in_quotes {
+                current_token.push(c);
+                if c == quote_char {
+                    in_quotes = false;
+                    tokens.push((start_idx, current_token.clone()));
+                    current_token.clear();
+                }
+                continue;
+            }
+
+            if c == '\'' || c == '"' {
+                if !current_token.is_empty() {
+                    tokens.push((start_idx, current_token.clone()));
+                    current_token.clear();
+                }
+                in_quotes = true;
+                quote_char = c;
+                start_idx = i;
+                current_token.push(c);
+                continue;
+            }
+
+            if c.is_whitespace() || c == '(' || c == ')' || c == ',' || c == ';' {
+                if !current_token.is_empty() {
+                    tokens.push((start_idx, current_token.clone()));
+                    current_token.clear();
+                }
+                tokens.push((i, c.to_string()));
+            } else {
+                if current_token.is_empty() {
+                    start_idx = i;
+                }
+                current_token.push(c);
             }
         }
+        if !current_token.is_empty() {
+            tokens.push((start_idx, current_token));
+        }
+
+        let mut last_pos = 0;
+        let mut i = 0;
+        while i < tokens.len() {
+            let (pos, ref token) = tokens[i];
+            let upper_token = token.to_uppercase();
+
+            if (upper_token == "FROM" || upper_token == "JOIN") && i + 1 < tokens.len() {
+                // Find next non-whitespace token which could be the view name
+                let mut j = i + 1;
+                while j < tokens.len() && tokens[j].1.chars().all(|c| c.is_whitespace()) {
+                    j += 1;
+                }
+
+                if j < tokens.len() {
+                    let (name_pos, ref name_token) = tokens[j];
+                    let name_lower = name_token.to_lowercase();
+
+                    if let Some(entry) = self.views.get(&name_lower) {
+                        let view_sql = entry.value();
+                        // Copy everything from last_pos to the start of the FROM/JOIN keyword
+                        result.push_str(&sql[last_pos..pos]);
+                        // Add the expanded view
+                        result.push_str(&upper_token);
+                        result.push_str(" (");
+                        result.push_str(view_sql);
+                        result.push_str(") AS ");
+                        result.push_str(&name_lower);
+
+                        // Advance last_pos to the end of the view name token
+                        last_pos = name_pos + name_token.len();
+                        i = j + 1;
+                        continue;
+                    }
+                }
+            }
+            i += 1;
+        }
+
+        result.push_str(&sql[last_pos..]);
         result
     }
 
@@ -93,6 +164,66 @@ mod tests {
         )
         .unwrap();
         assert!(reg.exists("active_users"));
+    }
+
+    #[test]
+    fn test_expand_multiple_views() {
+        let reg = ViewRegistry::new();
+        reg.create("v1", "SELECT 1").unwrap();
+        reg.create("v2", "SELECT 2").unwrap();
+        let sql = "SELECT * FROM v1 JOIN v2 ON v1.x = v2.x";
+        let expanded = reg.expand(sql);
+        assert!(expanded.contains("FROM (SELECT 1) AS v1"));
+        assert!(expanded.contains("JOIN (SELECT 2) AS v2"));
+    }
+
+    #[test]
+    fn test_expand_word_boundaries() {
+        let reg = ViewRegistry::new();
+        reg.create("v", "SELECT 1").unwrap();
+        let sql = "SELECT * FROM v, (SELECT * FROM v) AS sub";
+        let expanded = reg.expand(sql);
+        let count = expanded.matches("(SELECT 1)").count();
+        assert_eq!(count, 2);
+    }
+
+    #[test]
+    fn test_expand_not_a_keyword() {
+        let reg = ViewRegistry::new();
+        reg.create("v", "SELECT 1").unwrap();
+        let sql = "SELECT field_from_v FROM v";
+        let expanded = reg.expand(sql);
+        assert!(expanded.contains("field_from_v"));
+        assert!(expanded.contains("FROM (SELECT 1) AS v"));
+    }
+
+    #[test]
+    fn test_expand_with_non_ascii() {
+        let reg = ViewRegistry::new();
+        reg.create("v", "SELECT 'İ'").unwrap();
+        let sql = "SELECT * FROM v";
+        let expanded = reg.expand(sql);
+        assert!(expanded.contains("(SELECT 'İ') AS v"));
+    }
+
+    #[test]
+    fn test_expand_with_quotes() {
+        let reg = ViewRegistry::new();
+        reg.create("v", "SELECT 1").unwrap();
+        let sql = "SELECT 'FROM v' FROM v";
+        let expanded = reg.expand(sql);
+        assert!(expanded.contains("'FROM v'"));
+        let count = expanded.matches("(SELECT 1)").count();
+        assert_eq!(count, 1);
+    }
+
+    #[test]
+    fn test_expand_with_whitespace() {
+        let reg = ViewRegistry::new();
+        reg.create("v", "SELECT 1").unwrap();
+        let sql = "SELECT * FROM\n v";
+        let expanded = reg.expand(sql);
+        assert!(expanded.contains("FROM (SELECT 1) AS v"));
     }
 
     #[test]
