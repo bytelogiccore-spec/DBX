@@ -20,6 +20,8 @@ use std::sync::Arc;
 pub struct SchemaMetadata {
     pub table_name: String,
     pub fields: Vec<FieldMetadata>,
+    #[serde(default)]
+    pub metadata: HashMap<String, String>,
 }
 
 /// Serializable field metadata
@@ -57,6 +59,7 @@ impl From<&Schema> for SchemaMetadata {
         SchemaMetadata {
             table_name: String::new(), // Will be set by caller
             fields,
+            metadata: schema.metadata().clone(),
         }
     }
 }
@@ -74,7 +77,7 @@ impl TryFrom<SchemaMetadata> for Schema {
             })
             .collect();
 
-        Ok(Schema::new(fields?))
+        Ok(Schema::new(fields?).with_metadata(metadata.metadata))
     }
 }
 

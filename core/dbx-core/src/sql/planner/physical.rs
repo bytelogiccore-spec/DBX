@@ -289,10 +289,12 @@ impl PhysicalPlanner {
                 table,
                 columns,
                 if_not_exists,
+                policy,
             } => Ok(PhysicalPlan::CreateTable {
                 table: table.clone(),
                 columns: columns.clone(),
                 if_not_exists: *if_not_exists,
+                policy: policy.clone(),
             }),
             LogicalPlan::CreateIndex {
                 table,

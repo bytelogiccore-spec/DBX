@@ -71,10 +71,62 @@ impl LogicalPlanner {
                     })
                     .collect();
 
+                let mut policy = None;
+                if !create_table.with_options.is_empty() {
+                    let mut pol = crate::engine::policy::TablePolicy::default();
+                    for opt in &create_table.with_options {
+                        let opt_str = opt.to_string().replace(" ", "").replace("\"", "").replace("'", "").to_lowercase();
+                        let parts: Vec<&str> = opt_str.split('=').collect();
+                        if parts.len() == 2 {
+                            let key = parts[0];
+                            let val = parts[1];
+                            match key {
+                                "hot_ttl" | "hot_ttl_days" => {
+                                    if val == "none" || val == "null" {
+                                        pol.hot_ttl_days = None;
+                                    } else if let Ok(n) = val.parse::<u32>() {
+                                        pol.hot_ttl_days = Some(n);
+                                    }
+                                }
+                                "warm_ttl" | "warm_ttl_days" => {
+                                    if val == "none" || val == "null" {
+                                        pol.warm_ttl_days = None;
+                                    } else if let Ok(n) = val.parse::<u32>() {
+                                        pol.warm_ttl_days = Some(n);
+                                    }
+                                }
+                                "cold_ttl" | "cold_ttl_days" => {
+                                    if val == "none" || val == "null" {
+                                        pol.cold_ttl_days = None;
+                                    } else if let Ok(n) = val.parse::<u32>() {
+                                        pol.cold_ttl_days = Some(n);
+                                    }
+                                }
+                                "hot_strategy" => {
+                                    if val.contains("sharding") { pol.hot_strategy = crate::engine::policy::StorageStrategy::PureSharding; }
+                                    else if val.contains("replication") { pol.hot_strategy = crate::engine::policy::StorageStrategy::Replication { factor: 3 }; }
+                                }
+                                "warm_strategy" => {
+                                    if val.contains("erasure") { pol.warm_strategy = crate::engine::policy::StorageStrategy::ErasureCoding { k: 4, m: 2 }; }
+                                    else if val.contains("sharding") { pol.warm_strategy = crate::engine::policy::StorageStrategy::PureSharding; }
+                                    else if val.contains("replication") { pol.warm_strategy = crate::engine::policy::StorageStrategy::Replication { factor: 3 }; }
+                                }
+                                "cold_strategy" => {
+                                    if val.contains("erasure") { pol.cold_strategy = crate::engine::policy::StorageStrategy::ErasureCoding { k: 4, m: 2 }; }
+                                    else if val.contains("sharding") { pol.cold_strategy = crate::engine::policy::StorageStrategy::PureSharding; }
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
+                    policy = Some(pol);
+                }
+
                 Ok(LogicalPlan::CreateTable {
                     table,
                     columns,
                     if_not_exists: create_table.if_not_exists,
+                    policy,
                 })
             }
             Statement::AlterTable {
@@ -175,6 +227,47 @@ impl LogicalPlanner {
                 feature: format!("DDL statement: {:?}", statement),
                 hint: "Only CREATE TABLE, CREATE INDEX, DROP TABLE, DROP INDEX, and ALTER TABLE are supported".to_string(),
             }),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::sql::planner::LogicalPlan;
+    use sqlparser::dialect::GenericDialect;
+    use sqlparser::parser::Parser;
+
+    #[test]
+    fn test_parse_create_table_with_options() {
+        let sql = "CREATE TABLE users (id INT, name TEXT) WITH (hot_ttl = 30, cold_strategy = 'erasure', warm_strategy='sharding', hot_strategy='replication')";
+        let statements = Parser::parse_sql(&GenericDialect {}, sql).unwrap();
+        
+        let plan = plan_ddl(&statements[0], sql).unwrap();
+        
+        if let LogicalPlan::CreateTable { table, policy, .. } = plan {
+            assert_eq!(table, "users");
+            assert!(policy.is_some());
+            let pol = policy.unwrap();
+            
+            assert_eq!(pol.hot_ttl_days, Some(30));
+            
+            match pol.hot_strategy {
+                crate::engine::policy::StorageStrategy::Replication { .. } => {}
+                _ => panic!("Expected Hot Strategy Replication"),
+            }
+            
+            match pol.warm_strategy {
+                crate::engine::policy::StorageStrategy::PureSharding => {}
+                _ => panic!("Expected Warm Strategy Sharding"),
+            }
+            
+            match pol.cold_strategy {
+                crate::engine::policy::StorageStrategy::ErasureCoding { .. } => {}
+                _ => panic!("Expected Cold Strategy ErasureCoding"),
+            }
+        } else {
+            panic!("Expected CreateTable logical plan");
         }
     }
 }

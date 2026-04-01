@@ -832,6 +832,7 @@ impl Database {
                 table,
                 columns,
                 if_not_exists,
+                policy,
             } => {
                 // CREATE TABLE implementation
                 use arrow::array::{Int64Array, RecordBatch};
@@ -863,7 +864,18 @@ impl Database {
                         })
                         .collect();
 
-                    let schema = Arc::new(Schema::new(fields));
+                    let mut schema = Schema::new(fields);
+                    
+                    // IF Policy exists, embed as JSON into Arrow schema metadata
+                    if let Some(p) = policy {
+                        if let Ok(json) = p.to_json() {
+                            let mut map = std::collections::HashMap::new();
+                            map.insert("dbx_table_policy".to_string(), json);
+                            schema = schema.with_metadata(map);
+                        }
+                    }
+                    
+                    let schema = Arc::new(schema);
 
                     // Store schema in memory
                     self.table_schemas

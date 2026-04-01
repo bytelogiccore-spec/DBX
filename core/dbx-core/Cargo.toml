@@ -52,6 +52,8 @@ chrono = "0.4"
 
 # Compression and Checksum
 zstd = "0.13"
+# Erasure Coding
+reed-solomon-erasure = "6.0"
 
 # Encryption — AEAD ciphers + key derivation
 aes-gcm-siv = "0.11"

@@ -12,9 +12,11 @@ pub mod delta_variant;
 pub mod feature_flags;
 pub mod index;
 pub mod index_versioning;
+pub mod lifecycle;
 pub mod metadata;
 pub mod parallel_engine;
 pub mod plan;
+pub mod policy;
 pub mod query_builder;
 pub mod query_builder_api;
 pub mod rollback;
@@ -44,7 +46,9 @@ pub use benchmark::{BenchmarkResult, BenchmarkRunner};
 pub use database::Database;
 pub use delta_variant::DeltaVariant;
 pub use feature_flags::{Feature, FeatureFlags};
+pub use lifecycle::LifecycleWorker;
 pub use metadata::{FieldMetadata, IndexMetadata, SchemaMetadata};
+pub use policy::{StorageStrategy, TablePolicy};
 pub use parallel_engine::{
     DbConfig, DirtyBufferMode, ParallelExecutionEngine, ParallelismConfig, ParallelizationPolicy,
 };

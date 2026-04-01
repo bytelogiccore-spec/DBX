@@ -12,6 +12,7 @@ pub mod columnar_delta;
 pub mod compression;
 pub mod delta_store;
 pub mod encryption;
+pub mod erasure_coding;
 pub mod gpu;
 pub mod index;
 pub mod kv_adapter;

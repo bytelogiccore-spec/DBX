@@ -68,6 +68,7 @@ pub enum LogicalPlan {
         table: String,
         columns: Vec<(String, String)>, // (name, type_str)
         if_not_exists: bool,
+        policy: Option<crate::engine::policy::TablePolicy>,
     },
     /// CREATE INDEX
     CreateIndex {
@@ -338,6 +339,7 @@ pub enum PhysicalPlan {
         table: String,
         columns: Vec<(String, String)>,
         if_not_exists: bool,
+        policy: Option<crate::engine::policy::TablePolicy>,
     },
     /// Create Index
     CreateIndex {
