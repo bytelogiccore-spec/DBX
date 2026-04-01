@@ -9,13 +9,19 @@ use std::sync::Arc;
 pub mod expr;
 pub mod operators;
 pub mod parallel_query;
+pub mod fragment_splitter;
+pub mod local_executor;
+pub mod distributed_executor;
 
 pub use expr::evaluate_expr;
 pub use operators::{
-    FilterOperator, HashAggregateOperator, HashJoinOperator, LimitOperator, PhysicalOperator,
-    ProjectionOperator, SortOperator, TableScanOperator,
+    FilterOperator, GridExchangeOperator, HashAggregateOperator, HashJoinOperator, LimitOperator,
+    PhysicalOperator, ProjectionOperator, SortOperator, TableScanOperator,
 };
 pub use parallel_query::{AggregateResult, AggregateType, ParallelQueryExecutor};
+pub use fragment_splitter::{FragmentSplitter, FragmentPair};
+pub use local_executor::LocalExecutor;
+pub use distributed_executor::DistributedExecutor;
 
 // Helper function for concatenating RecordBatches
 pub fn concat_batches(schema: &Arc<Schema>, batches: &[RecordBatch]) -> DbxResult<RecordBatch> {

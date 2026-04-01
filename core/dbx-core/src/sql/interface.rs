@@ -1594,6 +1594,11 @@ impl Database {
             PhysicalPlan::DropJob { .. } => {
                 unreachable!("DROP JOB should not reach build_operator")
             }
+            PhysicalPlan::GridExchange { .. } => {
+                // GridExchange 플레이스홀더 — DistributedExecutor가 런타임에 교체하므로
+                // interface의 build_operator에 도달하면 설계 오류
+                unreachable!("GridExchange placeholder must be replaced by DistributedExecutor before build_operator is called")
+            }
         }
     }
 

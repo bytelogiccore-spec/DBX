@@ -110,6 +110,7 @@ async fn test_grid_exchange_streaming_backpressure() -> DbxResult<()> {
         for _ in 0..10 {
             let msg = GridMessage::Query(QueryMessage::ExchangeData {
                 execution_id: worker_exe_id.clone(),
+                node_id: 1,
                 is_eof: false,
                 batch_data: bytes.clone(),
             });
@@ -128,6 +129,7 @@ async fn test_grid_exchange_streaming_backpressure() -> DbxResult<()> {
         // 스트림 전송 완료 (EOF)
         let eof_msg = GridMessage::Query(QueryMessage::ExchangeData {
             execution_id: worker_exe_id,
+            node_id: 1,
             is_eof: true,
             batch_data: vec![],
         });

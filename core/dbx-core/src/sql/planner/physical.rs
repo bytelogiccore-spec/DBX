@@ -496,6 +496,7 @@ impl PhysicalPlanner {
             PhysicalPlan::DropFunction { .. } => vec![],
             PhysicalPlan::DropTrigger { .. } => vec![],
             PhysicalPlan::DropJob { .. } => vec![],
+            PhysicalPlan::GridExchange { .. } => vec![], // 플레이스홀더
         }
     }
 

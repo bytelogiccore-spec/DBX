@@ -1,7 +1,10 @@
-use crate::error::DbxResult;
+use crate::error::{DbxError, DbxResult};
 use crate::grid::quic::{QuicChannel, GridMessageWrapper};
 use crate::grid::protocol::{GridMessage, StorageMessage, QueryMessage};
 use crate::storage::erasure_coding::distributed_store::DistributedErasureCodingStore;
+use crate::sql::planner::types::PhysicalPlan;
+use crate::sql::executor::local_executor::LocalExecutor;
+use arrow::array::RecordBatch;
 use tokio::sync::mpsc;
 use tracing::{info, error, warn};
 use std::sync::Arc;
@@ -15,6 +18,10 @@ pub struct GridManager {
     ec_store: Arc<DistributedErasureCodingStore>,
     receiver: mpsc::Receiver<GridMessageWrapper>,
     query_streams: Arc<DashMap<String, mpsc::Sender<DbxResult<Option<Vec<u8>>>>>>,
+    /// 워커 측 로컬 실행 엔진 (워커 노드일 때 사용)
+    local_executor: Option<Arc<LocalExecutor>>,
+    /// 이 노드의 식별자
+    node_id: u32,
 }
 
 impl GridManager {
@@ -23,12 +30,29 @@ impl GridManager {
         ec_store: Arc<DistributedErasureCodingStore>,
         receiver: mpsc::Receiver<GridMessageWrapper>,
     ) -> Self {
+        Self::with_node_id(quic_channel, ec_store, receiver, 0)
+    }
+
+    pub fn with_node_id(
+        quic_channel: Arc<QuicChannel>,
+        ec_store: Arc<DistributedErasureCodingStore>,
+        receiver: mpsc::Receiver<GridMessageWrapper>,
+        node_id: u32,
+    ) -> Self {
         Self {
             quic_channel,
             ec_store,
             receiver,
             query_streams: Arc::new(DashMap::new()),
+            local_executor: None,
+            node_id,
         }
+    }
+
+    /// 워커 노드 로컬 실행기 설정
+    pub fn with_local_executor(mut self, executor: Arc<LocalExecutor>) -> Self {
+        self.local_executor = Some(executor);
+        self
     }
     
     pub fn get_query_streams(&self) -> Arc<DashMap<String, mpsc::Sender<DbxResult<Option<Vec<u8>>>>>> {
@@ -42,10 +66,15 @@ impl GridManager {
         while let Some(wrapper) = self.receiver.recv().await {
             let ec_store = Arc::clone(&self.ec_store);
             let query_streams = Arc::clone(&self.query_streams);
+            let quic_channel = Arc::clone(&self.quic_channel);
+            let local_executor = self.local_executor.clone();
+            let node_id = self.node_id;
             
             // 각 메시지를 비동기적으로 처리하여 병목 방지
             tokio::spawn(async move {
-                if let Err(e) = Self::handle_message(ec_store, query_streams, wrapper).await {
+                if let Err(e) = Self::handle_message(
+                    ec_store, query_streams, quic_channel, local_executor, node_id, wrapper
+                ).await {
                     error!("Error handling GridMessage: {:?}", e);
                 }
             });
@@ -58,6 +87,9 @@ impl GridManager {
     async fn handle_message(
         ec_store: Arc<DistributedErasureCodingStore>,
         query_streams: Arc<DashMap<String, mpsc::Sender<DbxResult<Option<Vec<u8>>>>>>,
+        quic_channel: Arc<QuicChannel>,
+        local_executor: Option<Arc<LocalExecutor>>,
+        node_id: u32,
         wrapper: GridMessageWrapper,
     ) -> DbxResult<()> {
         let GridMessageWrapper { msg, mut stream } = wrapper;
@@ -67,7 +99,9 @@ impl GridManager {
                 Self::handle_storage_message(ec_store, storage_msg, &mut stream).await
             }
             GridMessage::Query(query_msg) => {
-                Self::handle_query_message(query_streams, query_msg).await
+                Self::handle_query_message(
+                    query_streams, quic_channel, local_executor, node_id, query_msg
+                ).await
             }
             GridMessage::Lock(_) => {
                 warn!("LockMessage received but not implemented yet");
@@ -83,15 +117,90 @@ impl GridManager {
     /// 쿼리(스트리밍) 메시지 처리
     async fn handle_query_message(
         query_streams: Arc<DashMap<String, mpsc::Sender<DbxResult<Option<Vec<u8>>>>>>,
+        quic_channel: Arc<QuicChannel>,
+        local_executor: Option<Arc<LocalExecutor>>,
+        node_id: u32,
         msg: QueryMessage,
     ) -> DbxResult<()> {
         match msg {
-            QueryMessage::ExecuteFragment { execution_id, plan_json: _ } => {
-                info!("ExecuteFragment received for ID: {}", execution_id);
-                // 모의 테스트에서는 워커가 직접 데이터를 쏘므로 여기선 무시.
+            QueryMessage::ExecuteFragment { execution_id, plan_bytes, coordinator_addr } => {
+                info!("ExecuteFragment received for ID: {} from coordinator: {}", execution_id, coordinator_addr);
+
+                let executor = match local_executor {
+                    Some(e) => e,
+                    None => {
+                        warn!("ExecuteFragment received but no LocalExecutor configured — ignoring");
+                        return Ok(());
+                    }
+                };
+
+                // 코디네이터 주소 파싱
+                let coord_addr: std::net::SocketAddr = match coordinator_addr.parse() {
+                    Ok(a) => a,
+                    Err(e) => {
+                        return Err(DbxError::Network(format!("Invalid coordinator addr: {}", e)));
+                    }
+                };
+
+                // Plan 역직렬화
+                let worker_plan: PhysicalPlan = bincode::deserialize(&plan_bytes)
+                    .map_err(|e| DbxError::Serialization(e.to_string()))?;
+
+                let exec_id = execution_id.clone();
+                // 비동기 워커 실행 — 스폰 후 메인 루프는 즉시 반환
+                tokio::spawn(async move {
+                    info!("Worker spawning execution for exec_id: {}", exec_id);
+                    let batches = match executor.execute_collect(&worker_plan) {
+                        Ok(b) => b,
+                        Err(e) => {
+                            error!("Worker execution error for {}: {:?}", exec_id, e);
+                            // 에러 EOF 전송
+                            let eof_msg = GridMessage::Query(QueryMessage::ExchangeData {
+                                execution_id: exec_id.clone(),
+                                node_id,
+                                is_eof: true,
+                                batch_data: vec![],
+                            });
+                            let _ = quic_channel.send_message(coord_addr, eof_msg).await;
+                            return;
+                        }
+                    };
+
+                    // 각 배치를 Arrow IPC로 직렬화 후 코디네이터로 스트리밍
+                    for batch in batches {
+                        let ipc_bytes = match serialize_batch_to_ipc(&batch) {
+                            Ok(b) => b,
+                            Err(e) => {
+                                error!("IPC serialization error: {:?}", e);
+                                continue;
+                            }
+                        };
+                        let msg = GridMessage::Query(QueryMessage::ExchangeData {
+                            execution_id: exec_id.clone(),
+                            node_id,
+                            is_eof: false,
+                            batch_data: ipc_bytes,
+                        });
+                        if let Err(e) = quic_channel.send_message(coord_addr, msg).await {
+                            warn!("Failed to send ExchangeData: {:?}", e);
+                            break;
+                        }
+                    }
+                    
+                    // EOF 전송
+                    let eof_msg = GridMessage::Query(QueryMessage::ExchangeData {
+                        execution_id: exec_id.clone(),
+                        node_id,
+                        is_eof: true,
+                        batch_data: vec![],
+                    });
+                    let _ = quic_channel.send_message(coord_addr, eof_msg).await;
+                    info!("Worker finished streaming for exec_id: {}", exec_id);
+                });
+
                 Ok(())
             }
-            QueryMessage::ExchangeData { execution_id, is_eof, batch_data } => {
+            QueryMessage::ExchangeData { execution_id, node_id: _, is_eof, batch_data } => {
                 // 코디네이터가 큐를 통해 Operator로 데이터 밀어넣기
                 // DashMap lock을 await 전에 해제하기 위해 Sender를 복제합니다.
                 let sender_opt = query_streams.get(&execution_id).map(|kv| kv.value().clone());
@@ -100,8 +209,6 @@ impl GridManager {
                     if is_eof {
                         let _ = sender.send(Ok(None)).await;
                     } else {
-                        // 큐가 가득차면 여기서 await 걸림 -> Task 정지 -> QUIC 수신 스레드는 계속 돌지만...
-                        // 실제로는 여러 스트림이 계속 배압을 유발해 궁극적으로 Backpressure 달성.
                         let _ = sender.send(Ok(Some(batch_data))).await;
                     }
                 } else {
@@ -152,4 +259,16 @@ impl GridManager {
             }
         }
     }
+}
+
+/// Arrow RecordBatch → Arrow IPC 바이너리 직렬화
+fn serialize_batch_to_ipc(batch: &RecordBatch) -> DbxResult<Vec<u8>> {
+    let mut buf = Vec::new();
+    {
+        let mut writer = arrow::ipc::writer::StreamWriter::try_new(&mut buf, &batch.schema())
+            .map_err(|e| DbxError::Serialization(e.to_string()))?;
+        writer.write(batch).map_err(|e| DbxError::Serialization(e.to_string()))?;
+        writer.finish().map_err(|e| DbxError::Serialization(e.to_string()))?;
+    }
+    Ok(buf)
 }

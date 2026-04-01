@@ -5,7 +5,7 @@
 use crate::storage::columnar::ScalarValue;
 
 /// 논리 플랜 — SQL 쿼리의 논리적 표현
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum LogicalPlan {
     /// 테이블 스캔
     Scan {
@@ -121,7 +121,7 @@ pub enum LogicalPlan {
 }
 
 /// ALTER TABLE operations
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum AlterTableOperation {
     /// ADD COLUMN
     AddColumn {
@@ -135,14 +135,14 @@ pub enum AlterTableOperation {
 }
 
 /// 트리거 타이밍
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum TriggerTiming {
     Before,
     After,
 }
 
 /// 트리거 이벤트 종류
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum TriggerEventKind {
     Insert,
     Update,
@@ -150,14 +150,14 @@ pub enum TriggerEventKind {
 }
 
 /// FOR EACH 종류
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum ForEachKind {
     Row,
     Statement,
 }
 
 /// 표현식 — 컬럼, 리터럴, 연산자, 함수
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum Expr {
     /// 컬럼 참조
     Column(String),
@@ -189,7 +189,7 @@ pub enum Expr {
 }
 
 /// 이항 연산자
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum BinaryOperator {
     // 산술
     Plus,
@@ -210,7 +210,7 @@ pub enum BinaryOperator {
 }
 
 /// 집계 표현식
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct AggregateExpr {
     pub function: AggregateFunction,
     pub expr: Expr,
@@ -218,7 +218,7 @@ pub struct AggregateExpr {
 }
 
 /// 집계 함수
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum AggregateFunction {
     Count,
     Sum,
@@ -228,7 +228,7 @@ pub enum AggregateFunction {
 }
 
 /// 스칼라 함수 (행별 처리)
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum ScalarFunction {
     // 문자열 함수
     Upper,
@@ -259,7 +259,7 @@ pub enum ScalarFunction {
 }
 
 /// JOIN 타입
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum JoinType {
     Inner,
     Left,
@@ -268,7 +268,7 @@ pub enum JoinType {
 }
 
 /// 정렬 표현식
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct SortExpr {
     pub expr: Expr,
     pub asc: bool,
@@ -276,7 +276,7 @@ pub struct SortExpr {
 }
 
 /// 집계 모드 (분산 최적화용)
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum AggregateMode {
     /// 단일 노드 실행
     Simple,
@@ -289,7 +289,7 @@ pub enum AggregateMode {
 // ===== Physical Plan =====
 
 /// 물리 플랜 — 실행 가능한 쿼리 플랜
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum PhysicalPlan {
     /// 테이블 스캔
     TableScan {
@@ -401,6 +401,13 @@ pub enum PhysicalPlan {
     DropTrigger { name: String, if_exists: bool },
     /// Drop Job
     DropJob { name: String, if_exists: bool },
+
+    /// Grid Exchange 플레이스홀더 — FragmentSplitter가 분기점에 삽입.
+    /// DistributedExecutor가 런타임에 이 노드를 GridExchangeOperator로 교체합니다.
+    GridExchange {
+        /// 워커 출력 컬럼 수 힌트 (스키마 구축용)
+        schema_hint: usize,
+    },
 }
 
 impl PhysicalPlan {
@@ -428,6 +435,7 @@ impl PhysicalPlan {
             PhysicalPlan::DropFunction { .. } => false,
             PhysicalPlan::DropTrigger { .. } => false,
             PhysicalPlan::DropJob { .. } => false,
+            PhysicalPlan::GridExchange { .. } => false, // 플레이스홀더 — 실행 전 교체됨
         }
     }
 
@@ -458,6 +466,7 @@ impl PhysicalPlan {
             PhysicalPlan::DropFunction { .. } => vec![],
             PhysicalPlan::DropTrigger { .. } => vec![],
             PhysicalPlan::DropJob { .. } => vec![],
+            PhysicalPlan::GridExchange { .. } => vec![], // 플레이스홀더
         };
         v.sort();
         v.dedup();
@@ -466,7 +475,7 @@ impl PhysicalPlan {
 }
 
 /// 물리 표현식
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum PhysicalExpr {
     Column(usize),
     Literal(ScalarValue),
@@ -526,7 +535,7 @@ impl PhysicalExpr {
 }
 
 /// 물리 집계 표현식
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct PhysicalAggExpr {
     pub function: AggregateFunction,
     pub input: usize,

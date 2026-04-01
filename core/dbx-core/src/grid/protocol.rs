@@ -81,11 +81,16 @@ pub enum QueryMessage {
     /// 하위 노드에 쿼리 파편(Fragment) 실행 요청
     ExecuteFragment {
         execution_id: String,
-        plan_json: String, // 향후 Binary Proto 등으로 고도화 가능.
+        /// bincode 직렬화된 PhysicalPlan 바이너리 (전 버전: plan_json: String)
+        plan_bytes: Vec<u8>,
+        /// 코디네이터 주소 — 워커가 결과를 역전송할 목적지
+        coordinator_addr: String,
     },
     /// 코디네이터로 RecordBatch 배압(Backpressure) 전송 스트림. (Arrow IPC 포맷 - FlatBuffer 내장)
     ExchangeData {
         execution_id: String,
+        /// 송신 워커 노드 식별자 (멀티 워커 집계 시 출처 추적용)
+        node_id: u32,
         is_eof: bool,         // 데이터 전송 완료 스트림 플래그
         batch_data: Vec<u8>,  // Arrow IPC (FlatBuffer metadata + raw payload)
     },

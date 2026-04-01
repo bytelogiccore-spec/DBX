@@ -13,7 +13,7 @@ use rayon::prelude::*;
 use std::sync::Arc;
 
 /// Represents a scalar value that can be stored in a column.
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum ScalarValue {
     Null,
     Int32(i32),
