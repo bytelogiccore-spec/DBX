@@ -4,6 +4,7 @@
 
 use crate::automation::{ForEachType, Trigger, TriggerOperation, TriggerTiming};
 use crate::error::{DbxError, DbxResult};
+use crate::sql::StringCaseExt;
 
 /// CREATE TRIGGER 파싱
 ///
@@ -24,7 +25,7 @@ pub fn parse_create_trigger(sql: &str) -> DbxResult<Trigger> {
     let sql = sql.trim();
 
     // CREATE TRIGGER 확인
-    if !sql.to_uppercase().starts_with("CREATE TRIGGER") {
+    if !sql.starts_with_ignore_ascii_case("CREATE TRIGGER") {
         return Err(DbxError::InvalidOperation {
             message: format!("Expected CREATE TRIGGER, got: {}", sql),
             context: "SQL parsing".to_string(),
@@ -160,7 +161,7 @@ pub fn parse_create_trigger(sql: &str) -> DbxResult<Trigger> {
 pub fn parse_drop_trigger(sql: &str) -> DbxResult<String> {
     let sql = sql.trim();
 
-    if !sql.to_uppercase().starts_with("DROP TRIGGER") {
+    if !sql.starts_with_ignore_ascii_case("DROP TRIGGER") {
         return Err(DbxError::InvalidOperation {
             message: format!("Expected DROP TRIGGER, got: {}", sql),
             context: "SQL parsing".to_string(),

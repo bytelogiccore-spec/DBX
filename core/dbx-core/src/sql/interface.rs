@@ -1,6 +1,8 @@
 //! SQL Execution Pipeline — SQL query execution methods
 
 use crate::engine::Database;
+use crate::sql::StringCaseExt;
+
 use crate::error::{DbxError, DbxResult};
 use crate::sql::executor::{
     FilterOperator, HashAggregateOperator, HashJoinOperator, LimitOperator, PhysicalOperator,
@@ -328,28 +330,27 @@ impl Database {
 
         // Step 0: Intercept CREATE VIEW / DROP VIEW (before parser)
         let sql_trimmed = sql.trim();
-        let sql_upper = sql_trimmed.to_uppercase();
 
-        if sql_upper.starts_with("CREATE VIEW") {
+        if sql_trimmed.starts_with_ignore_ascii_case("CREATE VIEW") {
             return self.handle_create_view(sql_trimmed);
         }
-        if sql_upper.starts_with("DROP VIEW") {
+        if sql_trimmed.starts_with_ignore_ascii_case("DROP VIEW") {
             return self.handle_drop_view(sql_trimmed);
         }
 
         // Materialized View 인터셀트 (CREATE/DROP/REFRESH)
-        if sql_upper.starts_with("CREATE MATERIALIZED VIEW") {
+        if sql_trimmed.starts_with_ignore_ascii_case("CREATE MATERIALIZED VIEW") {
             return self.handle_create_materialized_view(sql_trimmed);
         }
-        if sql_upper.starts_with("DROP MATERIALIZED VIEW") {
+        if sql_trimmed.starts_with_ignore_ascii_case("DROP MATERIALIZED VIEW") {
             return self.handle_drop_materialized_view(sql_trimmed);
         }
-        if sql_upper.starts_with("REFRESH MATERIALIZED VIEW") {
+        if sql_trimmed.starts_with_ignore_ascii_case("REFRESH MATERIALIZED VIEW") {
             return self.handle_refresh_materialized_view(sql_trimmed);
         }
 
         // SELECT 시 Materialized View 캐시 히트 확인
-        if sql_upper.starts_with("SELECT")
+        if sql_trimmed.starts_with_ignore_ascii_case("SELECT")
             && let Some(cached) = self.try_matview_cache(sql_trimmed)
         {
             return Ok(cached);
@@ -414,7 +415,7 @@ impl Database {
         let after_view = sql[upper.find("VIEW").unwrap() + 4..]
             .trim_start()
             .to_owned();
-        let (if_exists, name_part) = if after_view.to_uppercase().starts_with("IF EXISTS") {
+        let (if_exists, name_part) = if after_view.starts_with_ignore_ascii_case("IF EXISTS") {
             (true, after_view[9..].trim_start().to_string())
         } else {
             (false, after_view.clone())

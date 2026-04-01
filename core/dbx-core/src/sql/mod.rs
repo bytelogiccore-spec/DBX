@@ -20,3 +20,40 @@ pub use planner::{
     AggregateExpr, AggregateFunction, BinaryOperator, Expr, JoinType, LogicalPlan, LogicalPlanner,
     PhysicalAggExpr, PhysicalExpr, PhysicalPlan, PhysicalPlanner, SortExpr,
 };
+pub trait StringCaseExt {
+    fn starts_with_ignore_ascii_case(&self, prefix: &str) -> bool;
+    fn contains_ignore_ascii_case(&self, substring: &str) -> bool;
+}
+
+impl StringCaseExt for str {
+    fn starts_with_ignore_ascii_case(&self, prefix: &str) -> bool {
+        if self.len() < prefix.len() {
+            false
+        } else {
+            self.is_char_boundary(prefix.len()) && self[..prefix.len()].eq_ignore_ascii_case(prefix)
+        }
+    }
+
+    fn contains_ignore_ascii_case(&self, substring: &str) -> bool {
+        if substring.is_empty() {
+            return true;
+        }
+        if self.len() < substring.len() {
+            return false;
+        }
+
+        // Find indices safely using char boundaries
+        for (idx, _) in self.char_indices() {
+            if idx + substring.len() <= self.len() {
+                if self.is_char_boundary(idx + substring.len()) {
+                    if self[idx..idx + substring.len()].eq_ignore_ascii_case(substring) {
+                        return true;
+                    }
+                }
+            } else {
+                break;
+            }
+        }
+        false
+    }
+}
