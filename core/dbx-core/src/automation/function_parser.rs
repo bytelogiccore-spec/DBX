@@ -4,6 +4,7 @@
 
 use crate::automation::UdfMetadata;
 use crate::error::{DbxError, DbxResult};
+use crate::sql::StringCaseExt;
 
 /// CREATE FUNCTION 파싱
 ///
@@ -18,7 +19,7 @@ pub fn parse_create_function(sql: &str) -> DbxResult<UdfMetadata> {
     let sql = sql.trim();
 
     // CREATE FUNCTION 확인
-    if !sql.to_uppercase().starts_with("CREATE FUNCTION") {
+    if !sql.starts_with_ignore_ascii_case("CREATE FUNCTION") {
         return Err(DbxError::InvalidOperation {
             message: format!("Expected CREATE FUNCTION, got: {}", sql),
             context: "SQL parsing".to_string(),
@@ -98,7 +99,7 @@ pub fn parse_drop_function(sql: &str) -> DbxResult<String> {
     let sql = sql.trim();
 
     // DROP FUNCTION 확인
-    if !sql.to_uppercase().starts_with("DROP FUNCTION") {
+    if !sql.starts_with_ignore_ascii_case("DROP FUNCTION") {
         return Err(DbxError::InvalidOperation {
             message: format!("Expected DROP FUNCTION, got: {}", sql),
             context: "SQL parsing".to_string(),

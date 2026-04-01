@@ -4,6 +4,7 @@
 
 use crate::automation::{ProcedureParameter, StoredProcedure};
 use crate::error::{DbxError, DbxResult};
+use crate::sql::StringCaseExt;
 
 /// CREATE PROCEDURE 파싱
 ///
@@ -18,7 +19,7 @@ use crate::error::{DbxError, DbxResult};
 pub fn parse_create_procedure(sql: &str) -> DbxResult<StoredProcedure> {
     let sql = sql.trim();
 
-    if !sql.to_uppercase().starts_with("CREATE PROCEDURE") {
+    if !sql.starts_with_ignore_ascii_case("CREATE PROCEDURE") {
         return Err(DbxError::InvalidOperation {
             message: format!("Expected CREATE PROCEDURE, got: {}", sql),
             context: "SQL parsing".to_string(),
@@ -97,7 +98,7 @@ pub fn parse_create_procedure(sql: &str) -> DbxResult<StoredProcedure> {
 pub fn parse_drop_procedure(sql: &str) -> DbxResult<String> {
     let sql = sql.trim();
 
-    if !sql.to_uppercase().starts_with("DROP PROCEDURE") {
+    if !sql.starts_with_ignore_ascii_case("DROP PROCEDURE") {
         return Err(DbxError::InvalidOperation {
             message: format!("Expected DROP PROCEDURE, got: {}", sql),
             context: "SQL parsing".to_string(),
@@ -125,7 +126,7 @@ pub fn parse_drop_procedure(sql: &str) -> DbxResult<String> {
 pub fn parse_call_procedure(sql: &str) -> DbxResult<(String, Vec<String>)> {
     let sql = sql.trim();
 
-    if !sql.to_uppercase().starts_with("CALL") {
+    if !sql.starts_with_ignore_ascii_case("CALL") {
         return Err(DbxError::InvalidOperation {
             message: format!("Expected CALL, got: {}", sql),
             context: "SQL parsing".to_string(),

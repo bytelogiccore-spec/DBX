@@ -1,6 +1,7 @@
 //! Custom statement planning - CREATE FUNCTION, CREATE TRIGGER, CREATE JOB
 
 use crate::error::{DbxError, DbxResult};
+use crate::sql::StringCaseExt;
 use crate::sql::planner::types::*;
 use sqlparser::ast::Statement;
 
@@ -118,16 +119,16 @@ impl LogicalPlanner {
             })?;
 
         // 타이밍 추출 (BEFORE/AFTER)
-        let timing = if sql.to_uppercase().contains("BEFORE") {
+        let timing = if sql.contains_ignore_ascii_case("BEFORE") {
             TriggerTiming::Before
         } else {
             TriggerTiming::After
         };
 
         // 이벤트 추출 (INSERT/UPDATE/DELETE)
-        let event = if sql.to_uppercase().contains("INSERT") {
+        let event = if sql.contains_ignore_ascii_case("INSERT") {
             TriggerEventKind::Insert
-        } else if sql.to_uppercase().contains("UPDATE") {
+        } else if sql.contains_ignore_ascii_case("UPDATE") {
             TriggerEventKind::Update
         } else {
             TriggerEventKind::Delete
@@ -142,7 +143,7 @@ impl LogicalPlanner {
             .unwrap_or_default();
 
         // FOR EACH 추출
-        let for_each = if sql.to_uppercase().contains("FOR EACH ROW") {
+        let for_each = if sql.contains_ignore_ascii_case("FOR EACH ROW") {
             ForEachKind::Row
         } else {
             ForEachKind::Statement
