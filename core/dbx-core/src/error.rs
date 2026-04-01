@@ -138,6 +138,10 @@ pub enum DbxError {
         current: f64,
         ratio: f64,
     },
+
+    /// Network error (QUIC/TCP communication)
+    #[error("network error: {0}")]
+    Network(String),
 }
 
 /// Result type alias for all DBX operations.

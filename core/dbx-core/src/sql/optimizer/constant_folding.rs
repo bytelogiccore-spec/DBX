@@ -65,10 +65,12 @@ impl ConstantFoldingRule {
                 input,
                 group_by,
                 aggregates,
+                mode,
             } => Ok(LogicalPlan::Aggregate {
                 input: Box::new(self.fold(*input)?),
                 group_by,
                 aggregates,
+                mode,
             }),
             LogicalPlan::Scan {
                 table,

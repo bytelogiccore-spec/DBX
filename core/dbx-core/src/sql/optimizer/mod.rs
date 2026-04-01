@@ -7,6 +7,8 @@ mod constant_folding;
 mod limit_pushdown;
 mod predicate_pushdown;
 mod projection_pushdown;
+mod distributed_pushdown;
+mod subquery_unnesting;
 
 #[cfg(test)]
 mod tests;
@@ -18,6 +20,8 @@ pub use constant_folding::ConstantFoldingRule;
 pub use limit_pushdown::LimitPushdownRule;
 pub use predicate_pushdown::PredicatePushdownRule;
 pub use projection_pushdown::ProjectionPushdownRule;
+pub use distributed_pushdown::DistributedPushdownRule;
+pub use subquery_unnesting::SubqueryUnnestingRule;
 
 /// 최적화 규칙 트레이트
 pub trait OptimizationRule: Send + Sync {
@@ -38,13 +42,16 @@ impl QueryOptimizer {
     pub fn new() -> Self {
         Self {
             rules: vec![
+                Box::new(SubqueryUnnestingRule), // 가장 먼저 서브쿼리 해제
                 Box::new(PredicatePushdownRule),
                 Box::new(ProjectionPushdownRule),
                 Box::new(ConstantFoldingRule),
+                Box::new(DistributedPushdownRule),
                 Box::new(LimitPushdownRule),
             ],
         }
     }
+
 
     /// 모든 규칙 적용
     pub fn optimize(&self, plan: LogicalPlan) -> DbxResult<LogicalPlan> {

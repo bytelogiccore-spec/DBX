@@ -15,7 +15,7 @@ fn scan(table: &str) -> LogicalPlan {
 #[test]
 fn test_optimizer_creation() {
     let optimizer = QueryOptimizer::new();
-    assert_eq!(optimizer.rules.len(), 4);
+    assert_eq!(optimizer.rules.len(), 6);
 }
 
 #[test]

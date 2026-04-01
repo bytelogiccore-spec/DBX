@@ -1449,6 +1449,7 @@ impl Database {
                 input,
                 group_by,
                 aggregates,
+                mode,
             } => {
                 // Track OLAP Workload
                 self.workload_analyzer
@@ -1487,6 +1488,7 @@ impl Database {
                         agg_schema,
                         group_by.clone(),
                         aggregates.clone(),
+                        mode.clone(),
                     )
                     .with_gpu(self.gpu_manager.clone()),
                 ))

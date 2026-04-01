@@ -92,6 +92,7 @@ impl PhysicalPlanner {
                 input,
                 group_by,
                 aggregates,
+                mode,
             } => {
                 let input_plan = self.plan(input)?;
                 let input_schema = self.extract_schema(&input_plan);
@@ -122,6 +123,7 @@ impl PhysicalPlanner {
                     input: Box::new(input_plan),
                     group_by: group_by_indices,
                     aggregates: physical_aggs,
+                    mode: *mode,
                 })
             }
             LogicalPlan::Sort { input, order_by } => {
@@ -452,6 +454,7 @@ impl PhysicalPlanner {
                 input,
                 group_by,
                 aggregates,
+                ..
             } => {
                 let input_schema = self.extract_schema(input);
                 let mut fields = Vec::new();

@@ -57,11 +57,24 @@ impl ShardRouter {
 
     /// 커스텀 노드 목록으로 라우터 생성
     pub fn new(shards: Vec<ShardNode>) -> Self {
+        use crate::sharding::node_ring::NodeRing;
         let mut ring = NodeRing::new(100);
         for s in &shards {
             ring.add_node(s);
         }
         Self { shards, ring }
+    }
+
+    /// 노드 주소 목록으로 라우터 생성
+    pub fn new_with_addresses(addresses: Vec<String>) -> Self {
+        let shards: Vec<ShardNode> = addresses.into_iter().enumerate()
+            .map(|(i, addr)| ShardNode {
+                id: i,
+                address: addr,
+                weight: 1.0,
+            })
+            .collect();
+        Self::new(shards)
     }
 
     /// 샤드 수

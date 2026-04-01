@@ -23,8 +23,11 @@ impl ErasureCodingStore {
         }
     }
 
-    /// 인코딩 (데이터 -> K 프래그먼트 + M 패리티) 후 디스크에 저장
-    pub fn encode_and_store(&self, key: &str, data: &[u8]) -> DbxResult<()> {
+    pub fn k(&self) -> usize { self.k }
+    pub fn m(&self) -> usize { self.m }
+
+    /// 인코딩 (데이터 -> K 프래그먼트 + M 패리티)
+    pub fn encode(&self, data: &[u8]) -> DbxResult<Vec<Vec<u8>>> {
         let rs = ReedSolomon::new(self.k, self.m).map_err(|e| DbxError::Storage(e.to_string()))?;
         
         let chunk_size = (data.len() + self.k - 1) / self.k;
@@ -42,20 +45,72 @@ impl ErasureCodingStore {
 
         // 2. 패리티 생성
         rs.encode(&mut shards).map_err(|e| DbxError::Storage(e.to_string()))?;
+        Ok(shards)
+    }
 
-        // 3. 디스크에 샤드 기록 (시뮬레이션 용 로컬 폴더 분산)
+    /// 개별 샤드를 디스크에 저장
+    pub fn store_shard(&self, key: &str, shard_id: usize, data: &[u8]) -> DbxResult<()> {
         let object_dir = self.base_dir.join(key);
         fs::create_dir_all(&object_dir)?;
+        let shard_path = object_dir.join(format!("shard_{}.blk", shard_id));
+        fs::write(&shard_path, data)?;
+        Ok(())
+    }
 
+    /// 샤드를 디스크에서 읽기
+    pub fn fetch_shard(&self, key: &str, shard_id: usize) -> DbxResult<Option<Vec<u8>>> {
+        let shard_path = self.base_dir.join(key).join(format!("shard_{}.blk", shard_id));
+        if shard_path.exists() {
+            Ok(Some(fs::read(shard_path)?))
+        } else {
+            Ok(None)
+        }
+    }
+
+    /// 샤드들을 디스크에 저장
+    pub fn store_shards(&self, key: &str, shards: &[Vec<u8>], original_len: usize) -> DbxResult<()> {
         for (i, shard) in shards.iter().enumerate() {
-            let shard_path = object_dir.join(format!("shard_{}.blk", i));
-            fs::write(&shard_path, shard)?;
+            self.store_shard(key, i, shard)?;
+        }
+        
+        let object_dir = self.base_dir.join(key);
+        // 메타데이터 (원본 길이) 기록
+        fs::write(object_dir.join("metadata.json"), format!("{{\"length\":{}}}", original_len))?;
+        Ok(())
+    }
+
+    /// 인코딩 후 디스크에 저장 (편의용 메서드)
+    pub fn encode_and_store(&self, key: &str, data: &[u8]) -> DbxResult<()> {
+        let shards = self.encode(data)?;
+        self.store_shards(key, &shards, data.len())
+    }
+
+    /// 샤드들로부터 데이터 복구
+    pub fn decode(&self, mut shards: Vec<Option<Vec<u8>>>, original_len: usize) -> DbxResult<Vec<u8>> {
+        let rs = ReedSolomon::new(self.k, self.m).map_err(|e| DbxError::Storage(e.to_string()))?;
+        
+        // 1. 유실된 샤드 복원
+        rs.reconstruct(&mut shards).map_err(|e| DbxError::Storage(e.to_string()))?;
+
+        // 2. 원본 데이터 합치기
+        // original_len이 usize::MAX 같은 비정상적인 값일 경우를 대비해 capacity 제한
+        let chunk_size = shards.iter().flatten().next().map(|s| s.len()).unwrap_or(0);
+        let max_len = chunk_size * self.k;
+        let capacity = std::cmp::min(original_len, max_len);
+        let mut output = Vec::with_capacity(capacity);
+        
+        let mut bytes_written = 0;
+        
+        for shard in shards.into_iter().take(self.k) {
+            if let Some(data) = shard {
+                let remaining = original_len.saturating_sub(bytes_written);
+                let take = std::cmp::min(remaining, data.len());
+                output.extend_from_slice(&data[..take]);
+                bytes_written += take;
+            }
         }
 
-        // 4. 메타데이터 (원본 길이) 기록
-        fs::write(object_dir.join("metadata.json"), format!("{{\"length\":{}}}", data.len()))?;
-
-        Ok(())
+        Ok(output)
     }
 
     /// 복구 (K 프래그먼트 + M 패리티 중 K개 이상으로 데이터 복원)

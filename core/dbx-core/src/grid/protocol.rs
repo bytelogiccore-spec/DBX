@@ -14,6 +14,9 @@ pub enum GridMessage {
 
     /// Network-Aware Lock Manager 제어 메시지
     Lock(LockMessage),
+
+    /// 분산 스토리지(EC 샤드 등) 제어 메시지
+    Storage(StorageMessage),
 }
 
 /// 분산 락(Network Lock) 전용 프로토콜
@@ -47,6 +50,28 @@ pub enum LockMessage {
     },
 }
 
+/// 스토리지(Grid EC) 전용 프로토콜
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum StorageMessage {
+    /// 샤드 저장 요청
+    StoreShard {
+        key: String,
+        shard_id: usize,
+        data: Vec<u8>,
+    },
+    /// 샤드 조회 요청
+    FetchShard {
+        key: String,
+        shard_id: usize,
+    },
+    /// 샤드 응답
+    ShardResponse {
+        key: String,
+        shard_id: usize,
+        data: Option<Vec<u8>>,
+    },
+}
+
 impl GridMessage {
     /// 이 메시지가 Replication 부류인지 검사합니다.
     pub fn is_replication(&self) -> bool {
@@ -56,5 +81,22 @@ impl GridMessage {
     /// 이 메시지가 Lock 제어 부류인지 검사합니다.
     pub fn is_lock(&self) -> bool {
         matches!(self, GridMessage::Lock(_))
+    }
+
+    /// 이 메시지가 스토리지 제어 부류인지 검사합니다.
+    pub fn is_storage(&self) -> bool {
+        matches!(self, GridMessage::Storage(_))
+    }
+
+    /// bincode를 사용해 메시지를 직렬화합니다.
+    pub fn serialize(&self) -> crate::error::DbxResult<Vec<u8>> {
+        bincode::serialize(self)
+            .map_err(|e| crate::error::DbxError::Serialization(e.to_string()))
+    }
+
+    /// bincode를 사용해 바이트 배열로부터 메시지를 역직렬화합니다.
+    pub fn deserialize(bytes: &[u8]) -> crate::error::DbxResult<Self> {
+        bincode::deserialize(bytes)
+            .map_err(|e| crate::error::DbxError::Serialization(e.to_string()))
     }
 }

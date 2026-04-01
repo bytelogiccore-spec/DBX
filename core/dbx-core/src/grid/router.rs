@@ -18,6 +18,7 @@ pub struct GridRouter {
     // Outbound (Node -> Network)
     pub repl_out_tx: broadcast::Sender<ReplicationMessage>,
     pub lock_out_tx: broadcast::Sender<LockMessage>,
+    pub storage_out_tx: broadcast::Sender<crate::grid::protocol::StorageMessage>,
 }
 
 impl GridRouter {
@@ -26,6 +27,7 @@ impl GridRouter {
         let (lock_in_tx, _) = broadcast::channel(1024);
         let (repl_out_tx, _) = broadcast::channel(1024);
         let (lock_out_tx, _) = broadcast::channel(1024);
+        let (storage_out_tx, _) = broadcast::channel(1024);
 
         Self {
             grid_tx,
@@ -33,6 +35,7 @@ impl GridRouter {
             lock_in_tx,
             repl_out_tx,
             lock_out_tx,
+            storage_out_tx,
         }
     }
 
@@ -51,6 +54,9 @@ impl GridRouter {
                     }
                     GridMessage::Lock(l) => {
                         let _ = lock_in_tx.send(l);
+                    }
+                    GridMessage::Storage(_) => {
+                        // TODO: Implement Storage handling
                     }
                 }
             }
@@ -71,6 +77,15 @@ impl GridRouter {
         tokio::spawn(async move {
             while let Ok(msg) = lock_out_rx.recv().await {
                 let _ = grid_tx_lock.send(GridMessage::Lock(msg));
+            }
+        });
+
+        // 4. Subsystems -> Grid (Outbound Storage)
+        let mut storage_out_rx = self.storage_out_tx.subscribe();
+        let grid_tx_storage = self.grid_tx.clone();
+        tokio::spawn(async move {
+            while let Ok(msg) = storage_out_rx.recv().await {
+                let _ = grid_tx_storage.send(GridMessage::Storage(msg));
             }
         });
     }

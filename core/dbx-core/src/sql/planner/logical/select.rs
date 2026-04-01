@@ -118,6 +118,7 @@ impl LogicalPlanner {
                 input: Box::new(plan),
                 group_by: group_by_exprs,
                 aggregates,
+                mode: AggregateMode::Simple,
             };
         }
 

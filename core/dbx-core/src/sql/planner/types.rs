@@ -28,6 +28,7 @@ pub enum LogicalPlan {
         input: Box<LogicalPlan>,
         group_by: Vec<Expr>,
         aggregates: Vec<AggregateExpr>,
+        mode: AggregateMode,
     },
     /// JOIN
     Join {
@@ -274,6 +275,17 @@ pub struct SortExpr {
     pub nulls_first: bool,
 }
 
+/// 집계 모드 (분산 최적화용)
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AggregateMode {
+    /// 단일 노드 실행
+    Simple,
+    /// 로컬 노드에서 부분 집계 (Shard level)
+    Partial,
+    /// 여러 노드의 결과를 병합한 최종 집계 (Coordinator level)
+    Final,
+}
+
 // ===== Physical Plan =====
 
 /// 물리 플랜 — 실행 가능한 쿼리 플랜
@@ -297,6 +309,7 @@ pub enum PhysicalPlan {
         input: Box<PhysicalPlan>,
         group_by: Vec<usize>,
         aggregates: Vec<PhysicalAggExpr>,
+        mode: AggregateMode,
     },
     /// Sort Merge
     SortMerge {

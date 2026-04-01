@@ -83,10 +83,12 @@ impl LimitPushdownRule {
                 input,
                 group_by,
                 aggregates,
+                mode,
             } => Ok(LogicalPlan::Aggregate {
                 input: Box::new(self.push_down(*input)?),
                 group_by,
                 aggregates,
+                mode,
             }),
             other => Ok(other),
         }
