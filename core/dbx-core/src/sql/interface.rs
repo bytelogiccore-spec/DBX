@@ -1599,6 +1599,9 @@ impl Database {
                 // interface의 build_operator에 도달하면 설계 오류
                 unreachable!("GridExchange placeholder must be replaced by DistributedExecutor before build_operator is called")
             }
+            PhysicalPlan::ShuffleWriter { .. } => {
+                unreachable!("ShuffleWriter is a distributed operator and not supported in singleton Database")
+            }
         }
     }
 

@@ -497,6 +497,7 @@ impl PhysicalPlanner {
             PhysicalPlan::DropTrigger { .. } => vec![],
             PhysicalPlan::DropJob { .. } => vec![],
             PhysicalPlan::GridExchange { .. } => vec![], // 플레이스홀더
+            PhysicalPlan::ShuffleWriter { .. } => vec![], // 테이블 리스트는 불필요
         }
     }
 

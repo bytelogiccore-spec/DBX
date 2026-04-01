@@ -89,6 +89,8 @@ pub enum QueryMessage {
     /// 코디네이터로 RecordBatch 배압(Backpressure) 전송 스트림. (Arrow IPC 포맷 - FlatBuffer 내장)
     ExchangeData {
         execution_id: String,
+        /// (신규) 다중 Exchange 스트림을 식별하기 위한 고유 ID
+        exchange_id: usize,
         /// 송신 워커 노드 식별자 (멀티 워커 집계 시 출처 추적용)
         node_id: u32,
         is_eof: bool,         // 데이터 전송 완료 스트림 플래그
@@ -128,4 +130,16 @@ impl GridMessage {
         bincode::deserialize(bytes)
             .map_err(|e| crate::error::DbxError::Serialization(e.to_string()))
     }
+}
+
+/// Arrow RecordBatch → Arrow IPC 바이너리 직렬화
+pub fn serialize_batch_to_ipc(batch: &arrow::array::RecordBatch) -> crate::error::DbxResult<Vec<u8>> {
+    let mut buf = Vec::new();
+    {
+        let mut writer = arrow::ipc::writer::StreamWriter::try_new(&mut buf, &batch.schema())
+            .map_err(|e| crate::error::DbxError::Serialization(e.to_string()))?;
+        writer.write(batch).map_err(|e| crate::error::DbxError::Serialization(e.to_string()))?;
+        writer.finish().map_err(|e| crate::error::DbxError::Serialization(e.to_string()))?;
+    }
+    Ok(buf)
 }

@@ -286,6 +286,19 @@ pub enum AggregateMode {
     Final,
 }
 
+// ===== Phase 4 Shuffle Data Tracking =====
+
+/// 데이터 쏠림(Skew) 방지를 위한 Shuffle 분산 전략
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub enum ShuffleSalting {
+    /// Salting 없음 (단순 Hash % N 연산)
+    None,
+    /// 조인 Build(Left) 측: 특정 키의 해시 시 무작위 값을 더해 N개 파티션으로 흩뿌림
+    RandomDistributed { factor: usize },
+    /// 조인 Probe(Right) 측: Probe 측에 매칭 실패 누락을 방지하기 위해 Left의 모든 Salt 파티션으로 완전 복제
+    ReplicateProbe { factor: usize },
+}
+
 // ===== Physical Plan =====
 
 /// 물리 플랜 — 실행 가능한 쿼리 플랜
@@ -405,8 +418,17 @@ pub enum PhysicalPlan {
     /// Grid Exchange 플레이스홀더 — FragmentSplitter가 분기점에 삽입.
     /// DistributedExecutor가 런타임에 이 노드를 GridExchangeOperator로 교체합니다.
     GridExchange {
+        exchange_id: usize,
         /// 워커 출력 컬럼 수 힌트 (스키마 구축용)
         schema_hint: usize,
+    },
+    /// Shuffle Writer — 여러 타겟 워커로 데이터를 해시 분할 송출합니다.
+    ShuffleWriter {
+        input: Box<PhysicalPlan>,
+        hash_params: Vec<usize>,
+        target_nodes: Vec<std::net::SocketAddr>,
+        exchange_id: usize,
+        salting: ShuffleSalting,
     },
 }
 
@@ -436,6 +458,8 @@ impl PhysicalPlan {
             PhysicalPlan::DropTrigger { .. } => false,
             PhysicalPlan::DropJob { .. } => false,
             PhysicalPlan::GridExchange { .. } => false, // 플레이스홀더 — 실행 전 교체됨
+            PhysicalPlan::ShuffleWriter { input, .. } => input.is_analytical(),
+
         }
     }
 
@@ -451,7 +475,8 @@ impl PhysicalPlan {
             PhysicalPlan::HashAggregate { input, .. }
             | PhysicalPlan::SortMerge { input, .. }
             | PhysicalPlan::Projection { input, .. }
-            | PhysicalPlan::Limit { input, .. } => input.tables(),
+            | PhysicalPlan::Limit { input, .. }
+            | PhysicalPlan::ShuffleWriter { input, .. } => input.tables(),
             PhysicalPlan::Insert { table, .. } => vec![table.clone()],
             PhysicalPlan::Update { table, .. } => vec![table.clone()],
             PhysicalPlan::Delete { table, .. } => vec![table.clone()],

@@ -1,4 +1,5 @@
 //! Physical Operators Module
+//! Physical Operators Module
 
 mod filter;
 mod hash_aggregate;
@@ -9,6 +10,7 @@ mod projection;
 mod sort;
 mod table_scan;
 mod exchange;
+pub mod shuffle;
 
 pub use filter::FilterOperator;
 pub use hash_aggregate::HashAggregateOperator;
@@ -19,3 +21,4 @@ pub use projection::ProjectionOperator;
 pub use sort::SortOperator;
 pub use table_scan::TableScanOperator;
 pub use exchange::GridExchangeOperator;
+pub use shuffle::GridShuffleWriterOperator;

@@ -62,6 +62,7 @@ impl FragmentSplitter {
                 // 실제 `GridExchangeOperator` 연결은 DistributedExecutor가 런타임에 담당.
                 let coord_plan = PhysicalPlan::HashAggregate {
                     input: Box::new(PhysicalPlan::GridExchange {
+                        exchange_id: 0, // 기본 코디네이터 단일 Exchange ID
                         schema_hint: extract_output_columns(&worker_plan),
                     }),
                     group_by,

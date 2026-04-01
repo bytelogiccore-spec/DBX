@@ -17,7 +17,7 @@ pub struct GridManager {
     quic_channel: Arc<QuicChannel>,
     ec_store: Arc<DistributedErasureCodingStore>,
     receiver: mpsc::Receiver<GridMessageWrapper>,
-    query_streams: Arc<DashMap<String, mpsc::Sender<DbxResult<Option<Vec<u8>>>>>>,
+    query_streams: Arc<DashMap<(String, usize), mpsc::Sender<DbxResult<Option<Vec<u8>>>>>>,
     /// 워커 측 로컬 실행 엔진 (워커 노드일 때 사용)
     local_executor: Option<Arc<LocalExecutor>>,
     /// 이 노드의 식별자
@@ -55,7 +55,7 @@ impl GridManager {
         self
     }
     
-    pub fn get_query_streams(&self) -> Arc<DashMap<String, mpsc::Sender<DbxResult<Option<Vec<u8>>>>>> {
+    pub fn get_query_streams(&self) -> Arc<DashMap<(String, usize), mpsc::Sender<DbxResult<Option<Vec<u8>>>>>> {
         Arc::clone(&self.query_streams)
     }
 
@@ -86,7 +86,7 @@ impl GridManager {
     /// 메시지 종류별 분기 처리
     async fn handle_message(
         ec_store: Arc<DistributedErasureCodingStore>,
-        query_streams: Arc<DashMap<String, mpsc::Sender<DbxResult<Option<Vec<u8>>>>>>,
+        query_streams: Arc<DashMap<(String, usize), mpsc::Sender<DbxResult<Option<Vec<u8>>>>>>,
         quic_channel: Arc<QuicChannel>,
         local_executor: Option<Arc<LocalExecutor>>,
         node_id: u32,
@@ -116,7 +116,7 @@ impl GridManager {
 
     /// 쿼리(스트리밍) 메시지 처리
     async fn handle_query_message(
-        query_streams: Arc<DashMap<String, mpsc::Sender<DbxResult<Option<Vec<u8>>>>>>,
+        query_streams: Arc<DashMap<(String, usize), mpsc::Sender<DbxResult<Option<Vec<u8>>>>>>,
         quic_channel: Arc<QuicChannel>,
         local_executor: Option<Arc<LocalExecutor>>,
         node_id: u32,
@@ -147,16 +147,22 @@ impl GridManager {
                     .map_err(|e| DbxError::Serialization(e.to_string()))?;
 
                 let exec_id = execution_id.clone();
+                let query_streams = Arc::clone(&query_streams);
+                
                 // 비동기 워커 실행 — 스폰 후 메인 루프는 즉시 반환
                 tokio::spawn(async move {
                     info!("Worker spawning execution for exec_id: {}", exec_id);
-                    let batches = match executor.execute_collect(&worker_plan) {
+                    let mut channels = crate::sql::executor::local_executor::DistributedChannels::default();
+                    
+                    // 1. Plan 실행 빌드
+                    let batches = match executor.execute_collect_distributed(&worker_plan, &mut channels) {
                         Ok(b) => b,
                         Err(e) => {
                             error!("Worker execution error for {}: {:?}", exec_id, e);
                             // 에러 EOF 전송
                             let eof_msg = GridMessage::Query(QueryMessage::ExchangeData {
                                 execution_id: exec_id.clone(),
+                                exchange_id: 0,
                                 node_id,
                                 is_eof: true,
                                 batch_data: vec![],
@@ -166,9 +172,43 @@ impl GridManager {
                         }
                     };
 
+                    // 2. 수동생성된 수신 채널(tx)들을 DashMap에 등록 (GridExchange 용도)
+                    for (e_id, tx) in channels.exchanges {
+                        query_streams.insert((exec_id.clone(), e_id), tx);
+                    }
+
+                    // 3. ShuffleWriter 발신 채널(rx)들을 타겟별로 묶어 송신 태스크 스폰
+                    for (e_id, receivers) in channels.shuffles {
+                        for (target_addr, mut rx) in receivers {
+                            let quic_ref = Arc::clone(&quic_channel);
+                            let exec_id_ref = exec_id.clone();
+                            tokio::spawn(async move {
+                                while let Some(Ok(Some(batch_bytes))) = rx.recv().await {
+                                    let msg = GridMessage::Query(QueryMessage::ExchangeData {
+                                        execution_id: exec_id_ref.clone(),
+                                        exchange_id: e_id,
+                                        node_id,
+                                        is_eof: false,
+                                        batch_data: batch_bytes,
+                                    });
+                                    let _ = quic_ref.send_message(target_addr, msg).await;
+                                }
+                                let eof_msg = GridMessage::Query(QueryMessage::ExchangeData {
+                                    execution_id: exec_id_ref,
+                                    exchange_id: e_id,
+                                    node_id,
+                                    is_eof: true,
+                                    batch_data: vec![],
+                                });
+                                let _ = quic_ref.send_message(target_addr, eof_msg).await;
+                            });
+                        }
+                    }
+
+                    // 4. (분산 Agg용) 로컬 Executor의 최종 출력 RecordBatch 포워딩
                     // 각 배치를 Arrow IPC로 직렬화 후 코디네이터로 스트리밍
                     for batch in batches {
-                        let ipc_bytes = match serialize_batch_to_ipc(&batch) {
+                        let ipc_bytes = match crate::grid::protocol::serialize_batch_to_ipc(&batch) {
                             Ok(b) => b,
                             Err(e) => {
                                 error!("IPC serialization error: {:?}", e);
@@ -177,6 +217,7 @@ impl GridManager {
                         };
                         let msg = GridMessage::Query(QueryMessage::ExchangeData {
                             execution_id: exec_id.clone(),
+                            exchange_id: 0,
                             node_id,
                             is_eof: false,
                             batch_data: ipc_bytes,
@@ -190,6 +231,7 @@ impl GridManager {
                     // EOF 전송
                     let eof_msg = GridMessage::Query(QueryMessage::ExchangeData {
                         execution_id: exec_id.clone(),
+                        exchange_id: 0,
                         node_id,
                         is_eof: true,
                         batch_data: vec![],
@@ -200,10 +242,10 @@ impl GridManager {
 
                 Ok(())
             }
-            QueryMessage::ExchangeData { execution_id, node_id: _, is_eof, batch_data } => {
+            QueryMessage::ExchangeData { execution_id, exchange_id, node_id: _, is_eof, batch_data } => {
                 // 코디네이터가 큐를 통해 Operator로 데이터 밀어넣기
                 // DashMap lock을 await 전에 해제하기 위해 Sender를 복제합니다.
-                let sender_opt = query_streams.get(&execution_id).map(|kv| kv.value().clone());
+                let sender_opt = query_streams.get(&(execution_id.clone(), exchange_id)).map(|kv| kv.value().clone());
                 
                 if let Some(sender) = sender_opt {
                     if is_eof {
@@ -261,14 +303,3 @@ impl GridManager {
     }
 }
 
-/// Arrow RecordBatch → Arrow IPC 바이너리 직렬화
-fn serialize_batch_to_ipc(batch: &RecordBatch) -> DbxResult<Vec<u8>> {
-    let mut buf = Vec::new();
-    {
-        let mut writer = arrow::ipc::writer::StreamWriter::try_new(&mut buf, &batch.schema())
-            .map_err(|e| DbxError::Serialization(e.to_string()))?;
-        writer.write(batch).map_err(|e| DbxError::Serialization(e.to_string()))?;
-        writer.finish().map_err(|e| DbxError::Serialization(e.to_string()))?;
-    }
-    Ok(buf)
-}

@@ -92,7 +92,7 @@ impl DistributedExecutor {
         let query_streams = self.grid_manager.get_query_streams();
         for (idx, sender) in senders.into_iter().enumerate() {
             let key = format!("{}:{}", execution_id, idx);
-            query_streams.insert(key, sender);
+            query_streams.insert((key, 0), sender);
         }
 
         // 모든 워커에게 ExecuteFragment 전송
@@ -121,7 +121,7 @@ impl DistributedExecutor {
         // 완료 후 DashMap 정리
         for idx in 0..self.peer_addrs.len() {
             let key = format!("{}:{}", execution_id, idx);
-            query_streams.remove(&key);
+            query_streams.remove(&(key, 0));
         }
 
         Ok(results)
@@ -133,11 +133,8 @@ impl DistributedExecutor {
         receivers: Vec<mpsc::Receiver<DbxResult<Option<Vec<u8>>>>>,
     ) -> mpsc::Receiver<DbxResult<Option<Vec<u8>>>> {
         let (merge_tx, merge_rx) = mpsc::channel::<DbxResult<Option<Vec<u8>>>>(64);
-        let total_workers = receivers.len();
 
         tokio::spawn(async move {
-            // 완료된 워커 카운트 추적
-            let mut eof_count = 0usize;
             let merge_tx = Arc::new(merge_tx);
 
             for mut rx in receivers {
