@@ -45,10 +45,10 @@ impl StringCaseExt for str {
         // Find indices safely using char boundaries
         for (idx, _) in self.char_indices() {
             if idx + substring.len() <= self.len() {
-                if self.is_char_boundary(idx + substring.len()) {
-                    if self[idx..idx + substring.len()].eq_ignore_ascii_case(substring) {
-                        return true;
-                    }
+                if self.is_char_boundary(idx + substring.len())
+                    && self[idx..idx + substring.len()].eq_ignore_ascii_case(substring)
+                {
+                    return true;
                 }
             } else {
                 break;
