@@ -17,6 +17,9 @@ pub enum GridMessage {
 
     /// 분산 스토리지(EC 샤드 등) 제어 메시지
     Storage(StorageMessage),
+
+    /// 분산 쿼리(스트리밍, 집계 등) 실행 메시지
+    Query(QueryMessage),
 }
 
 /// 분산 락(Network Lock) 전용 프로토콜
@@ -72,6 +75,22 @@ pub enum StorageMessage {
     },
 }
 
+/// 분산 쿼리 코디네이팅 전용 프로토콜
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum QueryMessage {
+    /// 하위 노드에 쿼리 파편(Fragment) 실행 요청
+    ExecuteFragment {
+        execution_id: String,
+        plan_json: String, // 향후 Binary Proto 등으로 고도화 가능.
+    },
+    /// 코디네이터로 RecordBatch 배압(Backpressure) 전송 스트림. (Arrow IPC 포맷 - FlatBuffer 내장)
+    ExchangeData {
+        execution_id: String,
+        is_eof: bool,         // 데이터 전송 완료 스트림 플래그
+        batch_data: Vec<u8>,  // Arrow IPC (FlatBuffer metadata + raw payload)
+    },
+}
+
 impl GridMessage {
     /// 이 메시지가 Replication 부류인지 검사합니다.
     pub fn is_replication(&self) -> bool {
@@ -86,6 +105,11 @@ impl GridMessage {
     /// 이 메시지가 스토리지 제어 부류인지 검사합니다.
     pub fn is_storage(&self) -> bool {
         matches!(self, GridMessage::Storage(_))
+    }
+
+    /// 이 메시지가 쿼리 스트리밍 제어 부류인지 검사합니다.
+    pub fn is_query(&self) -> bool {
+        matches!(self, GridMessage::Query(_))
     }
 
     /// bincode를 사용해 메시지를 직렬화합니다.

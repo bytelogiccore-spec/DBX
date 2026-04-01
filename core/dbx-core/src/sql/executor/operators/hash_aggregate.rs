@@ -56,10 +56,8 @@ impl HashAggregateOperator {
     fn aggregate_all(&mut self) -> DbxResult<Option<RecordBatch>> {
         // Collect all input
         let mut batches: SmallVec<[RecordBatch; 8]> = smallvec![];
-        let mut total_rows = 0;
         while let Some(batch) = self.input.next()? {
             if batch.num_rows() > 0 {
-                total_rows += batch.num_rows();
                 batches.push(batch);
             }
         }

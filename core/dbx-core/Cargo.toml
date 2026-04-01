@@ -13,7 +13,7 @@ readme = "README.md"
 thiserror = "2.0"
 
 # Data format — Arrow/Parquet
-arrow = { version = "54", features = ["prettyprint"] }
+arrow = { version = "54", features = ["prettyprint", "ipc"] }
 parquet = { version = "54", features = ["arrow"] }
 
 # Storage engines — native WOS (custom SSTable), no sled dependency

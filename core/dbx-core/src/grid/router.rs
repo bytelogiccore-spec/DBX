@@ -58,6 +58,9 @@ impl GridRouter {
                     GridMessage::Storage(_) => {
                         // TODO: Implement Storage handling
                     }
+                    GridMessage::Query(_) => {
+                        // Query 메시지는 GridManager가 직접 핸들링하므로 라우터 브로드캐스트에서는 무시.
+                    }
                 }
             }
         });

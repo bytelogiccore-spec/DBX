@@ -8,6 +8,7 @@ mod physical_operator;
 mod projection;
 mod sort;
 mod table_scan;
+mod exchange;
 
 pub use filter::FilterOperator;
 pub use hash_aggregate::HashAggregateOperator;
@@ -17,3 +18,4 @@ pub use physical_operator::PhysicalOperator;
 pub use projection::ProjectionOperator;
 pub use sort::SortOperator;
 pub use table_scan::TableScanOperator;
+pub use exchange::GridExchangeOperator;
