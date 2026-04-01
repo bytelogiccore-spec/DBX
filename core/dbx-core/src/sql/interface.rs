@@ -180,7 +180,7 @@ fn reconstruct_full_record(key: &[u8], value_bytes: &[u8]) -> Vec<u8> {
 }
 
 /// Convert a single JSON record to a RecordBatch for filter evaluation
-fn json_record_to_batch(value_bytes: &[u8]) -> DbxResult<RecordBatch> {
+pub fn json_record_to_batch(value_bytes: &[u8]) -> DbxResult<RecordBatch> {
     use arrow::array::{ArrayRef, BooleanArray, Float64Array, Int64Array, StringArray};
     use arrow::datatypes::{DataType, Field, Schema};
 
@@ -1341,6 +1341,30 @@ impl Database {
                     }
                     all_batches.extend(batches);
                 }
+
+                // ---------------------- PHASE 3: ROS (Parquet) Union ----------------------
+                // WOS 데이터뿐 아니라 ROS(Read-Optimized Storage) 티어에 있는 .parquet 파일들을 병합(Union)합니다.
+                if let Ok(ros_dir) = self.storage_manager.ros_dir() {
+                    if let Ok(entries) = std::fs::read_dir(ros_dir) {
+                        let table_prefix = format!("{}_", table);
+                        for entry in entries.flatten() {
+                            let path = entry.path();
+                            if path.extension().map(|s| s == "parquet").unwrap_or(false) {
+                                if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+                                    if name.starts_with(&table_prefix) {
+                                        if let Ok(ros_batches) = crate::storage::parquet_io::ParquetReader::read(&path) {
+                                            if base_schema.is_none() && !ros_batches.is_empty() {
+                                                base_schema = Some(ros_batches[0].schema());
+                                            }
+                                            all_batches.extend(ros_batches);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                // --------------------------------------------------------------------------
 
                 // Use the base schema from the loop, or try to look it up if all partitions were empty
                 let final_schema = base_schema.unwrap_or_else(|| {

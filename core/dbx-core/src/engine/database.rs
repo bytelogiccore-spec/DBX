@@ -84,6 +84,9 @@ pub struct Database {
     /// Tier 3: 파일 WOS (path 기반 DB에서만 Some, 테이블별 File/미지정 시 사용)
     pub(crate) file_wos: Option<WosVariant>,
 
+    /// 통합 경로 관리자
+    pub(crate) storage_manager: Arc<crate::storage::manager::StoragePathManager>,
+
     /// 테이블별 저장소 지정 (Memory | File). file_wos가 Some일 때만 사용.
     pub(crate) table_persistence: DashMap<String, TablePersistence>,
 

@@ -77,11 +77,11 @@ impl Database {
     #[instrument(skip(path))]
     pub fn open(path: &Path) -> DbxResult<Arc<Self>> {
         info!("Opening database at {:?}", path);
-        let wos_path = path.join("wos");
-        std::fs::create_dir_all(&wos_path)?;
-
+        let storage_manager = Arc::new(crate::storage::manager::StoragePathManager::new(path));
+        let wos_path = storage_manager.wos_dir()?;
+        let wal_path = storage_manager.wal_path();
+        
         // Initialize WAL
-        let wal_path = path.join("wal.log");
         let wal = Arc::new(crate::wal::WriteAheadLog::open(&wal_path)?);
 
         let wos_backend = Arc::new(NativeWosBackend::open(&wos_path)?);
@@ -110,6 +110,7 @@ impl Database {
             delta: DeltaVariant::RowBased(Arc::new(DeltaStore::new())),
             memory_wos: WosVariant::InMemory(Arc::new(InMemoryWosBackend::new())),
             file_wos: Some(WosVariant::Native(Arc::clone(&wos_backend))),
+            storage_manager: Arc::clone(&storage_manager),
             table_persistence: DashMap::new(),
             schemas: Arc::new(RwLock::new(HashMap::new())),
             tables: RwLock::new(HashMap::new()),
@@ -287,11 +288,11 @@ impl Database {
     #[instrument(skip(path, encryption))]
     pub fn open_encrypted(path: &Path, encryption: EncryptionConfig) -> DbxResult<Self> {
         info!("Opening encrypted database at {:?}", path);
-        let wos_path = path.join("wos");
-        std::fs::create_dir_all(&wos_path)?;
-
+        let storage_manager = Arc::new(crate::storage::manager::StoragePathManager::new(path));
+        let wos_path = storage_manager.wos_dir()?;
+        
         // Initialize encrypted WAL
-        let wal_path = path.join("wal.enc.log");
+        let wal_path = storage_manager.encrypted_wal_path();
         let encrypted_wal = Arc::new(crate::wal::encrypted_wal::EncryptedWal::open(
             &wal_path,
             encryption.clone(),
@@ -313,6 +314,7 @@ impl Database {
             delta: DeltaVariant::RowBased(Arc::new(DeltaStore::new())),
             memory_wos: WosVariant::InMemory(Arc::new(InMemoryWosBackend::new())),
             file_wos: Some(WosVariant::Encrypted(Arc::clone(&enc_wos))),
+            storage_manager: Arc::clone(&storage_manager),
             table_persistence: DashMap::new(),
             schemas: Arc::new(RwLock::new(HashMap::new())),
             tables: RwLock::new(HashMap::new()),
@@ -412,6 +414,9 @@ impl Database {
     #[instrument]
     pub fn open_in_memory() -> DbxResult<Self> {
         info!("Creating in-memory database");
+        let storage_manager = Arc::new(crate::storage::manager::StoragePathManager::new(
+            tempfile::tempdir().map_err(|e| crate::error::DbxError::Storage(e.to_string()))?.path().to_path_buf()
+        ));
         let db_index = Arc::new(HashIndex::new());
         let (tx, rx) = std::sync::mpsc::channel::<BackgroundJob>();
         spawn_background_worker(rx, None, None, Arc::clone(&db_index));
@@ -420,6 +425,7 @@ impl Database {
             delta: DeltaVariant::RowBased(Arc::new(DeltaStore::new())),
             memory_wos: WosVariant::InMemory(Arc::new(InMemoryWosBackend::new())),
             file_wos: None,
+            storage_manager: Arc::clone(&storage_manager),
             table_persistence: DashMap::new(),
             schemas: Arc::new(RwLock::new(HashMap::new())),
             tables: RwLock::new(HashMap::new()),
@@ -491,6 +497,10 @@ impl Database {
     /// # }
     /// ```
     pub fn open_in_memory_encrypted(encryption: EncryptionConfig) -> DbxResult<Self> {
+        info!("Creating encrypted in-memory database");
+        let storage_manager = Arc::new(crate::storage::manager::StoragePathManager::new(
+            tempfile::tempdir().map_err(|e| crate::error::DbxError::Storage(e.to_string()))?.path().to_path_buf()
+        ));
         let db_index = Arc::new(HashIndex::new());
         let (tx, rx) = std::sync::mpsc::channel::<BackgroundJob>();
         spawn_background_worker(rx, None, None, Arc::clone(&db_index));
@@ -501,6 +511,7 @@ impl Database {
                 encryption.clone(),
             )?)),
             file_wos: None,
+            storage_manager: Arc::clone(&storage_manager),
             table_persistence: DashMap::new(),
             schemas: Arc::new(RwLock::new(HashMap::new())),
             tables: RwLock::new(HashMap::new()),
@@ -594,12 +605,11 @@ impl Database {
             path.as_ref(),
             durability
         );
-        let path = path.as_ref();
-        let wos_path = path.join("wos");
-        std::fs::create_dir_all(&wos_path)?;
-
+        let storage_manager = Arc::new(crate::storage::manager::StoragePathManager::new(path));
+        let wos_path = storage_manager.wos_dir()?;
+        
         // Initialize WAL
-        let wal_path = path.join("wal.log");
+        let wal_path = storage_manager.wal_path();
         let wal = Arc::new(crate::wal::WriteAheadLog::open(&wal_path)?);
 
         let wos_backend = Arc::new(NativeWosBackend::open(&wos_path)?);
@@ -619,6 +629,7 @@ impl Database {
             delta: DeltaVariant::RowBased(Arc::new(DeltaStore::new())),
             memory_wos: WosVariant::InMemory(Arc::new(InMemoryWosBackend::new())),
             file_wos: Some(WosVariant::Native(Arc::clone(&wos_backend))),
+            storage_manager: Arc::clone(&storage_manager),
             table_persistence: DashMap::new(),
             schemas: Arc::new(RwLock::new(HashMap::new())),
             tables: RwLock::new(HashMap::new()),
@@ -791,10 +802,10 @@ impl Database {
         use tracing::info;
 
         info!("Opening database at {:?} with custom config", path);
-        let wos_path = path.join("wos");
-        std::fs::create_dir_all(&wos_path)?;
+        let storage_manager = Arc::new(crate::storage::manager::StoragePathManager::new(path));
+        let wos_path = storage_manager.wos_dir()?;
 
-        let wal_path = path.join("wal.log");
+        let wal_path = storage_manager.wal_path();
         let wal = Arc::new(crate::wal::WriteAheadLog::open(&wal_path)?);
 
         let wos_backend = Arc::new(NativeWosBackend::open_with_mode(
@@ -824,6 +835,7 @@ impl Database {
                 crate::storage::memory_wos::InMemoryWosBackend::new(),
             )),
             file_wos: Some(crate::engine::WosVariant::Native(Arc::clone(&wos_backend))),
+            storage_manager: Arc::clone(&storage_manager),
             table_persistence: DashMap::new(),
             schemas: Arc::new(RwLock::new(HashMap::new())),
             tables: RwLock::new(HashMap::new()),

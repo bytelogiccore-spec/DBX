@@ -242,26 +242,27 @@ mod tests {
     fn test_parse_create_table_with_options() {
         let sql = "CREATE TABLE users (id INT, name TEXT) WITH (hot_ttl = 30, cold_strategy = 'erasure', warm_strategy='sharding', hot_strategy='replication')";
         let statements = Parser::parse_sql(&GenericDialect {}, sql).unwrap();
-        
-        let plan = plan_ddl(&statements[0], sql).unwrap();
-        
+
+        let planner = LogicalPlanner::new();
+        let plan = planner.plan_ddl(&statements[0]).unwrap();
+
         if let LogicalPlan::CreateTable { table, policy, .. } = plan {
             assert_eq!(table, "users");
             assert!(policy.is_some());
             let pol = policy.unwrap();
-            
+
             assert_eq!(pol.hot_ttl_days, Some(30));
-            
+
             match pol.hot_strategy {
                 crate::engine::policy::StorageStrategy::Replication { .. } => {}
                 _ => panic!("Expected Hot Strategy Replication"),
             }
-            
+
             match pol.warm_strategy {
                 crate::engine::policy::StorageStrategy::PureSharding => {}
                 _ => panic!("Expected Warm Strategy Sharding"),
             }
-            
+
             match pol.cold_strategy {
                 crate::engine::policy::StorageStrategy::ErasureCoding { .. } => {}
                 _ => panic!("Expected Cold Strategy ErasureCoding"),
@@ -271,3 +272,4 @@ mod tests {
         }
     }
 }
+
