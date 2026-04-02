@@ -285,7 +285,7 @@ impl GridManager {
                                 });
                                 let _ = quic_ref.send_message(coord_addr, msg).await;
                             }
-                            
+
                             // EOF
                             let _ = quic_ref.send_message(coord_addr, GridMessage::Query(QueryMessage::ExchangeData {
                                 execution_id: exec_id_ref.clone(),

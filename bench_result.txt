@@ -1,0 +1,31 @@
+phase7_write_10k/dbx_insert
+                        time:   [240.45 ms 260.60 ms 283.70 ms]
+                        change: [-1.7721% +8.5416% +19.519%] (p = 0.12 > 0.05)
+                        No change in performance detected.
+Found 11 outliers among 100 measurements (11.00%)
+  5 (5.00%) high mild
+  6 (6.00%) high severe
+phase7_write_10k/rusqlite_insert
+                        time:   [43.167 ms 47.031 ms 51.416 ms]
+                        change: [-24.033% -13.752% -1.8120%] (p = 0.03 < 0.05)
+                        Performance has improved.
+Found 14 outliers among 100 measurements (14.00%)
+  2 (2.00%) low mild
+  3 (3.00%) high mild
+  9 (9.00%) high severe
+
+phase7_scan_aggregate_10k/dbx_scan_count
+                        time:   [328.46 µs 340.91 µs 357.19 µs]
+                        change: [-32.351% -25.460% -18.098%] (p = 0.00 < 0.05)
+                        Performance has improved.
+Found 4 outliers among 100 measurements (4.00%)
+  3 (3.00%) high mild
+  1 (1.00%) high severe
+phase7_scan_aggregate_10k/rusqlite_scan_count
+                        time:   [5.3645 µs 5.6629 µs 6.0508 µs]
+                        change: [+9.3133% +22.250% +36.315%] (p = 0.00 < 0.05)
+                        Performance has regressed.
+Found 14 outliers among 100 measurements (14.00%)
+  13 (13.00%) high mild
+  1 (1.00%) high severe
+
