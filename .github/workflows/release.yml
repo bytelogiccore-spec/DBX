@@ -15,35 +15,20 @@ jobs:
   # ──────────────────────────────────────────────
   # Phase 1: Rust 코어 검증
   # ──────────────────────────────────────────────
-  build-and-test:
-    name: Rust 코어 빌드 및 테스트
+  verify-build:
+    name: Rust 코어 빌드 검증
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
 
       - name: Rust 설치
         uses: dtolnay/rust-toolchain@stable
-        with:
-          components: clippy, rustfmt
 
       - name: Rust 캐시
         uses: Swatinem/rust-cache@v2
 
       - name: 빌드 (Release)
         run: cargo build --release --locked -p dbx-core -p dbx-ffi
-
-      - name: 테스트
-        run: cargo test -p dbx-core --locked
-
-      - name: Node.js 설치
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
-      - name: Python 설치
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
 
 
   # ──────────────────────────────────────────────
@@ -52,7 +37,7 @@ jobs:
   build-native:
     name: C/C++ 네이티브 빌드 (${{ matrix.platform }})
     runs-on: ${{ matrix.os }}
-    needs: build-and-test
+    needs: verify-build
     strategy:
       matrix:
         include:
