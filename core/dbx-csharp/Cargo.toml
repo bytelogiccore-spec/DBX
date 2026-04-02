@@ -1,6 +1,6 @@
 [package]
 name = "dbx-csharp"
-version = "0.2.0-beta"
+version.workspace = true
 edition = "2021"
 authors = ["DBX Team"]
 description = "CsBindgen native C# bindings for DBX database"
