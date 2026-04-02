@@ -8,7 +8,7 @@ parent: 한국어
 
 {: .fs-9 }
 
-[![Version](https://img.shields.io/badge/version-0.1.2--beta-blue.svg)](https://github.com/ByteLogicCore/DBX)
+[![Version](https://img.shields.io/badge/version-0.2.0--beta-blue.svg)](https://github.com/ByteLogicCore/DBX)
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-2024-orange.svg)](https://www.rust-lang.org)
 [![Documentation](https://img.shields.io/badge/docs-GitHub%20Pages-blue)](https://bytelogiccore-spec.github.io/DBX/)
@@ -41,16 +41,17 @@ Your support helps with:
 
 - **Tier 1 (Delta)**: 밀리초 미만의 쓰기를 위한 초고속 BTreeMap.
 - **Tier 2 (Cache)**: 즉각적인 OLAP 분석을 위한 Apache Arrow 기반 컬럼형 캐시.
-- **Tier 3 (WOS)**: 스냅샷 격리를 위한 SSD 최적화 MVCC 저장소.
+- **Tier 3 (WOS)**: 초고속 플러시를 위한 Native SSTable 기반 MVCC 저장소.
 - **Tier 4 (Index)**: 레이턴시 없는 조회를 위한 고속 Bloom 필터.
 - **Tier 5 (ROS)**: 페타바이트급 아카이브를 위한 고압축 Parquet 저장소.
 
 ### 🏎️ 2. 압도적인 성능
 
-10,000건 기준 벤치마크 결과, DBX는 업계 표준을 월등히 앞섭니다:
+10,000건 기준 벤치마크 결과, DBX는 새로운 **Fast-Path** 최적화(v0.2.0)를 통해 업계 표준을 월등히 앞섭니다:
 
-- **파일 GET**: SQLite 대비 **29배 빠름** (17ms vs 497ms) 🔥
+- **로컬 스캔**: **51µs (마이크로초)** — 로컬 바이패스를 통한 초저지연 조회 🔥
 - **메모리 INSERT**: SQLite 대비 **1.16배 빠름** (25ms vs 29ms) ✅
+- **분석 성능 (OLAP)**: 기존 B-Tree 엔진 대비 **최대 29배 빠름**.
 
 ### 🧠 3. 네이티브 GPU 가속
 

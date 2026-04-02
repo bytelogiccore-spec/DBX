@@ -21,7 +21,7 @@ async fn test_grid_ec_network_integration() -> DbxResult<()> {
     let subject_alt_names = vec!["localhost".to_string(), "127.0.0.1".to_string()];
     let cert = generate_simple_self_signed(subject_alt_names).unwrap();
     let cert_pem = cert.cert.pem();
-    let key_pem = cert.signing_key.serialize_pem();
+    let key_pem = cert.key_pair.serialize_pem();
 
     // 2. 노드 1 설정 (Port 15690)
     let dir1 = tempdir().unwrap();

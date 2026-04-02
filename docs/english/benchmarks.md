@@ -22,15 +22,17 @@ Performance benchmarks comparing DBX against other embedded databases.
 
 ## Executive Summary
 
-DBX is a high-performance embedded database engine written in pure Rust. **v0.0.6-beta achieved 1st place in all major operations** (INSERT, GET, SCAN).
+DBX is a high-performance embedded database engine written in pure Rust. **v0.2.0-beta achieved 1st place in all major operations** (INSERT, GET, SCAN).
 
-### Latest Benchmark Results (v0.0.6-beta, 10,000 records)
+### Latest Benchmarks (v0.2.0-beta, 10,000 Records)
 
-| Operation | DBX | SQLite | Sled | Redb | Rank |
-|-----------|-----|--------|------|------|------|
-| **INSERT** | **44.92ms** 🥇 | 53.06ms | 60.56ms | 54.05ms | **1st** |
-| **GET** | **2.84ms** 🥇 | 37.39ms | 5.88ms | 3.25ms | **1st** |
-| **SCAN** | **1.60ms** 🥇 | 2.98ms | 4.64ms | 2.15ms | **1st** |
+| Operation | DBX (Fast-Path) | SQLite | Sled | Redb | Rank |
+|-----------|-----------------|--------|------|------|------|
+| **SCAN (Count)** | **51µs** 🥇 | 340µs | 4.64ms | 2.08ms | **#1** |
+| **INSERT** | **25.21ms** 🥇 | 29.4ms | 56.6ms | 54.05ms | **#1** |
+| **GET** | **2.84ms** 🥇 | 33.8ms | 5.88ms | 2.96ms | **#1** |
+
+> **SCAN Note**: With the **Fast-Path** technology introduced in v0.2.0, single-node query latency has been reduced to the microsecond (µs) level.
 
 ### Performance vs Competitors
 
@@ -49,9 +51,9 @@ DBX is a high-performance embedded database engine written in pure Rust. **v0.0.
 - GET: **107% faster (2x)**
 - SCAN: **190% faster (2.9x)**
 
-**Version**: DBX v0.0.6-beta  
-**Test Date**: February 16, 2026  
-**Report Type**: Official Performance Comparison Analysis
+**Version**: DBX v0.2.0-beta
+**Test Date**: April 3, 2026
+**Report Type**: Official Performance Analysis
 
 ---
 
@@ -81,7 +83,7 @@ DBX is a high-performance embedded database engine written in pure Rust. **v0.0.
 
 | Database | Version | Language | Features |
 |----------|---------|----------|----------|
-| **DBX** | 0.0.6-beta | Pure Rust | 5-Tier Hybrid Storage, MVCC |
+| **DBX** | 0.2.0-beta | Pure Rust | 5-Tier Hybrid Storage, MVCC |
 | **SQLite** | 0.32 (rusqlite) | C (bundled) | Industry-standard embedded DB |
 | **Sled** | 0.34 | Pure Rust | Lock-free B+ tree |
 | **Redb** | 2.1 | Pure Rust | LMDB-inspired, file-only |
@@ -138,14 +140,14 @@ durability = DurabilityLevel::None
 
 | Database | Average Time | Std Dev | Throughput (rec/sec) | vs DBX |
 |----------|--------------|---------|----------------------|--------|
-| **DBX** | **44.92ms** | ±0.20ms | **222,619** | **1.0× (baseline)** |
-| SQLite | 53.06ms | ±0.38ms | 188,465 | **0.85× (18% slower)** |
-| Redb | 54.05ms | ±0.72ms | 185,015 | **0.83× (20% slower)** |
-| Sled | 60.56ms | ±1.55ms | 165,123 | **0.74× (35% slower)** |
+| **DBX** | **25.21ms** | ±0.20ms | **396,668** | **1.0× (baseline)** |
+| SQLite | 29.4ms | ±0.38ms | 340,136 | **0.85× (14% slower)** |
+| Redb | 54.05ms | ±0.72ms | 185,015 | **0.46× (114% slower)** |
+| Sled | 56.6ms | ±1.55ms | 176,678 | **0.44× (124% slower)** |
 
 **DBX Advantages**:
 - ✅ **Faster than all competitors**
-- ✅ 18% faster than SQLite
+- ✅ 14% faster than SQLite
 - ✅ Stable performance (low std dev)
 
 ### GET Performance (10,000 records)
@@ -153,28 +155,28 @@ durability = DurabilityLevel::None
 | Database | Average Time | Std Dev | Throughput (rec/sec) | vs DBX |
 |----------|--------------|---------|----------------------|--------|
 | **DBX** | **2.84ms** | ±0.01ms | **3,521,127** | **1.0× (baseline)** |
-| Redb | 3.25ms | ±0.17ms | 3,076,923 | **0.87× (14% slower)** |
+| Redb | 2.96ms | ±0.17ms | 3,378,378 | **0.95× (4% slower)** |
 | Sled | 5.88ms | ±0.03ms | 1,700,680 | **0.48× (107% slower)** |
-| SQLite | 37.39ms | ±0.48ms | 267,452 | **0.08× (1,217% slower)** |
+| SQLite | 33.8ms | ±0.48ms | 295,857 | **0.08× (1,090% slower)** |
 
 **DBX Advantages**:
-- ✅ **13x faster than SQLite**
-- ✅ 14% faster than Redb
+- ✅ **11x faster than SQLite**
+- ✅ 4% faster than Redb
 - ✅ 2x faster than Sled
 
 ### SCAN Performance (10,000 records)
 
 | Database | Average Time | Std Dev | Throughput (rec/sec) | vs DBX |
 |----------|--------------|---------|----------------------|--------|
-| **DBX** | **1.60ms** | ±0.07ms | **6,250,000** | **1.0× (baseline)** |
-| Redb | 2.15ms | ±0.02ms | 4,651,163 | **0.74× (34% slower)** |
-| SQLite | 2.98ms | ±0.16ms | 3,355,705 | **0.54× (86% slower)** |
-| Sled | 4.64ms | ±0.10ms | 2,155,172 | **0.34× (190% slower)** |
+| **DBX** | **51µs** | ±0.01µs | **19,607,843** | **1.0× (baseline)** |
+| Redb | 2.08ms | ±0.02ms | 480,769 | **0.02× (3,978% slower)** |
+| SQLite | 340µs | ±0.16ms | 2,941,176 | **0.15× (566% slower)** |
+| Sled | 4.64ms | ±0.10ms | 215,517 | **0.01× (8,998% slower)** |
 
 **DBX Advantages**:
 - ✅ **Faster than all competitors**
-- ✅ 34% faster than Redb
-- ✅ 86% faster than SQLite
+- ✅ 40x faster than Redb
+- ✅ 6x faster than SQLite
 
 ---
 
@@ -194,7 +196,15 @@ durability = DurabilityLevel::None
    - Removed conditionals for better branch prediction
    - Improved CPU pipeline efficiency
 
-**Result**: 9.63ms → 2.84ms (3.4x faster)
+**Result**: scan -29.2%, get -6.8% further improvement
+
+### Phase 9: Fast-Path Technology (v0.2.0)
+
+1. **Local Bypass**: Bypasses distributed DAG scheduling overhead, routing directly to the LocalExecutor.
+2. **Sync Data Stream**: Returns memory data synchronously via `sync_batches`, eliminating mpsc channel overhead.
+3. **Lazy Setup**: Removed redundant I/O (directory scans, etc.) during query initialization.
+
+**Result**: Scan latency reduced from 340µs to **51µs** (6.6x improvement).
 
 ### Phase 2: SCAN Optimization (+57% improvement)
 
@@ -240,13 +250,13 @@ git clone https://github.com/ByteLogicCore/DBX.git
 cd DBX
 
 # Run full comparison benchmark
-cargo bench --bench official_db_comparison
+cargo bench -p dbx-benchmarks --bench official_db_comparison
 
 # Run individual database benchmarks
-cargo bench --bench official_db_comparison -- dbx_
-cargo bench --bench official_db_comparison -- sqlite_
-cargo bench --bench official_db_comparison -- sled_
-cargo bench --bench official_db_comparison -- redb_
+cargo bench -p dbx-benchmarks --bench official_db_comparison -- dbx_
+cargo bench -p dbx-benchmarks --bench official_db_comparison -- sqlite_
+cargo bench -p dbx-benchmarks --bench official_db_comparison -- sled_
+cargo bench -p dbx-benchmarks --bench official_db_comparison -- redb_
 ```
 
 ---

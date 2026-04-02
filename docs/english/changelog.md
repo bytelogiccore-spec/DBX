@@ -14,6 +14,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.2.0-beta] - 2026-04-03
+
+Introduced Native SSTable-based WOS, Fast-Path ultra-low latency optimization, and Workspace refactoring.
+
+### New Features
+
+#### 🏗️ Native WOS (Write-Optimized Store)
+- **Sled Removal** — Completely removed external KV store dependencies and introduced a native SSTable-based WOS engine.
+- **Ultra-fast Flush** — Optimized WAL sequential writes and SSTable merging (Compaction) to reduce write latency.
+
+#### 🚀 Fast-Path (Local Bypass) Optimization
+- **Local Execution Bypass** — Introduced Fast-Path to bypass distributed DAG scheduling overhead in single-node environments.
+- **Synchronous Data Stream** — Achieved **51µs** ultra-low latency by eliminating mpsc channel overhead with the `sync_batches` synchronous data return path.
+
+#### 📦 Workspace Refactoring
+- **Crate Separation** — Refactored tests (`dbx-tests`), benchmarks (`dbx-benchmarks`), and examples (`dbx-examples`) into separate crates to keep the core library lightweight.
+- **Dependency Cleansing** — Removed unnecessary dev-dependencies from the core engine to improve build speed and maintainability.
+
+### Improvements
+- **Grid Engine** — Stabilized `s2n-quic` transport and DAG scheduling logic.
+- **Version Unification** — Updated all workspace members to `0.2.0-beta`.
+
+---
+
 ## [0.1.2-beta] - 2026-03-21
 
 Phase 1 & Ecosystem Compatibility Update: Atomic CAS Operations, Row-level Striped Locks, Native Serde, Async First Driver, and Network-Aware Distributed Lock Manager.

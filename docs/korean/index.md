@@ -20,15 +20,15 @@ description: "DBX — 고성능 임베디드 데이터베이스"
 ## 주요 기능
 
 ### 🏗️ 아키텍처
-- **5-Tier 하이브리드 스토리지** — Delta → Cache → WOS → Index → ROS
+- **5-Tier 하이브리드 스토리지** — Delta → Cache → Native WOS → Index → ROS
+- **Native WOS** — Sled 종속성을 제거한 자체 SSTable 기반 고성능 엔진
 - **HTAP 지원** — OLTP와 OLAP 워크로드 동시 처리
-- **MVCC 트랜잭션** — 가비지 컬렉션을 포함한 스냅샷 격리
-- **컬럼형 캐시** — Apache Arrow 기반 분석 쿼리 최적화
+- **분산 그리드** — QUIC 기반 실시간 복제 및 분산 실행
 
 ### 🚀 성능
-- SQLite 대비 **최대 13배 빠른** GET 속도
-- **멀티코어 병렬화** — Rayon 기반 scan, insert, 집계, JOIN 자동 병렬화 (v0.1.2-beta)
-- **`ParallelismConfig`** — [CPU 사용량과 병렬화 임계값 제어](guides/db-config)
+- **Fast-Path 최적화** — 단일 노드 스캔 레이턴시 **51µs** 달성 (v0.2.0-beta)
+- SQLite 대비 **최대 29배 빠른** 분석 성능
+- **멀티코어 병렬화** — Rayon 기반 scan, insert, 집계, JOIN 자동 병렬화
 - **GPU 가속** — CUDA 기반 집계, 필터링, 조인
 - **SIMD 벡터화** — `wide` crate stable SIMD (항상 활성)
 

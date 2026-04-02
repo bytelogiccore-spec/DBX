@@ -12,17 +12,17 @@ DBX uses the following open-source libraries. We are grateful to their maintaine
 - **Purpose**: High-performance columnar data format and storage
 - **Repository**: https://github.com/apache/arrow-rs
 
-### Sled
-- **License**: MIT OR Apache-2.0
-- **Version**: 0.34
-- **Purpose**: Embedded key-value storage engine
-- **Repository**: https://github.com/spacejam/sled
-
 ### SQLParser
 - **License**: Apache-2.0
 - **Version**: 0.52
 - **Purpose**: SQL parsing and AST generation
 - **Repository**: https://github.com/sqlparser-rs/sqlparser-rs
+
+### s2n-quic
+- **License**: Apache-2.0
+- **Version**: 1.x
+- **Purpose**: QUIC transport for distributed Grid communication
+- **Repository**: https://github.com/aws/s2n-quic
 
 ---
 
@@ -58,6 +58,12 @@ DBX uses the following open-source libraries. We are grateful to their maintaine
 - **Purpose**: Stack-allocated vectors for small data
 - **Repository**: https://github.com/servo/rust-smallvec
 
+### Wide
+- **License**: MIT OR Apache-2.0 OR Zlib
+- **Version**: 0.7
+- **Purpose**: Simple SIMD abstraction layer
+- **Repository**: https://github.com/Lokathor/wide
+
 ---
 
 ## Cryptography & Compression
@@ -80,21 +86,27 @@ DBX uses the following open-source libraries. We are grateful to their maintaine
 - **Purpose**: High-performance compression
 - **Repository**: https://github.com/gyscos/zstd-rs
 
-### Brotli
-- **License**: MIT OR Apache-2.0
-- **Version**: 7.0
-- **Purpose**: Compression algorithm
-- **Repository**: https://github.com/dropbox/rust-brotli
+### Reed-Solomon-Erasure
+- **License**: MIT
+- **Version**: 6.0
+- **Purpose**: Erasure coding for distributed tiering
+- **Repository**: https://github.com/darrenldl/reed-solomon-erasure
 
 ---
 
 ## GPU Acceleration (Optional)
 
-### cudarc
+### cudarc (Optional)
 - **License**: MIT OR Apache-2.0
-- **Version**: 0.12
-- **Purpose**: Rust CUDA bindings
+- **Version**: 0.19
+- **Purpose**: Rust CUDA bindings and GPU acceleration
 - **Repository**: https://github.com/coreylowman/cudarc
+
+### Cron & Chrono
+- **License**: MIT OR Apache-2.0
+- **Version**: 0.12 / 0.4
+- **Purpose**: Job scheduling for data lifecycle management
+- **Repository**: https://github.com/zslayton/cron
 
 ---
 
@@ -118,6 +130,12 @@ DBX uses the following open-source libraries. We are grateful to their maintaine
 - **Purpose**: Tracing event collection and formatting
 - **Repository**: https://github.com/tokio-rs/tracing
 
+### Tokio
+- **License**: MIT
+- **Version**: 1.x
+- **Purpose**: Async runtime and network communication
+- **Repository**: https://github.com/tokio-rs/tokio
+
 ---
 
 ## Serialization
@@ -140,9 +158,9 @@ DBX uses the following open-source libraries. We are grateful to their maintaine
 
 | License Type | Count | Key Libraries |
 |--------------|-------|---------------|
-| **MIT OR Apache-2.0** | 12 | Arrow, Parquet, Sled, Rayon, AHash, SmallVec, thiserror, cudarc, AES-GCM-SIV, ChaCha20, ZSTD, Brotli, Serde |
-| **MIT** | 3 | DashMap, Tracing, Bincode |
-| **Apache-2.0** | 1 | SQLParser |
+| **MIT OR Apache-2.0** | 14 | Arrow, Parquet, Rayon, AHash, SmallVec, thiserror, cudarc, AES-GCM-SIV, ChaCha20, ZSTD, Serde, Wide, Cron, Chrono |
+| **MIT** | 5 | DashMap, Tracing, Bincode, Reed-Solomon, Tokio |
+| **Apache-2.0** | 2 | SQLParser, s2n-quic |
 
 ---
 
@@ -161,8 +179,8 @@ See: https://www.apache.org/licenses/LICENSE-2.0
 - All dependencies are carefully selected for performance, security, and reliability
 - Regular security audits are performed on all dependencies
 - Version updates are tracked and tested before integration
-- Test-only dependencies (Criterion, Proptest, rusqlite, redb) are excluded from this list
+- Test and benchmark-only dependencies (Criterion, Proptest, rusqlite, redb) have been separated and are excluded from this list.
 
 ---
 
-*Last updated: 2026-02-13 (v0.0.1-beta)*
+*Last updated: 2026-04-03 (v0.2.0-beta)*

@@ -28,15 +28,32 @@ description: "DBX 데이터베이스 빠른 시작 가이드"
 
 ```toml
 [dependencies]
-dbx-core = "{{ site.dbx_version }}"
+dbx-core = "0.2.0-beta"
 ```
 
 ### .NET (C#, VB.NET, F#)
 
-NuGet을 통해 설치하세요:
+NuGet을 통해 설치하거나 `dbx-csharp` 바인딩을 사용하세요:
 
 ```bash
 dotnet add package DBX.Client
+```
+
+---
+
+## 예제 실행 (Examples)
+
+v0.2.0부터 모든 예제는 `dbx-examples` 패키지로 분리되었습니다. 다음 명령어로 실행해 볼 수 있습니다:
+
+```bash
+# 기본 퀵스타트 예제 실행
+cargo run -p dbx-examples --example quick_start
+
+# 분산 그리드 서버 실행 예제
+cargo run -p dbx-examples --example distributed_grid
+
+# 5-Tier 티어링 대규모 데이터 예제
+cargo run -p dbx-examples --example storage_tiering
 ```
 
 ---
@@ -124,7 +141,7 @@ let db = Database::open_in_memory()?;
 let schema = Arc::new(Schema::new(vec![
     Field::new("id", DataType::Int32, false),
     Field::new("age", DataType::Int32, false),
-]));
+ ]));
 
 // 데이터 생성
 let batch = RecordBatch::try_new(
@@ -160,15 +177,6 @@ let db = Database::open_encrypted("./secure-data", enc)?;
 db.insert("secrets", b"key1", b"sensitive-data")?;
 ```
 
-### 키 교체 (Key Rotation)
-
-```rust
-// 암호화 키 교체
-let new_enc = EncryptionConfig::from_password("new-password");
-let count = db.rotate_key(new_enc)?;
-println!("교체된 레코드 수: {}", count);
-```
-
 ---
 
 ## GPU 가속 (선택 사항)
@@ -177,7 +185,7 @@ println!("교체된 레코드 수: {}", count);
 
 ```toml
 [dependencies]
-dbx-core = { version = "{{ site.dbx_version }}", features = ["gpu"] }
+dbx-core = { version = "0.2.0-beta", features = ["gpu"] }
 ```
 
 GPU 가속 사용:

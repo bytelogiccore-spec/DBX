@@ -25,7 +25,7 @@ async fn test_fault_tolerance_timeout_retry() {
     let subject_alt_names = vec!["localhost".to_string(), "127.0.0.1".to_string()];
     let cert = generate_simple_self_signed(subject_alt_names).unwrap();
     let cert_pem = cert.cert.pem();
-    let key_pem = cert.signing_key.serialize_pem();
+    let key_pem = cert.key_pair.serialize_pem();
 
     // 2. 코디네이터 노드 설정 (Port 16690)
     let dir = tempdir().unwrap();

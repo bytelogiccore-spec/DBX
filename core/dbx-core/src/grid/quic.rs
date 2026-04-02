@@ -279,7 +279,7 @@ mod tests {
         let subject_alt_names = vec!["localhost".to_string(), "127.0.0.1".to_string()];
         let cert = generate_simple_self_signed(subject_alt_names).unwrap();
         let cert_pem = cert.cert.pem();
-        let key_pem = cert.signing_key.serialize_pem();
+        let key_pem = cert.key_pair.serialize_pem();
 
         let (tx1, mut rx1) = mpsc::channel(100);
         let node1_addr: SocketAddr = "127.0.0.1:0".parse().unwrap();

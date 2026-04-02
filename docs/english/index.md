@@ -20,13 +20,14 @@ High-performance embedded database built on a 5-Tier Hybrid Storage architecture
 ## Key Features
 
 ### 🏗️ Architecture
-- **5-Tier Hybrid Storage** — Delta → Cache → WOS → Index → ROS
-- **HTAP Support** — Concurrent OLTP and OLAP workloads
-- **MVCC Transactions** — Snapshot Isolation with Garbage Collection
-- **Columnar Cache** — Apache Arrow-based analytical query optimization
+- **5-Tier Hybrid Storage** — Delta → Cache → Native WOS → Index → ROS
+- **Native WOS** — High-performance SSTable-based engine (removed Sled dependency)
+- **HTAP Power** — Seamless coexistence of OLTP and OLAP workloads
+- **Distributed Grid** — QUIC-based real-time replication and distributed execution
 
 ### 🚀 Performance
 - **29x faster** file GET than SQLite
+- **Fast-Path** — 51µs latency for point lookups
 - **GPU Acceleration** — CUDA-based aggregation, filtering, joins
 - **SIMD Vectorization** — Optimized numerical operations
 - **Parallel Query** — Rayon-based parallel JOIN, Sort, Columnar Build

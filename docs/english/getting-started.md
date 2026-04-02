@@ -28,15 +28,32 @@ Add DBX to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-dbx-core = "{{ site.dbx_version }}"
+dbx-core = "0.2.0-beta"
 ```
 
 ### .NET (C#, VB.NET, F#)
 
-Install via NuGet:
+Install via NuGet or use `dbx-csharp` bindings:
 
 ```bash
 dotnet add package DBX.Client
+```
+
+---
+
+## Running Examples
+
+Since v0.2.0, all examples are separated into the `dbx-examples` package. You can run them using the following commands:
+
+```bash
+# Run basic quick-start example
+cargo run -p dbx-examples --example quick_start
+
+# Run distributed grid server example
+cargo run -p dbx-examples --example distributed_grid
+
+# Run 5-Tier storage tiering example
+cargo run -p dbx-examples --example storage_tiering
 ```
 
 ---
@@ -160,15 +177,6 @@ let db = Database::open_encrypted("./secure-data", enc)?;
 db.insert("secrets", b"key1", b"sensitive-data")?;
 ```
 
-### Key Rotation
-
-```rust
-// Rotate encryption key
-let new_enc = EncryptionConfig::from_password("new-password");
-let count = db.rotate_key(new_enc)?;
-println!("Rotated {} records", count);
-```
-
 ---
 
 ## GPU Acceleration (Optional)
@@ -177,7 +185,7 @@ Enable GPU features in `Cargo.toml`:
 
 ```toml
 [dependencies]
-dbx-core = { version = "{{ site.dbx_version }}", features = ["gpu"] }
+dbx-core = { version = "0.2.0-beta", features = ["gpu"] }
 ```
 
 Use GPU acceleration:

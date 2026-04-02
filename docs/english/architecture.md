@@ -89,15 +89,17 @@ DBX uses a sophisticated 5-tier architecture optimized for both OLTP and OLAP wo
 
 ### Tier 3: WOS (Write-Optimized Store)
 
-**Purpose**: Persistent transactional storage
+**Purpose**: Persistent transactional storage and SSD write latency optimization
 
-**Implementation**: `sled` embedded database
+**Implementation**: **Native SSTable** + WAL (Sled dependency completely removed)
+- `.wos` — SSTable (Compacted 4KB pages + sparse index + footer)
+- `.wal` — Write-Ahead Log (Sequential append, truncated on compact)
 
-**Features**:
-- MVCC with Snapshot Isolation
-- ACID transactions
-- Crash recovery
-- Compaction
+**Key Features**:
+- Ultra-fast flush via WAL sequential append
+- SSTable merging only on specific thresholds (Minimizes Write Amplification)
+- LRU Page Cache (4KB grain) and Zero-copy serialization
+- Tombstone-based deletion support
 
 
 ### Tier 4: Index

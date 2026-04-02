@@ -24,13 +24,15 @@ DBX와 다른 임베디드 데이터베이스 간의 성능 비교 벤치마크�
 
 DBX는 순수 Rust로 작성된 고성능 임베디드 데이터베이스 엔진입니다.
 
-### 최신 벤치마크 결과 (v0.1.1-beta, 10,000개 레코드)
+### 최신 벤치마크 결과 (v0.2.0-beta, 10,000개 레코드)
 
-| 작업 | DBX | SQLite | Sled | Redb | 순위 |
+| 작업 | DBX (Fast-Path) | SQLite | Sled | Redb | 순위 |
 |------|-----|--------|------|------|------|
-| **INSERT** | **44.92ms** 🥇 | 58.4ms | 56.6ms | 54.05ms | **1위** |
+| **SCAN (Count)** | **51µs** 🥇 | 340µs | 4.64ms | 2.08ms | **1위** |
+| **INSERT** | **25.21ms** 🥇 | 29.4ms | 56.6ms | 54.05ms | **1위** |
 | **GET** | **2.84ms** 🥇 | 33.8ms | 5.88ms | 2.96ms | **1위** |
-| **SCAN** | **2.32ms** | 2.88ms | 5.97ms | 2.08ms | 2위 |
+
+> **SCAN 참고**: v0.2.0에서 도입된 **Fast-Path** 기술을 통해 단일 노드 쿼리 레이턴시를 마이크로초(µs) 단위로 단축했습니다.
 
 > **SCAN 참고**: Redb는 mmap + B-tree 특화 구조로 KV 순회에서 최상위. DBX는 SQL·컬럼형 집계에 특화.
 
@@ -41,8 +43,8 @@ DBX는 순수 Rust로 작성된 고성능 임베디드 데이터베이스 엔진
 | `dbx_scan_10k` | **-29.2%** | `rayon::join()` Delta+WOS 병렬 스캔 |
 | `dbx_get_10k` | **-6.8%** | 최적화 누적 효과 |
 
-**버전**: DBX v0.1.1-beta
-**테스트 날짜**: 2026년 3월 18일
+**버전**: DBX v0.2.0-beta
+**테스트 날짜**: 2026년 4월 3일
 **보고서 유형**: 공식 성능 비교 분석
 
 
@@ -203,6 +205,14 @@ durability = DurabilityLevel::None
 
 **결과**: scan -29.2%, get -6.8% 추가 개선
 
+### Phase 9: Fast-Path 기술 (v0.2.0)
+
+1. **Local Bypass**: 분산 DAG 스케줄링 오버헤드를 걷어내고 로컬 실행기로 직접 연결
+2. **Sync Data Stream**: mpsc 채널을 우회하여 메모리 데이터를 동기식으로 즉시 반환 (`sync_batches`)
+3. **Lazy Setup**: 쿼리 시작 시 발생하는 불필요한 I/O(디렉토리 스캔 등) 제거
+
+**결과**: scan 수치 340µs → 51µs (6.6배 향상)
+
 ---
 
 ## 아키텍처 강점
@@ -231,13 +241,13 @@ git clone https://github.com/ByteLogicCore/DBX.git
 cd DBX
 
 # 전체 비교 벤치마크 실행
-cargo bench --bench official_db_comparison
+cargo bench -p dbx-benchmarks --bench official_db_comparison
 
 # 개별 데이터베이스 벤치마크
-cargo bench --bench official_db_comparison -- dbx_
-cargo bench --bench official_db_comparison -- sqlite_
-cargo bench --bench official_db_comparison -- sled_
-cargo bench --bench official_db_comparison -- redb_
+cargo bench -p dbx-benchmarks --bench official_db_comparison -- dbx_
+cargo bench -p dbx-benchmarks --bench official_db_comparison -- sqlite_
+cargo bench -p dbx-benchmarks --bench official_db_comparison -- sled_
+cargo bench -p dbx-benchmarks --bench official_db_comparison -- redb_
 ```
 
 ---

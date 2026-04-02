@@ -55,7 +55,7 @@ async fn test_grid_exchange_streaming_backpressure() -> DbxResult<()> {
     let subject_alt_names = vec!["localhost".to_string(), "127.0.0.1".to_string()];
     let cert = rcgen::generate_simple_self_signed(subject_alt_names).unwrap();
     let cert_pem = cert.cert.pem();
-    let key_pem = cert.signing_key.serialize_pem();
+    let key_pem = cert.key_pair.serialize_pem();
 
     // 2. Quic 채널 생성
     let (tx_coord, rx_coord) = mpsc::channel(100);
