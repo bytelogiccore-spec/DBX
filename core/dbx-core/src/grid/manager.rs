@@ -59,9 +59,7 @@ impl GridManager {
         self
     }
 
-    pub fn get_query_streams(
-        &self,
-    ) -> QueryStreamMap {
+    pub fn get_query_streams(&self) -> QueryStreamMap {
         Arc::clone(&self.query_streams)
     }
 
