@@ -67,26 +67,4 @@ path = "examples/perf_compare.rs"
 name = "sanity_check"
 path = "examples/sanity_check.rs"
 
-[[example]]
-name = "test_alter_table"
-path = "examples/test_alter_table.rs"
-
-[[example]]
-name = "test_ddl_index"
-path = "examples/test_ddl_index.rs"
-
-[[example]]
-name = "test_join"
-path = "examples/test_join.rs"
-
-[[example]]
-name = "test_metadata_persistence"
-path = "examples/test_metadata_persistence.rs"
-
-[[example]]
-name = "test_schema_builder"
-path = "examples/test_schema_builder.rs"
-
-[[example]]
-name = "test_snapshot"
-path = "examples/test_snapshot.rs"
+ 

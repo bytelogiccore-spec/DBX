@@ -23,6 +23,7 @@ documentation = "https://docs.rs/dbx-core"
 opt-level = 3
 lto = true
 codegen-units = 1
+strip = true       # 바이너리 크기 최적화 — 디버그 심볼 제거
 
 # 테스트 빌드 최적화 — debug(opt-level=0) 대비 빠른 링크·컴파일
 [profile.test]

@@ -38,8 +38,8 @@ jobs:
       - name: 포맷 검사
         run: cargo fmt --all -- --check
 
-      - name: Lint 검사 (dbx-core)
-        run: cargo clippy -p dbx-core -- -D warnings
+      - name: Lint 검사 (dbx-core, dbx-tests)
+        run: cargo clippy -p dbx-core -p dbx-tests -- -D warnings
 
   build-and-test:
     name: 빌드 & 테스트
@@ -57,10 +57,10 @@ jobs:
       - name: Rust 캐시
         uses: Swatinem/rust-cache@v2
 
-      - name: 빌드 & 테스트 (dbx-core)
+      - name: 빌드 & 테스트 (dbx-core, dbx-tests)
         run: |
-          cargo build -p dbx-core --locked
-          cargo test -p dbx-core --locked
+          cargo build -p dbx-core -p dbx-tests --locked
+          cargo test -p dbx-core -p dbx-tests --locked
 
       - name: 빌드 (dbx-ffi, dbx-csharp)
         run: |

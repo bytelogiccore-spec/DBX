@@ -29,12 +29,6 @@ jobs:
       - name: Rust 캐시
         uses: Swatinem/rust-cache@v2
 
-      - name: 포맷 검사
-        run: cargo fmt --all -- --check
-
-      - name: Lint 검사 (dbx-core)
-        run: cargo clippy -p dbx-core -- -D warnings
-
       - name: 빌드 (Release)
         run: cargo build --release --locked -p dbx-core -p dbx-ffi
 
