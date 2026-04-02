@@ -2,6 +2,7 @@
 
 use crate::error::{DbxError, DbxResult};
 use crate::sql::executor::operators::PhysicalOperator;
+use crate::sql::executor::spill::SpillContext;
 use crate::sql::planner::{AggregateFunction, PhysicalAggExpr};
 use ahash::AHashMap;
 use arrow::array::*;
@@ -27,6 +28,8 @@ pub struct HashAggregateOperator {
     done: bool,
     /// GPU manager for acceleration
     gpu_manager: Option<Arc<GpuManager>>,
+    /// Spill 컨텍스트 — 메모리 임계치 초과 시 디스크 유출
+    spill_context: Option<SpillContext>,
 }
 
 impl HashAggregateOperator {
@@ -45,7 +48,14 @@ impl HashAggregateOperator {
             mode,
             done: false,
             gpu_manager: None,
+            spill_context: None,
         }
+    }
+
+    /// Spill 컨텍스트를 주입하여 메모리 초과 시 디스크 유출 활성화.
+    pub fn with_spill(mut self, ctx: SpillContext) -> Self {
+        self.spill_context = Some(ctx);
+        self
     }
 
     pub fn with_gpu(mut self, gpu: Option<Arc<GpuManager>>) -> Self {
@@ -54,7 +64,68 @@ impl HashAggregateOperator {
     }
 
     fn aggregate_all(&mut self) -> DbxResult<Option<RecordBatch>> {
-        // Collect all input
+        use crate::sql::planner::types::AggregateMode;
+
+        // --- Spill-to-Disk 경로 ---
+        // take()로 꺼내서 borrow checker 충돌 방지 (처리 후 다시 set)
+        if let Some(mut spill_ctx) = self.spill_context.take() {
+            let mut spilled_paths = Vec::new();
+            let mut in_memory_batches: SmallVec<[RecordBatch; 8]> = smallvec![];
+
+            // 입력 batch를 하나씩 소모하며 메모리 추적
+            while let Some(batch) = self.input.next()? {
+                if batch.num_rows() == 0 {
+                    continue;
+                }
+                let estimated = SpillContext::estimate_batch_bytes(&batch);
+                spill_ctx.track(estimated);
+                in_memory_batches.push(batch);
+
+                // 임계치 초과 → partial 집계 후 Spill
+                if spill_ctx.should_spill() {
+                    let partial = self.run_aggregate_on(in_memory_batches.as_slice(), AggregateMode::Partial)?;
+                    if let Some(partial_batch) = partial {
+                        let path = spill_ctx.spill_batches(&[partial_batch])?;
+                        spilled_paths.push(path);
+                    }
+                    in_memory_batches.clear();
+                }
+            }
+
+            let current_mode = self.mode;
+
+            // Spill 없이 메모리 내 처리만 한 경우
+            if spilled_paths.is_empty() {
+                self.spill_context = Some(spill_ctx);
+                return self.run_aggregate_on(in_memory_batches.as_slice(), current_mode);
+            }
+
+            // 남은 in-memory 데이터도 partial 집계
+            if !in_memory_batches.is_empty() {
+                let partial = self.run_aggregate_on(in_memory_batches.as_slice(), AggregateMode::Partial)?;
+                if let Some(partial_batch) = partial {
+                    let path = spill_ctx.spill_batches(&[partial_batch])?;
+                    spilled_paths.push(path);
+                }
+            }
+
+            // 모든 spill 파일을 재적재하여 Final merge
+            let mut all_partial: Vec<RecordBatch> = Vec::new();
+            for path in &spilled_paths {
+                let reloaded = SpillContext::reload_batches(path)?;
+                all_partial.extend(reloaded);
+            }
+
+            self.spill_context = Some(spill_ctx);
+
+            if all_partial.is_empty() {
+                return Ok(Some(RecordBatch::new_empty(Arc::clone(&self.schema))));
+            }
+
+            return self.run_aggregate_on(&all_partial, AggregateMode::Final);
+        }
+
+        // --- 기존 in-memory 경로 (SpillContext 없음) ---
         let mut batches: SmallVec<[RecordBatch; 8]> = smallvec![];
         while let Some(batch) = self.input.next()? {
             if batch.num_rows() > 0 {
@@ -66,12 +137,26 @@ impl HashAggregateOperator {
             return Ok(Some(RecordBatch::new_empty(Arc::clone(&self.schema))));
         }
 
+        self.run_aggregate_on(batches.as_slice(), self.mode)
+    }
+
+    /// 주어진 batch 슬라이스에 대해 지정 모드로 집계를 수행합니다.
+    fn run_aggregate_on(
+        &self,
+        batches: &[RecordBatch],
+        mode: crate::sql::planner::types::AggregateMode,
+    ) -> DbxResult<Option<RecordBatch>> {
+        use crate::sql::planner::types::AggregateMode;
+
+        if batches.is_empty() {
+            return Ok(Some(RecordBatch::new_empty(Arc::clone(&self.schema))));
+        }
+
         let input_schema = batches[0].schema();
-        let merged = concat_batches(&input_schema, batches.as_slice())?;
+        let merged = concat_batches(&input_schema, batches)?;
 
         if self.group_by.is_empty() {
-            // Global aggregate (no GROUP BY)
-            return self.global_aggregate(&merged);
+            return self.global_aggregate_with_mode(&merged, mode);
         }
 
         // Group by: build groups
@@ -84,11 +169,9 @@ impl HashAggregateOperator {
             groups.entry(key).or_default().push(row_idx);
         }
 
-        // Build output columns
         let num_groups = groups.len();
         let group_keys: Vec<Vec<usize>> = groups.values().cloned().collect();
 
-        // Group-by columns
         let mut output_columns: Vec<ArrayRef> = Vec::new();
         for &col_idx in &self.group_by {
             let col = merged.column(col_idx);
@@ -96,17 +179,15 @@ impl HashAggregateOperator {
             output_columns.push(take_by_indices(col, &first_indices)?);
         }
 
-        // Aggregate columns
-        use crate::sql::planner::types::AggregateMode;
         for agg in &self.aggregates {
             let col = merged.column(agg.input);
-            let result = match self.mode {
+            let result = match mode {
                 AggregateMode::Simple | AggregateMode::Partial => compute_aggregate_grouped(
                     col,
                     &agg.function,
                     &group_keys,
                     num_groups,
-                    self.mode,
+                    mode,
                 )?,
                 AggregateMode::Final => {
                     merge_aggregate_grouped(col, &agg.function, &group_keys, num_groups)?
@@ -121,18 +202,21 @@ impl HashAggregateOperator {
         )?))
     }
 
-    fn global_aggregate(&self, batch: &RecordBatch) -> DbxResult<Option<RecordBatch>> {
+    /// Global aggregate (no GROUP BY) — 지정 모드 사용.
+    fn global_aggregate_with_mode(
+        &self,
+        batch: &RecordBatch,
+        mode: crate::sql::planner::types::AggregateMode,
+    ) -> DbxResult<Option<RecordBatch>> {
+        use crate::sql::planner::types::AggregateMode;
         let mut columns: Vec<ArrayRef> = Vec::new();
         for agg in &self.aggregates {
             let col = batch.column(agg.input);
-            let result = match self.mode {
-                crate::sql::planner::types::AggregateMode::Simple
-                | crate::sql::planner::types::AggregateMode::Partial => {
-                    compute_aggregate_global(col, &agg.function, self.mode)?
+            let result = match mode {
+                AggregateMode::Simple | AggregateMode::Partial => {
+                    compute_aggregate_global(col, &agg.function, mode)?
                 }
-                crate::sql::planner::types::AggregateMode::Final => {
-                    merge_aggregate_global(col, &agg.function)?
-                }
+                AggregateMode::Final => merge_aggregate_global(col, &agg.function)?,
             };
             columns.push(result);
         }

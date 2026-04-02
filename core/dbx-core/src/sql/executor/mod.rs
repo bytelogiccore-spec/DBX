@@ -12,6 +12,7 @@ pub mod fragment_splitter;
 pub mod local_executor;
 pub mod operators;
 pub mod parallel_query;
+pub mod spill;
 
 pub use distributed_executor::DistributedExecutor;
 pub use expr::evaluate_expr;
@@ -22,6 +23,7 @@ pub use operators::{
     PhysicalOperator, ProjectionOperator, SortOperator, TableScanOperator,
 };
 pub use parallel_query::{AggregateResult, AggregateType, ParallelQueryExecutor};
+pub use spill::SpillContext;
 
 // Helper function for concatenating RecordBatches
 pub fn concat_batches(schema: &Arc<Schema>, batches: &[RecordBatch]) -> DbxResult<RecordBatch> {
