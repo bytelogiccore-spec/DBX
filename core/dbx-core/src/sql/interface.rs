@@ -1343,30 +1343,8 @@ impl Database {
                     all_batches.extend(batches);
                 }
 
-                // ---------------------- PHASE 3: ROS (Parquet) Union ----------------------
-                // WOS 데이터뿐 아니라 ROS(Read-Optimized Storage) 티어에 있는 .parquet 파일들을 병합(Union)합니다.
-                if let Ok(ros_dir) = self.storage_manager.ros_dir() {
-                    if let Ok(entries) = std::fs::read_dir(ros_dir) {
-                        let table_prefix = format!("{}_", table);
-                        for entry in entries.flatten() {
-                            let path = entry.path();
-                            if path.extension().map(|s| s == "parquet").unwrap_or(false) {
-                                if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-                                    if name.starts_with(&table_prefix) {
-                                        if let Ok(ros_batches) =
-                                            crate::storage::parquet_io::ParquetReader::read(&path)
-                                        {
-                                            if base_schema.is_none() && !ros_batches.is_empty() {
-                                                base_schema = Some(ros_batches[0].schema());
-                                            }
-                                            all_batches.extend(ros_batches);
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
+                // ---------------------- PHASE 3: ROS (Parquet) Union (Optimized) ----------------------
+                // [Phase 9] 최적화: 매 쿼리마다 read_dir을 수행하는 대신 PhysicalPlan에 전달된 ros_files 정보를 TableScanOperator가 처리하도록 위임함.
                 // --------------------------------------------------------------------------
 
                 // Use the base schema from the loop, or try to look it up if all partitions were empty

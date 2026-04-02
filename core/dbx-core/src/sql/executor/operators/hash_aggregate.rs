@@ -12,6 +12,7 @@ use arrow::record_batch::RecordBatch;
 use smallvec::{SmallVec, smallvec};
 use std::sync::Arc;
 
+use crate::sql::executor::hash_utils;
 use crate::storage::gpu::GpuManager;
 
 /// Hash Aggregate 연산자 (GROUP BY) — AHashMap 기반 집계
@@ -159,18 +160,30 @@ impl HashAggregateOperator {
             return self.global_aggregate_with_mode(&merged, mode);
         }
 
-        // Group by: build groups
-        let mut groups: AHashMap<Vec<u8>, Vec<usize>> = AHashMap::new();
+        // Group by: build groups with vectorized hashing and collision handling
+        let mut groups: AHashMap<u64, Vec<Vec<usize>>> = AHashMap::new();
+        let group_indices: Vec<usize> = self.group_by.clone();
+        let hashes = hash_utils::hash_batch(&merged, &group_indices, 0)?;
+        
         for row_idx in 0..merged.num_rows() {
-            let mut key = Vec::new();
-            for &col_idx in &self.group_by {
-                append_value_to_key(&mut key, merged.column(col_idx), row_idx);
+            let hash = hashes.value(row_idx);
+            let entries = groups.entry(hash).or_default();
+            
+            let mut found = false;
+            for group in entries.iter_mut() {
+                if compare_rows(&merged, &group_indices, group[0], &merged, &group_indices, row_idx) {
+                    group.push(row_idx);
+                    found = true;
+                    break;
+                }
             }
-            groups.entry(key).or_default().push(row_idx);
+            if !found {
+                entries.push(vec![row_idx]);
+            }
         }
 
-        let num_groups = groups.len();
-        let group_keys: Vec<Vec<usize>> = groups.values().cloned().collect();
+        let group_keys: Vec<Vec<usize>> = groups.into_values().flatten().collect();
+        let num_groups = group_keys.len();
 
         let mut output_columns: Vec<ArrayRef> = Vec::new();
         for &col_idx in &self.group_by {
@@ -305,43 +318,60 @@ fn concat_batches(schema: &Arc<Schema>, batches: &[RecordBatch]) -> DbxResult<Re
     Ok(compute::concat_batches(schema, batches)?)
 }
 
+/// 두 행의 지정된 컬럼 값이 모두 일치하는지 비교합니다 (해시 충돌 방어용).
+fn compare_rows(
+    left_batch: &RecordBatch,
+    left_cols: &[usize],
+    left_row: usize,
+    right_batch: &RecordBatch,
+    right_cols: &[usize],
+    right_row: usize,
+) -> bool {
+    for i in 0..left_cols.len() {
+        let l_col = left_batch.column(left_cols[i]);
+        let r_col = right_batch.column(right_cols[i]);
+        
+        if !compare_column_values(l_col, left_row, r_col, right_row) {
+            return false;
+        }
+    }
+    true
+}
+
+fn compare_column_values(l_col: &ArrayRef, l_row: usize, r_col: &ArrayRef, r_row: usize) -> bool {
+    if l_col.is_null(l_row) || r_col.is_null(r_row) {
+        return l_col.is_null(l_row) && r_col.is_null(r_row);
+    }
+    
+    match l_col.data_type() {
+        DataType::Int32 => {
+            let l = l_col.as_any().downcast_ref::<Int32Array>().unwrap();
+            let r = r_col.as_any().downcast_ref::<Int32Array>().unwrap();
+            l.value(l_row) == r.value(r_row)
+        }
+        DataType::Int64 => {
+            let l = l_col.as_any().downcast_ref::<Int64Array>().unwrap();
+            let r = r_col.as_any().downcast_ref::<Int64Array>().unwrap();
+            l.value(l_row) == r.value(r_row)
+        }
+        DataType::Float64 => {
+            let l = l_col.as_any().downcast_ref::<Float64Array>().unwrap();
+            let r = r_col.as_any().downcast_ref::<Float64Array>().unwrap();
+            l.value(l_row) == r.value(r_row)
+        }
+        DataType::Utf8 => {
+            let l = l_col.as_any().downcast_ref::<StringArray>().unwrap();
+            let r = r_col.as_any().downcast_ref::<StringArray>().unwrap();
+            l.value(l_row) == r.value(r_row)
+        }
+        _ => format!("{:?}", l_col.as_any()) == format!("{:?}", r_col.as_any()),
+    }
+}
+
 /// Take rows by indices from a column.
 fn take_by_indices(col: &ArrayRef, indices: &[usize]) -> DbxResult<ArrayRef> {
     let idx_arr = UInt32Array::from(indices.iter().map(|&i| i as u32).collect::<Vec<_>>());
     Ok(compute::take(col.as_ref(), &idx_arr, None)?)
-}
-
-/// Append a cell value to a byte key for hashing.
-fn append_value_to_key(key: &mut Vec<u8>, col: &ArrayRef, row_idx: usize) {
-    if col.is_null(row_idx) {
-        key.push(0); // null marker
-        return;
-    }
-    key.push(1); // non-null marker
-    match col.data_type() {
-        DataType::Int32 => {
-            let arr = col.as_any().downcast_ref::<Int32Array>().unwrap();
-            key.extend_from_slice(&arr.value(row_idx).to_le_bytes());
-        }
-        DataType::Int64 => {
-            let arr = col.as_any().downcast_ref::<Int64Array>().unwrap();
-            key.extend_from_slice(&arr.value(row_idx).to_le_bytes());
-        }
-        DataType::Float64 => {
-            let arr = col.as_any().downcast_ref::<Float64Array>().unwrap();
-            key.extend_from_slice(&arr.value(row_idx).to_le_bytes());
-        }
-        DataType::Utf8 => {
-            let arr = col.as_any().downcast_ref::<StringArray>().unwrap();
-            let s = arr.value(row_idx);
-            key.extend_from_slice(&(s.len() as u32).to_le_bytes());
-            key.extend_from_slice(s.as_bytes());
-        }
-        _ => {
-            // Fallback: use debug format
-            key.extend_from_slice(format!("{:?}", col).as_bytes());
-        }
-    }
 }
 
 /// Compute an aggregate function over groups of rows (순차 처리 - 소규모 그룹).

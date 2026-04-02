@@ -5,6 +5,9 @@ members = [
     "core/dbx-py",
     "core/dbx-csharp",
     "core/dbx-node",
+    "core/dbx-tests",
+    "core/dbx-benchmarks",
+    "core/dbx-examples",
 ]
 resolver = "2"
 

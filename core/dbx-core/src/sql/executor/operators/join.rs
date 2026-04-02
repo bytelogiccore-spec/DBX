@@ -9,6 +9,7 @@ use arrow::array::*;
 use arrow::compute;
 use arrow::datatypes::{DataType, Schema};
 use arrow::record_batch::RecordBatch;
+use crate::sql::executor::hash_utils;
 // use rayon::prelude::*; // Not used currently in sequential probe
 use smallvec::{SmallVec, smallvec};
 use std::path::PathBuf;
@@ -30,7 +31,7 @@ pub struct HashJoinOperator {
     schema: Arc<Schema>,
     on: Vec<(usize, usize)>,
     join_type: JoinType,
-    build_table: Option<AHashMap<Vec<u8>, Vec<usize>>>,
+    build_table: Option<AHashMap<u64, Vec<usize>>>,
     left_batch: Option<RecordBatch>,
     right_batches: Option<Vec<RecordBatch>>,
     right_batch_idx: usize,
@@ -105,9 +106,9 @@ impl HashJoinOperator {
         let num_partitions = self.num_partitions;
         let mut row_indices: Vec<Vec<u32>> = (0..num_partitions).map(|_| Vec::new()).collect();
 
+        let hashes = hash_utils::hash_batch(batch, key_indices, seed)?;
         for row_idx in 0..batch.num_rows() {
-            let key = extract_join_key(batch, key_indices, row_idx);
-            let hash = ahash::RandomState::with_seeds(seed, seed, seed, seed).hash_one(&key);
+            let hash = hashes.value(row_idx);
             let part_idx = (hash % num_partitions as u64) as usize;
             row_indices[part_idx].push(row_idx as u32);
         }
@@ -266,10 +267,11 @@ impl HashJoinOperator {
             self.on.iter().map(|(_, right_col)| *right_col).collect()
         };
 
-        let mut hash_table: AHashMap<Vec<u8>, Vec<usize>> = AHashMap::new();
+        let mut hash_table: AHashMap<u64, Vec<usize>> = AHashMap::new();
+        let hashes = hash_utils::hash_batch(&merged, &key_columns, 0)?;
         for row_idx in 0..merged.num_rows() {
-            let key = extract_join_key(&merged, &key_columns, row_idx);
-            hash_table.entry(key).or_default().push(row_idx);
+            let hash = hashes.value(row_idx);
+            hash_table.entry(hash).or_default().push(row_idx);
         }
 
         self.left_batch = Some(merged);
@@ -344,10 +346,11 @@ impl HashJoinOperator {
                 let left_merged = super::super::concat_batches(&l_schema, &l0_batches)?;
                 
                 let key_indices: Vec<usize> = self.on.iter().map(|(l, _)| *l).collect();
-                let mut hash_table: AHashMap<Vec<u8>, Vec<usize>> = AHashMap::new();
+                let mut hash_table: AHashMap<u64, Vec<usize>> = AHashMap::new();
+                let hashes = hash_utils::hash_batch(&left_merged, &key_indices, 0)?;
                 for row_idx in 0..left_merged.num_rows() {
-                    let key = extract_join_key(&left_merged, &key_indices, row_idx);
-                    hash_table.entry(key).or_default().push(row_idx);
+                    let hash = hashes.value(row_idx);
+                    hash_table.entry(hash).or_default().push(row_idx);
                 }
                 
                 let r0_batches = std::mem::take(&mut self.right_partition0);
@@ -410,10 +413,11 @@ impl HashJoinOperator {
             let left_merged = super::super::concat_batches(&l_schema, &l_batches)?;
 
             let key_indices: Vec<usize> = self.on.iter().map(|(l, _)| *l).collect();
-            let mut hash_table: AHashMap<Vec<u8>, Vec<usize>> = AHashMap::new();
+            let mut hash_table: AHashMap<u64, Vec<usize>> = AHashMap::new();
+            let hashes = hash_utils::hash_batch(&left_merged, &key_indices, 0)?;
             for row_idx in 0..left_merged.num_rows() {
-                let key = extract_join_key(&left_merged, &key_indices, row_idx);
-                hash_table.entry(key).or_default().push(row_idx);
+                let hash = hashes.value(row_idx);
+                hash_table.entry(hash).or_default().push(row_idx);
             }
 
             let mut r_batches = Vec::new();
@@ -431,7 +435,7 @@ impl HashJoinOperator {
     /// 실제 Probing 작업을 처리하는 메서드 (Borrow Checker 회피를 위해 static으로 분리)
     fn do_probe(
         right_batch_idx: &mut usize,
-        build_table: &AHashMap<Vec<u8>, Vec<usize>>,
+        build_table: &AHashMap<u64, Vec<usize>>,
         left_batch: &RecordBatch,
         right_batches: &[RecordBatch],
         join_type: JoinType,
@@ -458,14 +462,20 @@ impl HashJoinOperator {
             };
 
             let right_key_columns: Vec<usize> = on.iter().map(|(_, r)| *r).collect();
+            let left_key_columns: Vec<usize> = on.iter().map(|(l, _)| *l).collect();
+            
+            let hashes = hash_utils::hash_batch(right_batch, &right_key_columns, 0)?;
             for right_row in 0..right_batch.num_rows() {
-                let key = extract_join_key(right_batch, &right_key_columns, right_row);
-                if let Some(left_rows) = build_table.get(&key) {
+                let hash = hashes.value(right_row);
+                if let Some(left_rows) = build_table.get(&hash) {
                     for &left_row in left_rows {
-                        left_indices.push(left_row as u32);
-                        right_indices.push(right_row as u32);
-                        if let Some(ref mut m) = matched_left_rows { m.insert(left_row); }
-                        if let Some(ref mut m) = matched_right_rows { m[right_row] = true; }
+                        // 해시 충돌 대응: 실제로 값이 같은지 확인
+                        if compare_rows(left_batch, &left_key_columns, left_row, right_batch, &right_key_columns, right_row) {
+                            left_indices.push(left_row as u32);
+                            right_indices.push(right_row as u32);
+                            if let Some(ref mut m) = matched_left_rows { m.insert(left_row); }
+                            if let Some(ref mut m) = matched_right_rows { m[right_row] = true; }
+                        }
                     }
                 }
             }
@@ -534,42 +544,53 @@ impl PhysicalOperator for HashJoinOperator {
     }
 }
 
-fn extract_join_key(batch: &RecordBatch, key_columns: &[usize], row_idx: usize) -> Vec<u8> {
-    let mut key = Vec::new();
-    for &col_idx in key_columns {
-        append_value_to_key(&mut key, batch.column(col_idx), row_idx);
+/// 두 행의 지정된 컬럼 값이 모두 일치하는지 비교합니다 (해시 충돌 방어용).
+fn compare_rows(
+    left_batch: &RecordBatch,
+    left_cols: &[usize],
+    left_row: usize,
+    right_batch: &RecordBatch,
+    right_cols: &[usize],
+    right_row: usize,
+) -> bool {
+    for i in 0..left_cols.len() {
+        let l_col = left_batch.column(left_cols[i]);
+        let r_col = right_batch.column(right_cols[i]);
+        
+        if !compare_column_values(l_col, left_row, r_col, right_row) {
+            return false;
+        }
     }
-    key
+    true
 }
 
-fn append_value_to_key(key: &mut Vec<u8>, col: &ArrayRef, row_idx: usize) {
-    if col.is_null(row_idx) {
-        key.push(0);
-        return;
+fn compare_column_values(l_col: &ArrayRef, l_row: usize, r_col: &ArrayRef, r_row: usize) -> bool {
+    if l_col.is_null(l_row) || r_col.is_null(r_row) {
+        return l_col.is_null(l_row) && r_col.is_null(r_row);
     }
-    key.push(1);
-    match col.data_type() {
+    
+    match l_col.data_type() {
         DataType::Int32 => {
-            let arr = col.as_any().downcast_ref::<Int32Array>().unwrap();
-            key.extend_from_slice(&arr.value(row_idx).to_le_bytes());
+            let l = l_col.as_any().downcast_ref::<Int32Array>().unwrap();
+            let r = r_col.as_any().downcast_ref::<Int32Array>().unwrap();
+            l.value(l_row) == r.value(r_row)
         }
         DataType::Int64 => {
-            let arr = col.as_any().downcast_ref::<Int64Array>().unwrap();
-            key.extend_from_slice(&arr.value(row_idx).to_le_bytes());
+            let l = l_col.as_any().downcast_ref::<Int64Array>().unwrap();
+            let r = r_col.as_any().downcast_ref::<Int64Array>().unwrap();
+            l.value(l_row) == r.value(r_row)
         }
         DataType::Float64 => {
-            let arr = col.as_any().downcast_ref::<Float64Array>().unwrap();
-            key.extend_from_slice(&arr.value(row_idx).to_le_bytes());
+            let l = l_col.as_any().downcast_ref::<Float64Array>().unwrap();
+            let r = r_col.as_any().downcast_ref::<Float64Array>().unwrap();
+            l.value(l_row) == r.value(r_row)
         }
         DataType::Utf8 => {
-            let arr = col.as_any().downcast_ref::<StringArray>().unwrap();
-            let s = arr.value(row_idx);
-            key.extend_from_slice(&(s.len() as u32).to_le_bytes());
-            key.extend_from_slice(s.as_bytes());
+            let l = l_col.as_any().downcast_ref::<StringArray>().unwrap();
+            let r = r_col.as_any().downcast_ref::<StringArray>().unwrap();
+            l.value(l_row) == r.value(r_row)
         }
-        _ => {
-            key.extend_from_slice(format!("{:?}", col).as_bytes());
-        }
+        _ => format!("{:?}", l_col.as_any()) == format!("{:?}", r_col.as_any()),
     }
 }
 

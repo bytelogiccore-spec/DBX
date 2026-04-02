@@ -9,6 +9,7 @@ use std::sync::Arc;
 pub mod distributed_executor;
 pub mod expr;
 pub mod fragment_splitter;
+pub mod hash_utils;
 pub mod local_executor;
 pub mod operators;
 pub mod parallel_query;

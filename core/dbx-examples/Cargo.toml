@@ -1,0 +1,92 @@
+[package]
+name = "dbx-examples"
+version = "0.1.2-beta"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Examples for DBX database engine"
+
+[dependencies]
+dbx-core = { path = "../dbx-core" }
+tokio = { version = "1", features = ["full"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+arrow = "54"
+tempfile = "3"
+rusqlite = { version = "0.32", features = ["bundled"] }
+sled = "0.34"
+redb = "2.1"
+sqlparser = "0.52"
+
+[[example]]
+name = "basic_crud"
+path = "examples/basic_crud.rs"
+
+[[example]]
+name = "quick_db_compare"
+path = "examples/quick_db_compare.rs"
+
+[[example]]
+name = "transactions"
+path = "examples/transactions.rs"
+
+[[example]]
+name = "query_builder"
+path = "examples/query_builder.rs"
+
+[[example]]
+name = "performance"
+path = "examples/performance.rs"
+
+[[example]]
+name = "encryption"
+path = "examples/encryption.rs"
+
+[[example]]
+name = "logging"
+path = "examples/logging.rs"
+
+[[example]]
+name = "migration"
+path = "examples/migration.rs"
+
+[[example]]
+name = "gpu_acceleration"
+path = "examples/gpu_acceleration.rs"
+
+[[example]]
+name = "dashmap_vs_rwlock"
+path = "examples/dashmap_vs_rwlock.rs"
+
+[[example]]
+name = "perf_compare"
+path = "examples/perf_compare.rs"
+
+[[example]]
+name = "sanity_check"
+path = "examples/sanity_check.rs"
+
+[[example]]
+name = "test_alter_table"
+path = "examples/test_alter_table.rs"
+
+[[example]]
+name = "test_ddl_index"
+path = "examples/test_ddl_index.rs"
+
+[[example]]
+name = "test_join"
+path = "examples/test_join.rs"
+
+[[example]]
+name = "test_metadata_persistence"
+path = "examples/test_metadata_persistence.rs"
+
+[[example]]
+name = "test_schema_builder"
+path = "examples/test_schema_builder.rs"
+
+[[example]]
+name = "test_snapshot"
+path = "examples/test_snapshot.rs"

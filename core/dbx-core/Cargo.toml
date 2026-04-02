@@ -68,13 +68,7 @@ bytes = "1.0"
 futures = "0.3.32"
 
 [dev-dependencies]
-proptest = "1.10"
-criterion = { version = "0.5", features = ["html_reports"] }
-rusqlite = { version = "0.32", features = ["bundled"] }
-sled = "0.34"
-redb = "2.1"
-rcgen = "0.14.7"
-tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+# 유닛 테스트에는 [dependencies]의 항목들이 사용됩니다.
 
 [features]
 default = ["wal", "mvcc", "index"]
@@ -91,74 +85,3 @@ version = "0.19.2"
 optional = true
 features = ["driver", "nvrtc", "cuda-12050"]
 
-[[bench]]
-name = "storage_bench"
-harness = false
-
-[[bench]]
-name = "sql_insert_benchmark"
-harness = false
-
-[[bench]]
-name = "sql_update_delete_benchmark"
-harness = false
-
-[[bench]]
-name = "sql_vs_kv"
-harness = false
-
-[[bench]]
-name = "parallel_engine_bench"
-harness = false
-
-[[bench]]
-name = "sql_baseline"
-harness = false
-
-[[bench]]
-name = "ddl_api_benchmark"
-harness = false
-
-[[bench]]
-name = "phase1_benchmarks"
-harness = false
-
-[[bench]]
-name = "phase1_improved_benchmarks"
-harness = false
-
-[[bench]]
-name = "parallel_parser_optimized"
-harness = false
-
-[[bench]]
-name = "phase2_benchmarks"
-harness = false
-
-[[bench]]
-name = "phase2_comparison"
-harness = false
-
-[[bench]]
-name = "cleanup_bench"
-harness = false
-
-[[bench]]
-name = "official_db_comparison"
-harness = false
-
-[[bench]]
-name = "dbx_baseline"
-harness = false
-
-[[bench]]
-name = "wos_flush_comparison"
-harness = false
-
-[[bench]]
-name = "htap_benchmark"
-harness = false
-
-[[bench]]
-name = "phase7_tiering_benchmarks"
-harness = false

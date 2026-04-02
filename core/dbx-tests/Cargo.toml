@@ -1,0 +1,21 @@
+[package]
+name = "dbx-tests"
+version = "0.1.2-beta"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Integration tests for DBX database engine"
+
+[dependencies]
+dbx-core = { path = "../dbx-core" }
+arrow = "54"
+tempfile = "3"
+sqlparser = "0.52"
+tokio = { version = "1", features = ["full"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+
+[dev-dependencies]
+# 테스트 전용 라이브러리들
+proptest = "1.10"

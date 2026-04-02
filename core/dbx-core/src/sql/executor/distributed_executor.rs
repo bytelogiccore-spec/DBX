@@ -54,6 +54,11 @@ impl DistributedExecutor {
 
     /// PhysicalPlan을 분산 실행하고 최종 RecordBatch를 반환합니다.
     pub async fn execute(&self, plan: PhysicalPlan) -> DbxResult<Vec<RecordBatch>> {
+        // [Phase 9] 로컬 전용 최적화: 피어가 없으면 분산 오버헤드(Split, Thread, Channel) 전체 우회
+        if self.peer_addrs.is_empty() {
+            return self.local_executor.execute_collect(&plan);
+        }
+
         let dag = FragmentSplitter::split(plan)?;
 
         // 코디네이터 플랜이 없으면 단건 로컬 실행으로 Fallback
