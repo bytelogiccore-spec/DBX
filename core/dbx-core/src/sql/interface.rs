@@ -865,7 +865,7 @@ impl Database {
                         .collect();
 
                     let mut schema = Schema::new(fields);
-                    
+
                     // IF Policy exists, embed as JSON into Arrow schema metadata
                     if let Some(p) = policy {
                         if let Ok(json) = p.to_json() {
@@ -874,7 +874,7 @@ impl Database {
                             schema = schema.with_metadata(map);
                         }
                     }
-                    
+
                     let schema = Arc::new(schema);
 
                     // Store schema in memory
@@ -1182,6 +1182,7 @@ impl Database {
                 table,
                 projection,
                 filter,
+                ros_files,
             } => {
                 // Track OLAP Workload
                 self.workload_analyzer
@@ -1352,7 +1353,9 @@ impl Database {
                             if path.extension().map(|s| s == "parquet").unwrap_or(false) {
                                 if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
                                     if name.starts_with(&table_prefix) {
-                                        if let Ok(ros_batches) = crate::storage::parquet_io::ParquetReader::read(&path) {
+                                        if let Ok(ros_batches) =
+                                            crate::storage::parquet_io::ParquetReader::read(&path)
+                                        {
                                             if base_schema.is_none() && !ros_batches.is_empty() {
                                                 base_schema = Some(ros_batches[0].schema());
                                             }
@@ -1382,7 +1385,14 @@ impl Database {
                 };
                 let mut scan =
                     TableScanOperator::new(table.clone(), final_schema, projection_to_use);
-                scan.set_data(all_batches);
+
+                // ros_files가 채워져 있으면 파이프라인 티어 스캔,
+                // 비어있으면 기존의 all_batches 통째 주입
+                if !ros_files.is_empty() {
+                    scan.start_tier_scan(all_batches, ros_files.clone());
+                } else {
+                    scan.set_data(all_batches);
+                }
 
                 // Wrap with filter if needed AND NOT pushed down
                 if let Some(filter_expr) = filter {
@@ -1597,10 +1607,14 @@ impl Database {
             PhysicalPlan::GridExchange { .. } => {
                 // GridExchange 플레이스홀더 — DistributedExecutor가 런타임에 교체하므로
                 // interface의 build_operator에 도달하면 설계 오류
-                unreachable!("GridExchange placeholder must be replaced by DistributedExecutor before build_operator is called")
+                unreachable!(
+                    "GridExchange placeholder must be replaced by DistributedExecutor before build_operator is called"
+                )
             }
             PhysicalPlan::ShuffleWriter { .. } => {
-                unreachable!("ShuffleWriter is a distributed operator and not supported in singleton Database")
+                unreachable!(
+                    "ShuffleWriter is a distributed operator and not supported in singleton Database"
+                )
             }
         }
     }

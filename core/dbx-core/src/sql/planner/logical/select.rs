@@ -271,6 +271,7 @@ impl LogicalPlanner {
             table: table_name,
             columns: vec![], // All columns (optimized later by projection pushdown)
             filter: None,
+            ros_files: vec![],
         };
 
         // Process JOINs
@@ -289,6 +290,7 @@ impl LogicalPlanner {
                 table: right_table,
                 columns: vec![],
                 filter: None,
+                ros_files: vec![],
             };
 
             // Determine JOIN type

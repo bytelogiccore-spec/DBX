@@ -18,6 +18,7 @@ pub mod index;
 pub mod kv_adapter;
 pub mod manager;
 pub mod memory_wos;
+pub mod metadata;
 pub mod native_wos;
 pub mod parquet_io;
 pub mod partition;

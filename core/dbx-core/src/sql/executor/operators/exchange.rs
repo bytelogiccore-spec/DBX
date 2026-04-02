@@ -1,8 +1,8 @@
-use crate::error::{DbxResult, DbxError};
+use crate::error::{DbxError, DbxResult};
+use crate::sql::executor::operators::physical_operator::PhysicalOperator;
 use arrow::array::RecordBatch;
 use arrow::datatypes::Schema;
 use arrow::ipc::reader::StreamReader;
-use crate::sql::executor::operators::physical_operator::PhysicalOperator;
 use std::io::Cursor;
 use std::sync::Arc;
 use tokio::sync::mpsc::Receiver;
@@ -33,32 +33,32 @@ impl PhysicalOperator for GridExchangeOperator {
             Some(Ok(Some(raw_bytes))) => {
                 // I/O 스레드가 아닌 CPU 연산(Physical) 스레드에서 백그라운드 디코딩
                 let cursor = Cursor::new(raw_bytes);
-                let mut reader = StreamReader::try_new(cursor, None)
-                    .map_err(|e| DbxError::SqlExecution {
+                let mut reader =
+                    StreamReader::try_new(cursor, None).map_err(|e| DbxError::SqlExecution {
                         message: format!("Arrow IPC stream init failed: {}", e),
-                        context: "GridExchangeOperator".to_string()
+                        context: "GridExchangeOperator".to_string(),
                     })?;
-                
+
                 if let Some(result) = reader.next() {
-                    let batch = result.map_err(|e| DbxError::SqlExecution { 
+                    let batch = result.map_err(|e| DbxError::SqlExecution {
                         message: format!("Arrow IPC parse failed: {}", e),
-                        context: "GridExchangeOperator".to_string()
+                        context: "GridExchangeOperator".to_string(),
                     })?;
                     Ok(Some(batch))
                 } else {
                     Err(DbxError::SqlExecution {
                         message: "Empty IPC stream received".to_string(),
-                        context: "GridExchangeOperator".to_string()
+                        context: "GridExchangeOperator".to_string(),
                     })
                 }
-            },
+            }
             Some(Ok(None)) => Ok(None), // 정상 EOF
             Some(Err(e)) => Err(e),
             None => {
                 // Sender가 EOF 신호 없이 비정상 종료 시 에러 처리
                 Err(DbxError::SqlExecution {
                     message: "Grid exchange channel closed unexpectedly".to_string(),
-                    context: "GridExchangeOperator".to_string()
+                    context: "GridExchangeOperator".to_string(),
                 })
             }
         }
@@ -67,7 +67,7 @@ impl PhysicalOperator for GridExchangeOperator {
     fn reset(&mut self) -> DbxResult<()> {
         Err(DbxError::SqlExecution {
             message: "Reset is not supported on GridExchangeOperator".to_string(),
-            context: "GridExchangeOperator".to_string()
+            context: "GridExchangeOperator".to_string(),
         })
     }
 }

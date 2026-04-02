@@ -43,15 +43,18 @@ impl PredicatePushdownRule {
                         table,
                         columns,
                         filter: None,
+                        ros_files,
                     } => Ok(LogicalPlan::Scan {
                         table,
                         columns,
                         filter: Some(predicate),
+                        ros_files,
                     }),
                     LogicalPlan::Scan {
                         table,
                         columns,
                         filter: Some(existing),
+                        ros_files,
                     } => Ok(LogicalPlan::Scan {
                         table,
                         columns,
@@ -60,6 +63,7 @@ impl PredicatePushdownRule {
                             op: BinaryOperator::And,
                             right: Box::new(predicate),
                         }),
+                        ros_files,
                     }),
                     other => Ok(LogicalPlan::Filter {
                         input: Box::new(other),

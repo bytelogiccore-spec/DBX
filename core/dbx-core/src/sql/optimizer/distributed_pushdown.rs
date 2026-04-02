@@ -4,9 +4,9 @@
 //! - Partial Aggregate Pushdown: `Aggregate` 노드를 Shard 수준의 `LocalAggregate`와 Coordinator 수준의 `GlobalAggregate`로 분리
 //! - Limit Pushdown: 분산 실행 환경에서 불필요한 네트워크 전송을 줄이기 위해 부분 Limit 적용 반영 (현재는 기본 LimitPushdown과 연계)
 
-use crate::error::DbxResult;
-use crate::sql::planner::{LogicalPlan, AggregateMode};
 use super::OptimizationRule;
+use crate::error::DbxResult;
+use crate::sql::planner::{AggregateMode, LogicalPlan};
 
 pub struct DistributedPushdownRule;
 
@@ -52,7 +52,7 @@ impl DistributedPushdownRule {
                 mode,
             } => {
                 let pushed_input = self.push_down(*input)?;
-                
+
                 if mode == AggregateMode::Simple {
                     // Create Partial Aggregate for Shard level
                     let partial_agg = LogicalPlan::Aggregate {
@@ -63,7 +63,7 @@ impl DistributedPushdownRule {
                     };
 
                     // Create Final Aggregate for Coordinator level
-                    // For now, Final uses the same expressions, but HashAggregateOperator 
+                    // For now, Final uses the same expressions, but HashAggregateOperator
                     // will handle the "Merge" logic based on its mode.
                     Ok(LogicalPlan::Aggregate {
                         input: Box::new(partial_agg),

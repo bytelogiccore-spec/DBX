@@ -1,22 +1,22 @@
 use dbx_core::error::DbxResult;
-use dbx_core::grid::quic::QuicChannel;
 use dbx_core::grid::manager::GridManager;
 use dbx_core::grid::protocol::{GridMessage, QueryMessage};
+use dbx_core::grid::quic::QuicChannel;
 use dbx_core::sharding::router::ShardRouter;
-use dbx_core::storage::erasure_coding::store::ErasureCodingStore;
+use dbx_core::sql::executor::operators::{GridExchangeOperator, PhysicalOperator};
 use dbx_core::storage::erasure_coding::distributed_store::DistributedErasureCodingStore;
-use dbx_core::sql::executor::operators::{PhysicalOperator, GridExchangeOperator};
+use dbx_core::storage::erasure_coding::store::ErasureCodingStore;
 
 use arrow::array::Int32Array;
 use arrow::datatypes::{DataType, Field, Schema};
-use arrow::record_batch::RecordBatch;
 use arrow::ipc::writer::StreamWriter;
+use arrow::record_batch::RecordBatch;
 
-use std::sync::Arc;
-use tokio::sync::mpsc;
 use std::net::SocketAddr;
 use std::str::FromStr;
+use std::sync::Arc;
 use tempfile::tempdir;
+use tokio::sync::mpsc;
 
 fn make_dummy_batch() -> RecordBatch {
     let schema = Arc::new(Schema::new(vec![Field::new("val", DataType::Int32, false)]));
@@ -44,7 +44,7 @@ async fn test_grid_exchange_streaming_backpressure() -> DbxResult<()> {
     // 임시 디렉토리 및 의존성
     let dir1 = tempdir()?;
     let dir2 = tempdir()?;
-    
+
     // 포트 할당
     let addr_coord = "127.0.0.1:15890";
     let addr_worker = "127.0.0.1:15891";
@@ -77,8 +77,16 @@ async fn test_grid_exchange_streaming_backpressure() -> DbxResult<()> {
         addr_worker.to_string(),
     ]));
 
-    let ec_store1 = Arc::new(DistributedErasureCodingStore::new(local_store1, Arc::clone(&router), Some(Arc::clone(&quic_coord))));
-    let ec_store2 = Arc::new(DistributedErasureCodingStore::new(local_store2, Arc::clone(&router), Some(Arc::clone(&quic_worker))));
+    let ec_store1 = Arc::new(DistributedErasureCodingStore::new(
+        local_store1,
+        Arc::clone(&router),
+        Some(Arc::clone(&quic_coord)),
+    ));
+    let ec_store2 = Arc::new(DistributedErasureCodingStore::new(
+        local_store2,
+        Arc::clone(&router),
+        Some(Arc::clone(&quic_worker)),
+    ));
 
     // 2. GridManager 생성 및 실행
     let manager_coord = GridManager::new(Arc::clone(&quic_coord), ec_store1, rx_coord);
@@ -93,7 +101,7 @@ async fn test_grid_exchange_streaming_backpressure() -> DbxResult<()> {
     // 3. 코디네이터 노드: 스트리밍 수신 큐(배압을 위해 Bounded 2 설정!) 등록
     // 채널 사이즈가 2이므로, worker가 엄청 빨리 쏴도 Coordinator가 천천히 꺼내가면 backpressure가 발생함.
     let (sender, receiver) = mpsc::channel(2);
-    coord_streams.insert(execution_id.clone(), sender);
+    coord_streams.insert((execution_id.clone(), 0), sender);
 
     // 4. GridExchangeOperator (코디네이터 측 물리 오퍼레이터) 생성
     let dummy_schema = make_dummy_batch().schema();
@@ -102,26 +110,29 @@ async fn test_grid_exchange_streaming_backpressure() -> DbxResult<()> {
     // 5. 워커 노드 구동 흉내내기: 10개의 RecordBatch 스트리밍 발송!
     let worker_channel = Arc::clone(&quic_worker);
     let worker_exe_id = execution_id.clone();
-    
+
     let worker_task = tokio::spawn(async move {
         let dummy = make_dummy_batch();
         let bytes = batch_to_ipc_bytes(&dummy);
-        
+
         for _ in 0..10 {
             let msg = GridMessage::Query(QueryMessage::ExchangeData {
                 execution_id: worker_exe_id.clone(),
                 node_id: 1,
                 is_eof: false,
                 batch_data: bytes.clone(),
+                exchange_id: 0,
             });
             // QUIC 통신으로 쏘기 (Stream reset 에러는 무시)
             if let Err(e) = worker_channel.send_message(coord_sock, msg).await {
                 let err_str = e.to_string();
-                if !err_str.contains("Stream had been reset") && !err_str.contains("application::Error") {
+                if !err_str.contains("Stream had been reset")
+                    && !err_str.contains("application::Error")
+                {
                     panic!("Unexpected network error: {}", e);
                 }
             }
-            
+
             // 약간의 지연(현실적인 IO 딜레이 흉내)
             tokio::time::sleep(std::time::Duration::from_millis(5)).await;
         }
@@ -132,6 +143,7 @@ async fn test_grid_exchange_streaming_backpressure() -> DbxResult<()> {
             node_id: 1,
             is_eof: true,
             batch_data: vec![],
+            exchange_id: 0,
         });
         let _ = worker_channel.send_message(coord_sock, eof_msg).await;
     });
@@ -156,11 +168,16 @@ async fn test_grid_exchange_streaming_backpressure() -> DbxResult<()> {
             }
         }
         total_batches
-    }).await.unwrap();
+    })
+    .await
+    .unwrap();
 
-    assert_eq!(count, 10, "Should exactly receive 10 RecordBatches over Grid network");
-    
+    assert_eq!(
+        count, 10,
+        "Should exactly receive 10 RecordBatches over Grid network"
+    );
+
     worker_task.await.unwrap();
-    
+
     Ok(())
 }

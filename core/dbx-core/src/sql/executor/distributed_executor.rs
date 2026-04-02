@@ -15,15 +15,15 @@ use crate::grid::protocol::{GridMessage, QueryMessage};
 use crate::grid::quic::QuicChannel;
 use crate::sql::executor::fragment_splitter::FragmentSplitter;
 use crate::sql::executor::local_executor::LocalExecutor;
-use crate::sql::executor::operators::{GridExchangeOperator, PhysicalOperator};
-use crate::sql::planner::types::{AggregateFunction, AggregateMode, PhysicalPlan};
+use crate::sql::executor::operators::PhysicalOperator;
+use crate::sql::planner::types::PhysicalPlan;
+use crate::storage::metadata::MetadataRegistry;
 use arrow::array::RecordBatch;
-use arrow::datatypes::{DataType, Field, Schema};
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::mpsc;
-use tracing::{info, warn};
+use tracing::{error, info, warn};
 
 /// 분산 쿼리 코디네이터 실행기
 pub struct DistributedExecutor {
@@ -32,6 +32,7 @@ pub struct DistributedExecutor {
     local_executor: Arc<LocalExecutor>,
     /// 알려진 워커 노드 목록 (생성자 주입)
     peer_addrs: Vec<SocketAddr>,
+    metadata_registry: Arc<MetadataRegistry>,
 }
 
 impl DistributedExecutor {
@@ -40,19 +41,36 @@ impl DistributedExecutor {
         grid_manager: Arc<GridManager>,
         local_executor: Arc<LocalExecutor>,
         peer_addrs: Vec<SocketAddr>,
+        metadata_registry: Arc<MetadataRegistry>,
     ) -> Self {
-        Self { quic_channel, grid_manager, local_executor, peer_addrs }
+        Self {
+            quic_channel,
+            grid_manager,
+            local_executor,
+            peer_addrs,
+            metadata_registry,
+        }
     }
 
     /// PhysicalPlan을 분산 실행하고 최종 RecordBatch를 반환합니다.
     pub async fn execute(&self, plan: PhysicalPlan) -> DbxResult<Vec<RecordBatch>> {
-        let pair = FragmentSplitter::split(plan)?;
+        let dag = FragmentSplitter::split(plan)?;
 
-        // 코디네이터 플랜이 없으면 로컬 실행 (단일 노드 fallback)
-        let coord_plan = match pair.coordinator_plan {
+        // 코디네이터 플랜이 없으면 단건 로컬 실행으로 Fallback
+        let coord_plan = match dag.coordinator_plan {
             None => {
                 info!("No distributed split found — executing locally");
-                return self.local_executor.execute_collect(&pair.worker_plan);
+                // stage가 1개 있다는 의미이므로 그냥 로컬 실행
+                let worker_plan = dag
+                    .stages
+                    .into_iter()
+                    .next()
+                    .unwrap()
+                    .plans
+                    .into_iter()
+                    .next()
+                    .unwrap();
+                return self.local_executor.execute_collect(&worker_plan);
             }
             Some(p) => p,
         };
@@ -68,175 +86,195 @@ impl DistributedExecutor {
                 .as_secs();
             format!("exec-{}-{}", secs, nanos)
         };
-        let worker_plan = pair.worker_plan;
 
-        // 워커 플랜 직렬화
-        let plan_bytes = bincode::serialize(&worker_plan)
-            .map_err(|e| DbxError::Serialization(e.to_string()))?;
+        // 1. 코디네이터의 `GridExchange` 수신 채널 준비 및 Operator 빌드
+        let mut channels = crate::sql::executor::local_executor::DistributedChannels::default();
+        let mut root_op = self
+            .local_executor
+            .build_operator_distributed(&coord_plan, &mut channels)?;
 
-        let coordinator_addr = self.quic_channel.local_addr.to_string();
-
-        // 워커 수만큼 배압 채널 생성 (bounded 8로 OOM 방지)
-        let channel_size = 8usize;
-        let mut senders: Vec<mpsc::Sender<DbxResult<Option<Vec<u8>>>>> = Vec::new();
-        let mut receivers: Vec<mpsc::Receiver<DbxResult<Option<Vec<u8>>>>> = Vec::new();
-
-        for _ in &self.peer_addrs {
-            let (tx, rx) = mpsc::channel(channel_size);
-            senders.push(tx);
-            receivers.push(rx);
-        }
-
-        // GridManager DashMap에 모든 워커 채널 등록
-        // execution_id에 워커 인덱스를 붙여 독립적인 큐 보장
+        // 2. DashMap에 `channels.exchanges` Sender 등록 (GridManager가 통신을 수신하여 전달할 수 있도록 함)
         let query_streams = self.grid_manager.get_query_streams();
-        for (idx, sender) in senders.into_iter().enumerate() {
-            let key = format!("{}:{}", execution_id, idx);
-            query_streams.insert((key, 0), sender);
+        for (e_id, tx) in channels.exchanges {
+            query_streams.insert((execution_id.clone(), e_id), tx);
         }
 
-        // 모든 워커에게 ExecuteFragment 전송
-        info!("Dispatching ExecuteFragment to {} workers (exec_id: {})", self.peer_addrs.len(), execution_id);
-        for (idx, peer) in self.peer_addrs.iter().enumerate() {
-            let msg = GridMessage::Query(QueryMessage::ExecuteFragment {
-                execution_id: format!("{}:{}", execution_id, idx),
-                plan_bytes: plan_bytes.clone(),
-                coordinator_addr: coordinator_addr.clone(),
-            });
-            if let Err(e) = self.quic_channel.send_message(*peer, msg).await {
-                warn!("Failed to send ExecuteFragment to {}: {:?}", peer, e);
+        // 3. spawn_blocking으로 코디네이터 플랜 실행을 백그라운드로 밀어넣음
+        // (root_op가 내부적으로 GridExchange로부터 튜플을 Pull-based로 소모하기 시작함)
+        let coord_task = tokio::task::spawn_blocking(move || {
+            let mut results = Vec::new();
+            while let Some(batch) = root_op.next()? {
+                if batch.num_rows() > 0 {
+                    results.push(batch);
+                }
             }
-        }
-
-        // coordinator_plan의 GridExchange 플레이스홀더를 실제 GridExchangeOperator로 교체
-        // 각 워커의 수신 큐를 모아 MergeExchangeOperator처럼 동작하도록 구성
-        let merged_rx = self.merge_receivers(receivers);
-        let exchange_schema = self.infer_exchange_schema(&coord_plan);
-        let exchange_op = Box::new(GridExchangeOperator::new(exchange_schema, merged_rx));
-
-        // coordinator_plan 실행 (GridExchange를 실제 연산자로 교체하여)
-        let final_plan = self.inject_exchange(coord_plan, exchange_op);
-        let results = self.execute_plan_with_operator(final_plan)?;
-
-        // 완료 후 DashMap 정리
-        for idx in 0..self.peer_addrs.len() {
-            let key = format!("{}:{}", execution_id, idx);
-            query_streams.remove(&(key, 0));
-        }
-
-        Ok(results)
-    }
-
-    /// 여러 워커의 수신 큐를 단일 mpsc 채널로 합칩니다 (Fan-in Merge)
-    fn merge_receivers(
-        &self,
-        receivers: Vec<mpsc::Receiver<DbxResult<Option<Vec<u8>>>>>,
-    ) -> mpsc::Receiver<DbxResult<Option<Vec<u8>>>> {
-        let (merge_tx, merge_rx) = mpsc::channel::<DbxResult<Option<Vec<u8>>>>(64);
-
-        tokio::spawn(async move {
-            let merge_tx = Arc::new(merge_tx);
-
-            for mut rx in receivers {
-                let tx = Arc::clone(&merge_tx);
-                tokio::spawn(async move {
-                    loop {
-                        match rx.recv().await {
-                            Some(Ok(Some(bytes))) => {
-                                let _ = tx.send(Ok(Some(bytes))).await;
-                            }
-                            Some(Ok(None)) => {
-                                // 이 워커의 EOF — merge 채널로 EOF 포워드
-                                // 마지막 워커가 EOF를 보낼 때 추적
-                                let _ = tx.send(Ok(None)).await;
-                                break;
-                            }
-                            Some(Err(e)) => {
-                                let _ = tx.send(Err(e)).await;
-                                break;
-                            }
-                            None => break,
-                        }
-                    }
-                });
-            }
+            Ok::<_, DbxError>(results)
         });
 
-        merge_rx
-    }
+        // 4. DAG 기반 Multi-Stage 스케줄링 (Stage-by-Stage 순차 장벽 배포)
+        let coordinator_addr = self.quic_channel.local_addr.to_string();
+        for stage in dag.stages {
+            let stage_id = stage.stage_id;
 
-    /// coordinator_plan에서 GridExchange 스키마를 추론
-    fn infer_exchange_schema(&self, plan: &PhysicalPlan) -> Arc<Schema> {
-        // Final Agg의 입력 스키마 힌트에서 추론
-        // 간단히: group_key + agg_columns 패턴
-        match plan {
-            PhysicalPlan::HashAggregate { group_by, aggregates, .. } => {
-                let mut fields = Vec::new();
-                for i in 0..group_by.len() {
-                    fields.push(Field::new(format!("group_{}", i), DataType::Int64, true));
+            let mut pending_workers = self.peer_addrs.clone();
+
+            // Phase 6: Locality Routing (가중치 소팅)
+            let mut node_scores: std::collections::HashMap<std::net::SocketAddr, usize> =
+                std::collections::HashMap::new();
+
+            fn collect_table_scans<'a>(p: &'a PhysicalPlan) -> Vec<&'a PhysicalPlan> {
+                let mut scans = Vec::new();
+                match p {
+                    PhysicalPlan::TableScan { .. } => scans.push(p),
+                    PhysicalPlan::Projection { input, .. }
+                    | PhysicalPlan::SortMerge { input, .. }
+                    | PhysicalPlan::Limit { input, .. }
+                    | PhysicalPlan::HashAggregate { input, .. } => {
+                        scans.extend(collect_table_scans(input))
+                    }
+                    PhysicalPlan::HashJoin { left, right, .. } => {
+                        scans.extend(collect_table_scans(left));
+                        scans.extend(collect_table_scans(right));
+                    }
+                    _ => {}
                 }
-                for agg in aggregates {
-                    let name = agg.alias.clone().unwrap_or_else(|| format!("agg_{}", agg.input));
-                    fields.push(Field::new(name, DataType::Int64, true));
-                }
-                Arc::new(Schema::new(fields))
+                scans
             }
-            _ => Arc::new(Schema::new(vec![Field::new("value", DataType::Int64, true)])),
-        }
-    }
 
-    /// coordinator_plan에서 GridExchange 플레이스홀더를 주입된 exchange_op으로 교체하고
-    /// 남은 상위 노드를 직렬 실행합니다.
-    fn inject_exchange(
-        &self,
-        plan: PhysicalPlan,
-        exchange_op: Box<dyn PhysicalOperator>,
-    ) -> (PhysicalPlan, Box<dyn PhysicalOperator>) {
-        // GridExchange 플레이스홀더를 만나면 exchange_op 반환
-        // 상위 플랜은 이 operator를 input으로 래핑
-        (plan, exchange_op)
-    }
-
-    fn execute_plan_with_operator(
-        &self,
-        (plan, exchange_op): (PhysicalPlan, Box<dyn PhysicalOperator>),
-    ) -> DbxResult<Vec<RecordBatch>> {
-        // Final Agg를 exchange_op 위에 직접 조립하여 실행
-        let mut final_op: Box<dyn PhysicalOperator> = match plan {
-            PhysicalPlan::HashAggregate { group_by, aggregates, mode, .. } => {
-                use crate::sql::executor::operators::HashAggregateOperator;
-                use arrow::datatypes::{DataType, Field, Schema};
-
-                let input_schema = exchange_op.schema().clone();
-                let mut output_fields = Vec::new();
-                for &col_idx in &group_by {
-                    if col_idx < input_schema.fields().len() {
-                        output_fields.push(input_schema.field(col_idx).clone());
+            for p in &stage.plans {
+                let scans = collect_table_scans(p);
+                for scan in scans {
+                    if let PhysicalPlan::TableScan {
+                        table, ros_files, ..
+                    } = scan
+                    {
+                        if let Some(table_meta) = self.metadata_registry.tables.get(table) {
+                            for part_ref in table_meta.partitions.iter() {
+                                let part = part_ref.value();
+                                // ros_files가 비어있으면(로컬 fallback) 모든 파티션을 고려, 아니면 ros_files 대상만
+                                if ros_files.is_empty() || ros_files.contains(&part.file_path) {
+                                    if let Some(ref addr_str) = part.node_addr {
+                                        if let Ok(addr) = addr_str.parse::<std::net::SocketAddr>() {
+                                            *node_scores.entry(addr).or_insert(0) +=
+                                                part.row_count.max(1);
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
-                for agg in &aggregates {
-                    let name = agg.alias.clone().unwrap_or_else(|| format!("agg_{}", agg.input));
-                    output_fields.push(Field::new(&name, DataType::Int64, true));
-                }
-                let output_schema = Arc::new(Schema::new(output_fields));
-
-                Box::new(HashAggregateOperator::new(
-                    exchange_op,
-                    output_schema,
-                    group_by,
-                    aggregates,
-                    mode,
-                ))
             }
-            _ => exchange_op, // GridExchange 자체가 루트인 경우
-        };
 
-        let mut results = Vec::new();
-        while let Some(batch) = final_op.next()? {
-            if batch.num_rows() > 0 {
-                results.push(batch);
+            // node_scores가 높은 순으로 워커 우선순위 정렬
+            pending_workers.sort_by(|a, b| {
+                let score_a = node_scores.get(a).copied().unwrap_or(0);
+                let score_b = node_scores.get(b).copied().unwrap_or(0);
+                score_b.cmp(&score_a)
+            });
+
+            // 동일 스테이지 내의 플랜들을 직렬화
+            let mut plans_bytes = Vec::new();
+            for p in stage.plans {
+                let bytes =
+                    bincode::serialize(&p).map_err(|e| DbxError::Serialization(e.to_string()))?;
+                plans_bytes.push(bytes);
+            }
+
+            let max_retries = 3;
+            // 테스트를 위해 환경변수로 Timeout 조정 (기본값 30초)
+            let timeout_secs = std::env::var("DBX_WORKER_TIMEOUT_SECS")
+                .unwrap_or_else(|_| "30".to_string())
+                .parse::<u64>()
+                .unwrap_or(30);
+            let timeout_duration = std::time::Duration::from_secs(timeout_secs);
+
+            // 재시도 루프
+            for retry_count in 0..=max_retries {
+                if pending_workers.is_empty() {
+                    break;
+                }
+
+                info!(
+                    "Dispatching Stage {} to {} workers (exec_id: {}, retry: {})",
+                    stage_id,
+                    pending_workers.len(),
+                    execution_id,
+                    retry_count
+                );
+
+                let stage_barriers = self.grid_manager.get_stage_barriers();
+                let mut awaiters = Vec::new();
+
+                for peer in &pending_workers {
+                    // 수신 확인을 위한 1회용 채널
+                    let (tx, mut rx) = mpsc::channel(1);
+                    stage_barriers.insert((execution_id.clone(), stage_id, *peer), tx);
+
+                    let msg = GridMessage::Query(QueryMessage::ExecuteFragment {
+                        execution_id: execution_id.clone(),
+                        stage_id,
+                        plans_bytes: plans_bytes.clone(),
+                        coordinator_addr: coordinator_addr.clone(),
+                    });
+
+                    if let Err(e) = self.quic_channel.send_message(*peer, msg).await {
+                        warn!("Failed to send Stage {} to {}: {:?}", stage_id, peer, e);
+                    }
+
+                    let peer_addr = *peer;
+                    awaiters.push(async move {
+                        let res = tokio::time::timeout(timeout_duration, rx.recv()).await;
+                        (peer_addr, res.is_ok())
+                    });
+                }
+
+                // 모든 워커의 FragmentCompleted 신호 수신 대기 (Barrier)
+                let results = futures::future::join_all(awaiters).await;
+
+                let mut retry_peers = Vec::new();
+                for (peer_addr, success) in results {
+                    stage_barriers.remove(&(execution_id.clone(), stage_id, peer_addr));
+                    if !success {
+                        warn!("Worker {} timed out on Stage {}", peer_addr, stage_id);
+                        retry_peers.push(peer_addr);
+                    }
+                }
+
+                pending_workers = retry_peers;
+
+                if !pending_workers.is_empty() && retry_count == max_retries {
+                    error!(
+                        "Max retries exceeded for Stage {} on workers: {:?}",
+                        stage_id, pending_workers
+                    );
+                    return Err(DbxError::Network(format!(
+                        "Stage {} timed out after {} retries",
+                        stage_id, max_retries
+                    )));
+                }
             }
         }
-        Ok(results)
+
+        // 5. 모든 Stage 완료 후, 코디네이터 태스크(조인 등 최종 집계)가 종료되길 기다림
+        let final_results = coord_task
+            .await
+            .map_err(|e| DbxError::Network(format!("Coordinator thread panic: {:?}", e)))??;
+
+        // 리소스 정리
+        let keys_to_remove: Vec<_> = query_streams
+            .iter()
+            .filter(|k| k.key().0 == execution_id)
+            .map(|k| k.key().clone())
+            .collect();
+        for k in keys_to_remove {
+            query_streams.remove(&k);
+        }
+
+        info!(
+            "Distributed execution {} finished successfully",
+            execution_id
+        );
+        Ok(final_results)
     }
 }

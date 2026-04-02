@@ -1,21 +1,21 @@
 //! Grid Distributed Erasure Coding Store
-//! 
+//!
 //! Provides a high-level API to store and retrieve data with erasure coding
 //! across multiple nodes in the Grid.
 
 use crate::error::DbxResult;
+use crate::grid::protocol::{GridMessage, StorageMessage};
+use crate::grid::quic::QuicChannel;
 use crate::sharding::router::ShardRouter;
 use crate::storage::erasure_coding::store::ErasureCodingStore;
-use std::sync::Arc;
-use crate::grid::quic::QuicChannel;
-use crate::grid::protocol::{GridMessage, StorageMessage};
+use futures::stream::{FuturesUnordered, StreamExt};
 use std::net::SocketAddr;
 use std::str::FromStr;
-use futures::stream::{FuturesUnordered, StreamExt};
+use std::sync::Arc;
 use tracing::{error, warn};
 
 /// 그리드 분산 Erasure Coding 스토어
-/// 
+///
 /// 로컬 ErasureCodingStore와 ShardRouter를 결합하여 데이터를 분산 저장합니다.
 pub struct DistributedErasureCodingStore {
     local_store: ErasureCodingStore,
@@ -24,8 +24,16 @@ pub struct DistributedErasureCodingStore {
 }
 
 impl DistributedErasureCodingStore {
-    pub fn new(local_store: ErasureCodingStore, router: Arc<ShardRouter>, quic_channel: Option<Arc<QuicChannel>>) -> Self {
-        Self { local_store, router, quic_channel }
+    pub fn new(
+        local_store: ErasureCodingStore,
+        router: Arc<ShardRouter>,
+        quic_channel: Option<Arc<QuicChannel>>,
+    ) -> Self {
+        Self {
+            local_store,
+            router,
+            quic_channel,
+        }
     }
 
     /// 데이터를 인코딩하여 그리드 노드들에 분산 저장 요청
@@ -36,13 +44,13 @@ impl DistributedErasureCodingStore {
 
         // 1. EC 인코딩 (K 데이터 + M 패리티)
         let shards = self.local_store.encode(&buffer)?;
-        
+
         let mut futures = FuturesUnordered::new();
-        
+
         // 2. 샤드별 대상 노드 결정 및 전송
         for (i, shard) in shards.iter().enumerate() {
             let shard_key = format!("{}:shard_{}", key, i);
-            
+
             // 만약 quic_channel이 존재한다면 원격 노드로 전송
             if let Some(channel) = &self.quic_channel {
                 if let Some(node) = self.router.route(shard_key.as_bytes()) {
@@ -62,7 +70,7 @@ impl DistributedErasureCodingStore {
                 }
             }
         }
-        
+
         // 백그라운 전송 대기
         while let Some(_) = futures.next().await {}
 
@@ -108,12 +116,14 @@ impl DistributedErasureCodingStore {
                         shard_id: i,
                     });
                     let ch = channel.clone();
-                    
+
                     futures.push(tokio::spawn(async move {
                         match ch.send_request_and_wait(addr, msg).await {
-                            Ok(GridMessage::Storage(StorageMessage::ShardResponse { shard_id, data: Some(shard_data), .. })) => {
-                                Some((shard_id, shard_data))
-                            }
+                            Ok(GridMessage::Storage(StorageMessage::ShardResponse {
+                                shard_id,
+                                data: Some(shard_data),
+                                ..
+                            })) => Some((shard_id, shard_data)),
                             Ok(other) => {
                                 warn!(?other, "Unexpected response for shard {}", i);
                                 None
@@ -128,7 +138,8 @@ impl DistributedErasureCodingStore {
             }
         }
 
-        let mut collected_shards: std::collections::HashMap<usize, Vec<u8>> = std::collections::HashMap::new();
+        let mut collected_shards: std::collections::HashMap<usize, Vec<u8>> =
+            std::collections::HashMap::new();
         let target_k = self.local_store.k();
 
         // 도착하는 순서대로 K개를 모음
@@ -187,15 +198,15 @@ impl DistributedErasureCodingStore {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::tempdir;
     use crate::sharding::router::ShardRouter;
+    use tempfile::tempdir;
 
     #[tokio::test]
     async fn test_distributed_store_basic() {
         let dir = tempdir().unwrap();
         let local_store = ErasureCodingStore::new(dir.path(), 4, 2);
         let router = Arc::new(ShardRouter::new_local(4)); // 4 nodes simulation
-        
+
         let d_store = DistributedErasureCodingStore::new(local_store, router, None);
         let key = "distributed_obj_1";
         let data = b"Distributed Erasure Coding on Grid Test Data";
@@ -215,9 +226,9 @@ mod tests {
         let local_store = ErasureCodingStore::new(dir.path(), 4, 2);
         // Simulate a 10-node Grid cluster
         let router = Arc::new(ShardRouter::new_local(10));
-        
+
         let key = "routing_test_obj";
-        
+
         let mut target_nodes = std::collections::HashSet::new();
         // Simulate routing of 100 shards
         for i in 0..100 {
@@ -225,8 +236,11 @@ mod tests {
             let node_idx = router.shard_index(shard_key.as_bytes());
             target_nodes.insert(node_idx);
         }
-        
+
         // uniform hashing should map 100 shards to multiple distinct nodes
-        assert!(target_nodes.len() > 1, "Shards should be distributed across multiple nodes");
+        assert!(
+            target_nodes.len() > 1,
+            "Shards should be distributed across multiple nodes"
+        );
     }
 }

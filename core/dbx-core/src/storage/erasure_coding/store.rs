@@ -4,7 +4,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 /// Erasure Coding Store (Cold Tier)
-/// 
+///
 /// 데이터를 K개의 데이터 청크와 M개의 패리티 청크로 나누어 디스크(혹은 원격 노드)에 저장합니다.
 pub struct ErasureCodingStore {
     base_dir: PathBuf,
@@ -23,13 +23,17 @@ impl ErasureCodingStore {
         }
     }
 
-    pub fn k(&self) -> usize { self.k }
-    pub fn m(&self) -> usize { self.m }
+    pub fn k(&self) -> usize {
+        self.k
+    }
+    pub fn m(&self) -> usize {
+        self.m
+    }
 
     /// 인코딩 (데이터 -> K 프래그먼트 + M 패리티)
     pub fn encode(&self, data: &[u8]) -> DbxResult<Vec<Vec<u8>>> {
         let rs = ReedSolomon::new(self.k, self.m).map_err(|e| DbxError::Storage(e.to_string()))?;
-        
+
         let chunk_size = (data.len() + self.k - 1) / self.k;
         let mut shards = vec![vec![0u8; chunk_size]; self.k + self.m];
 
@@ -44,7 +48,8 @@ impl ErasureCodingStore {
         }
 
         // 2. 패리티 생성
-        rs.encode(&mut shards).map_err(|e| DbxError::Storage(e.to_string()))?;
+        rs.encode(&mut shards)
+            .map_err(|e| DbxError::Storage(e.to_string()))?;
         Ok(shards)
     }
 
@@ -59,7 +64,10 @@ impl ErasureCodingStore {
 
     /// 샤드를 디스크에서 읽기
     pub fn fetch_shard(&self, key: &str, shard_id: usize) -> DbxResult<Option<Vec<u8>>> {
-        let shard_path = self.base_dir.join(key).join(format!("shard_{}.blk", shard_id));
+        let shard_path = self
+            .base_dir
+            .join(key)
+            .join(format!("shard_{}.blk", shard_id));
         if shard_path.exists() {
             Ok(Some(fs::read(shard_path)?))
         } else {
@@ -68,14 +76,22 @@ impl ErasureCodingStore {
     }
 
     /// 샤드들을 디스크에 저장
-    pub fn store_shards(&self, key: &str, shards: &[Vec<u8>], original_len: usize) -> DbxResult<()> {
+    pub fn store_shards(
+        &self,
+        key: &str,
+        shards: &[Vec<u8>],
+        original_len: usize,
+    ) -> DbxResult<()> {
         for (i, shard) in shards.iter().enumerate() {
             self.store_shard(key, i, shard)?;
         }
-        
+
         let object_dir = self.base_dir.join(key);
         // 메타데이터 (원본 길이) 기록
-        fs::write(object_dir.join("metadata.json"), format!("{{\"length\":{}}}", original_len))?;
+        fs::write(
+            object_dir.join("metadata.json"),
+            format!("{{\"length\":{}}}", original_len),
+        )?;
         Ok(())
     }
 
@@ -86,11 +102,16 @@ impl ErasureCodingStore {
     }
 
     /// 샤드들로부터 데이터 복구
-    pub fn decode(&self, mut shards: Vec<Option<Vec<u8>>>, original_len: usize) -> DbxResult<Vec<u8>> {
+    pub fn decode(
+        &self,
+        mut shards: Vec<Option<Vec<u8>>>,
+        original_len: usize,
+    ) -> DbxResult<Vec<u8>> {
         let rs = ReedSolomon::new(self.k, self.m).map_err(|e| DbxError::Storage(e.to_string()))?;
-        
+
         // 1. 유실된 샤드 복원
-        rs.reconstruct(&mut shards).map_err(|e| DbxError::Storage(e.to_string()))?;
+        rs.reconstruct(&mut shards)
+            .map_err(|e| DbxError::Storage(e.to_string()))?;
 
         // 2. 원본 데이터 합치기
         // original_len이 usize::MAX 같은 비정상적인 값일 경우를 대비해 capacity 제한
@@ -98,9 +119,9 @@ impl ErasureCodingStore {
         let max_len = chunk_size * self.k;
         let capacity = std::cmp::min(original_len, max_len);
         let mut output = Vec::with_capacity(capacity);
-        
+
         let mut bytes_written = 0;
-        
+
         for shard in shards.into_iter().take(self.k) {
             if let Some(data) = shard {
                 let remaining = original_len.saturating_sub(bytes_written);
@@ -121,14 +142,19 @@ impl ErasureCodingStore {
         }
 
         let meta_str = fs::read_to_string(object_dir.join("metadata.json"))?;
-        
+
         // JSON 파싱 (간이 구현)
-        let length_str = meta_str.split(':').nth(1).unwrap_or("0").trim_end_matches('}').trim();
+        let length_str = meta_str
+            .split(':')
+            .nth(1)
+            .unwrap_or("0")
+            .trim_end_matches('}')
+            .trim();
         let original_len: usize = length_str.parse().unwrap_or(0);
 
         let rs = ReedSolomon::new(self.k, self.m).map_err(|e| DbxError::Storage(e.to_string()))?;
         let mut shards: Vec<Option<Vec<u8>>> = vec![None; self.k + self.m];
-        
+
         // 1. 남아있는 샤드들 읽기
         for i in 0..(self.k + self.m) {
             let shard_path = object_dir.join(format!("shard_{}.blk", i));
@@ -138,12 +164,13 @@ impl ErasureCodingStore {
         }
 
         // 2. 유실된 Шад 복원
-        rs.reconstruct(&mut shards).map_err(|e| DbxError::Storage(e.to_string()))?;
+        rs.reconstruct(&mut shards)
+            .map_err(|e| DbxError::Storage(e.to_string()))?;
 
         // 3. 원본 데이터 합치기
         let mut output = Vec::with_capacity(original_len);
         let mut bytes_written = 0;
-        
+
         for shard in shards.into_iter().take(self.k) {
             if let Some(data) = shard {
                 let remaining = original_len - bytes_written;
@@ -155,7 +182,7 @@ impl ErasureCodingStore {
 
         Ok(Some(output))
     }
-    
+
     /// Delete EC fragments
     pub fn delete(&self, key: &str) -> DbxResult<bool> {
         let object_dir = self.base_dir.join(key);

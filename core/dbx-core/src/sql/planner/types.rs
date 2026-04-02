@@ -12,6 +12,8 @@ pub enum LogicalPlan {
         table: String,
         columns: Vec<String>,
         filter: Option<Expr>,
+        #[serde(default)]
+        ros_files: Vec<String>,
     },
     /// 컬럼 선택/계산
     Project {
@@ -309,6 +311,8 @@ pub enum PhysicalPlan {
         table: String,
         projection: Vec<usize>,
         filter: Option<PhysicalExpr>,
+        /// ROS (Parquet) 파일 목록 (Phase 6 파티션 푸루닝)
+        ros_files: Vec<String>,
     },
     /// Hash Join
     HashJoin {
@@ -459,7 +463,6 @@ impl PhysicalPlan {
             PhysicalPlan::DropJob { .. } => false,
             PhysicalPlan::GridExchange { .. } => false, // 플레이스홀더 — 실행 전 교체됨
             PhysicalPlan::ShuffleWriter { input, .. } => input.is_analytical(),
-
         }
     }
 

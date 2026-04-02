@@ -25,6 +25,7 @@ impl PhysicalPlanner {
                 table,
                 columns: _,
                 filter,
+                ros_files,
             } => {
                 let schemas = self.table_schemas.read().unwrap();
                 let schema = schemas
@@ -52,6 +53,7 @@ impl PhysicalPlanner {
                     table: table.clone(),
                     projection: vec![],
                     filter: physical_filter,
+                    ros_files: ros_files.clone(),
                 })
             }
             LogicalPlan::Project { input, projections } => {
@@ -682,6 +684,7 @@ mod tests {
             table: "users".to_string(),
             projection: vec![0, 1],
             filter: None,
+            ros_files: vec![],
         };
         assert!(!plan1.is_analytical());
         assert_eq!(plan1.tables(), vec!["users"]);
@@ -691,6 +694,7 @@ mod tests {
             table: "users".to_string(),
             projection: vec![0, 1],
             filter: Some(PhysicalExpr::Column(0)),
+            ros_files: vec![],
         };
         assert!(plan2.is_analytical());
 
@@ -700,11 +704,13 @@ mod tests {
                 table: "users".to_string(),
                 projection: vec![0],
                 filter: None,
+                ros_files: vec![],
             }),
             right: Box::new(PhysicalPlan::TableScan {
                 table: "orders".to_string(),
                 projection: vec![0],
                 filter: None,
+                ros_files: vec![],
             }),
             on: vec![(0, 0)],
             join_type: JoinType::Inner,

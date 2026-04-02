@@ -7,6 +7,7 @@ fn scan(table: &str) -> LogicalPlan {
         table: table.to_string(),
         columns: vec![],
         filter: None,
+        ros_files: vec![],
     }
 }
 
@@ -66,6 +67,7 @@ fn test_predicate_pushdown_merge_filters() {
                 op: BinaryOperator::Eq,
                 right: Box::new(Expr::Literal(ScalarValue::Boolean(true))),
             }),
+            ros_files: vec![],
         }),
         predicate: Expr::BinaryOp {
             left: Box::new(Expr::Column("age".to_string())),

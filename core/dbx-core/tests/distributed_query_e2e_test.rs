@@ -49,7 +49,10 @@ fn make_sales_table(rows: &[(i32, i64)]) -> (Arc<Schema>, Vec<RecordBatch>) {
     let vals: Vec<i64> = rows.iter().map(|(_, v)| *v).collect();
     let batch = RecordBatch::try_new(
         Arc::clone(&schema),
-        vec![Arc::new(Int32Array::from(keys)), Arc::new(Int64Array::from(vals))],
+        vec![
+            Arc::new(Int32Array::from(keys)),
+            Arc::new(Int64Array::from(vals)),
+        ],
     )
     .unwrap();
     (schema, vec![batch])
@@ -107,6 +110,7 @@ fn make_partial_plan(table: &str) -> PhysicalPlan {
             table: table.to_string(),
             projection: vec![],
             filter: None,
+            ros_files: vec![],
         }),
         group_by: vec![0],
         aggregates: vec![PhysicalAggExpr {
@@ -141,6 +145,7 @@ fn test_fragment_splitter_produces_correct_plans() {
                 table: "t".to_string(),
                 projection: vec![],
                 filter: None,
+                ros_files: vec![],
             }),
             group_by: vec![0],
             aggregates: vec![PhysicalAggExpr {
@@ -163,16 +168,22 @@ fn test_fragment_splitter_produces_correct_plans() {
 
     let coord = pair.coordinator_plan.expect("코디네이터 플랜 생성 실패");
     assert!(
-        matches!(coord, PhysicalPlan::HashAggregate { mode: AggregateMode::Final, .. }),
+        matches!(
+            coord,
+            PhysicalPlan::HashAggregate {
+                mode: AggregateMode::Final,
+                ..
+            }
+        ),
         "코디네이터 루트는 Final Agg여야 함"
     );
 
     assert!(
         matches!(
-            pair.worker_plan,
-            PhysicalPlan::HashAggregate { mode: AggregateMode::Partial, .. }
+            pair.stages[0].plans[0],
+            PhysicalPlan::ShuffleWriter { ref input, .. } if matches!(**input, PhysicalPlan::HashAggregate { mode: AggregateMode::Partial, .. })
         ),
-        "워커 루트는 Partial Agg여야 함"
+        "워커 루트는 ShuffleWriter로 감싸진 Partial Agg여야 함"
     );
 }
 
@@ -185,6 +196,7 @@ fn test_fragment_splitter_single_node_fallback() {
         table: "t".to_string(),
         projection: vec![],
         filter: None,
+        ros_files: vec![],
     };
 
     let pair = FragmentSplitter::split(plan).unwrap();
@@ -260,7 +272,9 @@ async fn test_distributed_pipeline_in_process() -> DbxResult<()> {
             m
         }));
         let executor = LocalExecutor::new(ts, ss);
-        executor.execute_collect(&make_partial_plan("sales")).unwrap()
+        executor
+            .execute_collect(&make_partial_plan("sales"))
+            .unwrap()
     }
 
     let w1_batches = run_worker(&w1_data);

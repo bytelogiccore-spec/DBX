@@ -12,33 +12,54 @@
 //! - 분산 Join (Shuffle Exchange) — Phase 4에서 구현
 
 use crate::error::DbxResult;
-use crate::sql::planner::types::{AggregateMode, PhysicalAggExpr, PhysicalPlan};
+use crate::sql::planner::types::{AggregateMode, PhysicalPlan};
 
-/// 분할 결과 — 코디네이터 플랜과 워커 플랜의 쌍
-pub struct FragmentPair {
-    /// 코디네이터가 실행할 플랜 (Final Agg 이상, 입력은 Exchange 수신으로 교체됨)
+pub struct FragmentStage {
+    pub stage_id: usize,
+    pub plans: Vec<PhysicalPlan>,
+}
+
+/// 분할 결과 — 코디네이터 플랜과 스테이지 배열의 쌍 (Fragment DAG)
+pub struct FragmentDAG {
+    /// 코디네이터가 실행할 플랜 (Join 이상, 입력은 Exchange 수신으로 교체됨)
     /// `None`이면 플랜이 분산 실행 대상이 아님 (단일 노드 실행)
     pub coordinator_plan: Option<PhysicalPlan>,
-    /// 워커 노드가 실행할 플랜 (Partial Agg 이하)
-    pub worker_plan: PhysicalPlan,
+    /// 워커 노드들이 실행할 스테이지 플랜들의 위상 정렬된 배열
+    pub stages: Vec<FragmentStage>,
 }
 
 pub struct FragmentSplitter;
 
 impl FragmentSplitter {
-    /// PhysicalPlan → FragmentPair 분할
+    /// PhysicalPlan → FragmentDAG 분할
     ///
-    /// 분산 실행 경계(Final Agg)를 찾으면 분리하고,
-    /// 찾을 수 없으면 전체 플랜을 단일 워커 플랜으로 반환합니다 (`coordinator_plan: None`).
-    pub fn split(plan: PhysicalPlan) -> DbxResult<FragmentPair> {
+    /// 분산 실행 경계(Final Agg 또는 HashJoin)를 찾으면 분리하고,
+    /// 찾을 수 없으면 전체 플랜을 단일 스테이지 플랜으로 반환합니다 (`coordinator_plan: None`).
+    pub fn split(plan: PhysicalPlan) -> DbxResult<FragmentDAG> {
         match Self::try_split(plan)? {
-            SplitResult::Split { coordinator, worker } => Ok(FragmentPair {
+            SplitResult::SplitDAG {
+                coordinator,
+                stages,
+            } => Ok(FragmentDAG {
                 coordinator_plan: Some(coordinator),
-                worker_plan: worker,
+                stages,
             }),
-            SplitResult::Unsplit(plan) => Ok(FragmentPair {
+            SplitResult::Split {
+                coordinator,
+                worker,
+            } => Ok(FragmentDAG {
+                coordinator_plan: Some(coordinator),
+                stages: vec![FragmentStage {
+                    stage_id: 1,
+                    plans: vec![worker],
+                }],
+            }),
+            SplitResult::Unsplit(plan) => Ok(FragmentDAG {
                 coordinator_plan: None,
-                worker_plan: plan,
+                stages: vec![FragmentStage {
+                    stage_id: 1,
+                    plans: vec![plan],
+                }],
             }),
         }
     }
@@ -59,80 +80,190 @@ impl FragmentSplitter {
                 let worker_plan = *input;
 
                 // Coordinator Fragment: Final Agg, 입력은 GridExchange(Placeholder)로 교체.
-                // 실제 `GridExchangeOperator` 연결은 DistributedExecutor가 런타임에 담당.
                 let coord_plan = PhysicalPlan::HashAggregate {
                     input: Box::new(PhysicalPlan::GridExchange {
-                        exchange_id: 0, // 기본 코디네이터 단일 Exchange ID
+                        exchange_id: 1, // Agg용 기본 코디네이터 단일 Exchange ID
                         schema_hint: extract_output_columns(&worker_plan),
                     }),
                     group_by,
                     aggregates,
                     mode: AggregateMode::Final,
                 };
-                Ok(SplitResult::Split {
+
+                // Aggregation은 ShuffleWriter (브로드캐스트) 로 감싸서 워커에 배치
+                let worker_shuffle = PhysicalPlan::ShuffleWriter {
+                    input: Box::new(worker_plan),
+                    hash_params: vec![], // ShuffleSalting::ReplicateProbe 등이 사용됨
+                    target_nodes: vec![], // DistributedExecutor가 라우팅
+                    exchange_id: 1,
+                    salting: crate::sql::planner::types::ShuffleSalting::None,
+                };
+
+                Ok(SplitResult::SplitDAG {
                     coordinator: coord_plan,
-                    worker: worker_plan,
+                    stages: vec![FragmentStage {
+                        stage_id: 1,
+                        plans: vec![worker_shuffle],
+                    }],
+                })
+            }
+
+            // ─── 분기점: HashJoin (Multi-stage DAG) ─────────────────────────
+            PhysicalPlan::HashJoin {
+                left,
+                right,
+                join_type,
+                on,
+            } => {
+                let left_worker = *left;
+                let right_worker = *right;
+
+                // Coordinator: HashJoin 수신부
+                let coord_plan = PhysicalPlan::HashJoin {
+                    left: Box::new(PhysicalPlan::GridExchange {
+                        exchange_id: 1,
+                        schema_hint: extract_output_columns(&left_worker),
+                    }),
+                    right: Box::new(PhysicalPlan::GridExchange {
+                        exchange_id: 2,
+                        schema_hint: extract_output_columns(&right_worker),
+                    }),
+                    join_type,
+                    on,
+                };
+
+                // Stage 1: Left (Build)
+                let left_shuffle = PhysicalPlan::ShuffleWriter {
+                    input: Box::new(left_worker),
+                    hash_params: vec![], // 향후 Hash 분할용 확장
+                    target_nodes: vec![],
+                    exchange_id: 1,
+                    salting: crate::sql::planner::types::ShuffleSalting::None,
+                };
+
+                // Stage 2: Right (Probe)
+                let right_shuffle = PhysicalPlan::ShuffleWriter {
+                    input: Box::new(right_worker),
+                    hash_params: vec![],
+                    target_nodes: vec![],
+                    exchange_id: 2,
+                    salting: crate::sql::planner::types::ShuffleSalting::None,
+                };
+
+                Ok(SplitResult::SplitDAG {
+                    coordinator: coord_plan,
+                    stages: vec![
+                        FragmentStage {
+                            stage_id: 1,
+                            plans: vec![left_shuffle],
+                        },
+                        FragmentStage {
+                            stage_id: 2,
+                            plans: vec![right_shuffle],
+                        },
+                    ],
                 })
             }
 
             // ─── 상위 래퍼: 재귀 탐색 ──────────────────────────────────────────
-            PhysicalPlan::Projection { input, exprs, aliases } => {
-                match Self::try_split(*input)? {
-                    SplitResult::Split { coordinator, worker } => Ok(SplitResult::Split {
-                        coordinator: PhysicalPlan::Projection {
-                            input: Box::new(coordinator),
-                            exprs,
-                            aliases,
-                        },
-                        worker,
-                    }),
-                    SplitResult::Unsplit(unchanged) => Ok(SplitResult::Unsplit(
-                        PhysicalPlan::Projection {
-                            input: Box::new(unchanged),
-                            exprs,
-                            aliases,
-                        },
-                    )),
+            PhysicalPlan::Projection {
+                input,
+                exprs,
+                aliases,
+            } => match Self::try_split(*input)? {
+                SplitResult::SplitDAG {
+                    coordinator,
+                    stages,
+                } => Ok(SplitResult::SplitDAG {
+                    coordinator: PhysicalPlan::Projection {
+                        input: Box::new(coordinator),
+                        exprs,
+                        aliases,
+                    },
+                    stages,
+                }),
+                SplitResult::Split {
+                    coordinator,
+                    worker,
+                } => Ok(SplitResult::Split {
+                    coordinator: PhysicalPlan::Projection {
+                        input: Box::new(coordinator),
+                        exprs: exprs.clone(),
+                        aliases: aliases.clone(),
+                    },
+                    worker,
+                }),
+                SplitResult::Unsplit(unchanged) => {
+                    Ok(SplitResult::Unsplit(PhysicalPlan::Projection {
+                        input: Box::new(unchanged),
+                        exprs,
+                        aliases,
+                    }))
                 }
-            }
+            },
 
-            PhysicalPlan::Limit { input, count, offset } => {
-                match Self::try_split(*input)? {
-                    SplitResult::Split { coordinator, worker } => Ok(SplitResult::Split {
-                        coordinator: PhysicalPlan::Limit {
-                            input: Box::new(coordinator),
-                            count,
-                            offset,
-                        },
-                        worker,
-                    }),
-                    SplitResult::Unsplit(unchanged) => Ok(SplitResult::Unsplit(
-                        PhysicalPlan::Limit {
-                            input: Box::new(unchanged),
-                            count,
-                            offset,
-                        },
-                    )),
-                }
-            }
+            PhysicalPlan::Limit {
+                input,
+                count,
+                offset,
+            } => match Self::try_split(*input)? {
+                SplitResult::SplitDAG {
+                    coordinator,
+                    stages,
+                } => Ok(SplitResult::SplitDAG {
+                    coordinator: PhysicalPlan::Limit {
+                        input: Box::new(coordinator),
+                        count,
+                        offset,
+                    },
+                    stages,
+                }),
+                SplitResult::Split {
+                    coordinator,
+                    worker,
+                } => Ok(SplitResult::Split {
+                    coordinator: PhysicalPlan::Limit {
+                        input: Box::new(coordinator),
+                        count,
+                        offset,
+                    },
+                    worker,
+                }),
+                SplitResult::Unsplit(unchanged) => Ok(SplitResult::Unsplit(PhysicalPlan::Limit {
+                    input: Box::new(unchanged),
+                    count,
+                    offset,
+                })),
+            },
 
-            PhysicalPlan::SortMerge { input, order_by } => {
-                match Self::try_split(*input)? {
-                    SplitResult::Split { coordinator, worker } => Ok(SplitResult::Split {
-                        coordinator: PhysicalPlan::SortMerge {
-                            input: Box::new(coordinator),
-                            order_by,
-                        },
-                        worker,
-                    }),
-                    SplitResult::Unsplit(unchanged) => Ok(SplitResult::Unsplit(
-                        PhysicalPlan::SortMerge {
-                            input: Box::new(unchanged),
-                            order_by,
-                        },
-                    )),
+            PhysicalPlan::SortMerge { input, order_by } => match Self::try_split(*input)? {
+                SplitResult::SplitDAG {
+                    coordinator,
+                    stages,
+                } => Ok(SplitResult::SplitDAG {
+                    coordinator: PhysicalPlan::SortMerge {
+                        input: Box::new(coordinator),
+                        order_by: order_by.clone(),
+                    },
+                    stages,
+                }),
+                SplitResult::Split {
+                    coordinator,
+                    worker,
+                } => Ok(SplitResult::Split {
+                    coordinator: PhysicalPlan::SortMerge {
+                        input: Box::new(coordinator),
+                        order_by: order_by.clone(),
+                    },
+                    worker,
+                }),
+                SplitResult::Unsplit(unchanged) => {
+                    Ok(SplitResult::Unsplit(PhysicalPlan::SortMerge {
+                        input: Box::new(unchanged),
+                        order_by,
+                    }))
                 }
-            }
+            },
 
             // ─── 분기 불명: 단일 노드 플랜으로 반환 ──────────────────────────
             other => Ok(SplitResult::Unsplit(other)),
@@ -142,6 +273,10 @@ impl FragmentSplitter {
 
 /// 내부 분할 상태
 enum SplitResult {
+    SplitDAG {
+        coordinator: PhysicalPlan,
+        stages: Vec<FragmentStage>,
+    },
     Split {
         coordinator: PhysicalPlan,
         worker: PhysicalPlan,
@@ -152,12 +287,22 @@ enum SplitResult {
 /// 워커 플랜 루트의 출력 컬럼 수를 추정 (GridExchange 플레이스홀더 스키마 힌트용)
 fn extract_output_columns(plan: &PhysicalPlan) -> usize {
     match plan {
-        PhysicalPlan::HashAggregate { group_by, aggregates, .. } => {
-            group_by.len() + aggregates.len()
-        }
+        PhysicalPlan::HashAggregate {
+            group_by,
+            aggregates,
+            ..
+        } => group_by.len() + aggregates.len(),
         PhysicalPlan::Projection { exprs, .. } => exprs.len(),
-        PhysicalPlan::TableScan { projection, .. } => {
-            if projection.is_empty() { 8 } else { projection.len() } // 스키마 없이 추정
+        PhysicalPlan::TableScan {
+            projection,
+            ros_files: _,
+            ..
+        } => {
+            if projection.is_empty() {
+                8
+            } else {
+                projection.len()
+            }
         }
         _ => 4, // 안전한 기본값
     }
@@ -166,7 +311,9 @@ fn extract_output_columns(plan: &PhysicalPlan) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::sql::planner::types::{AggregateFunction, AggregateMode, PhysicalAggExpr, PhysicalPlan};
+    use crate::sql::planner::types::{
+        AggregateFunction, AggregateMode, PhysicalAggExpr, PhysicalPlan,
+    };
 
     fn make_partial_agg() -> PhysicalPlan {
         PhysicalPlan::HashAggregate {
@@ -174,6 +321,7 @@ mod tests {
                 table: "sales".to_string(),
                 projection: vec![],
                 filter: None,
+                ros_files: vec![],
             }),
             group_by: vec![0],
             aggregates: vec![PhysicalAggExpr {
@@ -198,40 +346,65 @@ mod tests {
             mode: AggregateMode::Final,
         };
 
-        let pair = FragmentSplitter::split(plan).unwrap();
+        let dag = FragmentSplitter::split(plan).unwrap();
 
         // 코디네이터 플랜 존재 확인
-        assert!(pair.coordinator_plan.is_some(), "coordinator_plan should be Some");
-        let coord = pair.coordinator_plan.unwrap();
+        assert!(
+            dag.coordinator_plan.is_some(),
+            "coordinator_plan should be Some"
+        );
+        let coord = dag.coordinator_plan.unwrap();
 
         // 코디네이터 플랜이 Final Agg인지 확인
         assert!(matches!(
             coord,
-            PhysicalPlan::HashAggregate { mode: AggregateMode::Final, .. }
+            PhysicalPlan::HashAggregate {
+                mode: AggregateMode::Final,
+                ..
+            }
         ));
 
         // 코디네이터 입력이 GridExchange인지 확인
         if let PhysicalPlan::HashAggregate { input, .. } = &coord {
-            assert!(matches!(**input, PhysicalPlan::GridExchange { .. }),
-                "coordinator input should be GridExchange");
+            assert!(
+                matches!(**input, PhysicalPlan::GridExchange { .. }),
+                "coordinator input should be GridExchange"
+            );
         }
 
-        // 워커 플랜이 Partial Agg인지 확인
-        assert!(matches!(
-            pair.worker_plan,
-            PhysicalPlan::HashAggregate { mode: AggregateMode::Partial, .. }
-        ));
+        // 워커 플랜 스테이지 확인
+        assert_eq!(dag.stages.len(), 1, "Should have 1 stage for aggregation");
+        let worker_plan = &dag.stages[0].plans[0];
+
+        // 플랜이 ShuffleWriter로 래핑되어 있는지 확인
+        if let PhysicalPlan::ShuffleWriter { input, .. } = worker_plan {
+            assert!(matches!(
+                **input,
+                PhysicalPlan::HashAggregate {
+                    mode: AggregateMode::Partial,
+                    ..
+                }
+            ));
+        } else {
+            panic!("Expected ShuffleWriter");
+        }
     }
 
     #[test]
     fn test_no_split_simple_scan() {
         let plan = PhysicalPlan::TableScan {
-            table: "t".to_string(),
+            table: "T1".to_string(),
             projection: vec![],
             filter: None,
+            ros_files: vec![],
         };
 
-        let pair = FragmentSplitter::split(plan).unwrap();
-        assert!(pair.coordinator_plan.is_none(), "simple scan should not split");
+        let dag = FragmentSplitter::split(plan).unwrap();
+        assert!(
+            dag.coordinator_plan.is_none(),
+            "simple scan should not split"
+        );
+        assert_eq!(dag.stages.len(), 1);
+        assert_eq!(dag.stages[0].plans.len(), 1);
     }
 }

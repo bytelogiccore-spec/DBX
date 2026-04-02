@@ -1,10 +1,10 @@
-use std::path::{Path, PathBuf};
 use std::fs;
 use std::io;
+use std::path::{Path, PathBuf};
 use tracing::info;
 
 /// 스토리지 경로 관리자 (StoragePathManager)
-/// 
+///
 /// 5-Tier 하이브리드 스토리지 시스템의 파편화된 파일 경로를 하나의 루트 디렉토리 산하로 통합 관리합니다.
 /// 단일 폴더(Virtual File System 대체) 방식을 통해 유저의 단순 백업/복제를 지원합니다.
 #[derive(Debug, Clone)]
@@ -62,7 +62,7 @@ impl StoragePathManager {
         fs::create_dir_all(&p)?;
         Ok(p)
     }
-    
+
     /// 메모리 초과 시 스필링할 객체 캐시(L2 Cache) 경로
     pub fn l2_cache_dir(&self) -> io::Result<PathBuf> {
         let p = self.root_dir.join("l2_cache");

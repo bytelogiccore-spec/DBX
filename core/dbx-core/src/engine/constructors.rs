@@ -80,7 +80,7 @@ impl Database {
         let storage_manager = Arc::new(crate::storage::manager::StoragePathManager::new(path));
         let wos_path = storage_manager.wos_dir()?;
         let wal_path = storage_manager.wal_path();
-        
+
         // Initialize WAL
         let wal = Arc::new(crate::wal::WriteAheadLog::open(&wal_path)?);
 
@@ -106,7 +106,7 @@ impl Database {
         let (tx, rx) = std::sync::mpsc::channel::<BackgroundJob>();
         spawn_background_worker(rx, Some(wal.clone()), None, Arc::clone(&db_index));
 
-        let db = Self {
+        let mut db = Self {
             delta: DeltaVariant::RowBased(Arc::new(DeltaStore::new())),
             memory_wos: WosVariant::InMemory(Arc::new(InMemoryWosBackend::new())),
             file_wos: Some(WosVariant::Native(Arc::clone(&wos_backend))),
@@ -159,7 +159,13 @@ impl Database {
             )),
             metrics: Arc::new(crate::monitoring::DbxMetrics::new()),
             cas_locks: Arc::new(crate::engine::database::RowLockManager::new(10)),
+            metadata_registry: Arc::new(crate::storage::metadata::MetadataRegistry::new()),
         };
+
+        db.sql_optimizer
+            .register_rule(Box::new(crate::sql::optimizer::TierPruningRule::new(
+                Arc::clone(&db.metadata_registry),
+            )));
 
         // Perform crash recovery
         let apply_fn = |record: &crate::wal::WalRecord| -> DbxResult<()> {
@@ -290,7 +296,7 @@ impl Database {
         info!("Opening encrypted database at {:?}", path);
         let storage_manager = Arc::new(crate::storage::manager::StoragePathManager::new(path));
         let wos_path = storage_manager.wos_dir()?;
-        
+
         // Initialize encrypted WAL
         let wal_path = storage_manager.encrypted_wal_path();
         let encrypted_wal = Arc::new(crate::wal::encrypted_wal::EncryptedWal::open(
@@ -310,7 +316,7 @@ impl Database {
             Arc::clone(&db_index),
         );
 
-        let db = Self {
+        let mut db = Self {
             delta: DeltaVariant::RowBased(Arc::new(DeltaStore::new())),
             memory_wos: WosVariant::InMemory(Arc::new(InMemoryWosBackend::new())),
             file_wos: Some(WosVariant::Encrypted(Arc::clone(&enc_wos))),
@@ -363,7 +369,14 @@ impl Database {
             )),
             metrics: Arc::new(crate::monitoring::DbxMetrics::new()),
             cas_locks: Arc::new(crate::engine::database::RowLockManager::new(10)),
+            metadata_registry: Arc::new(crate::storage::metadata::MetadataRegistry::new()),
         };
+
+        db.sql_optimizer
+            .register_rule(Box::new(crate::sql::optimizer::TierPruningRule::new(
+                Arc::clone(&db.metadata_registry),
+            )));
+
         let records = encrypted_wal.replay()?;
         let mut recovered_count = 0;
         for record in &records {
@@ -415,13 +428,16 @@ impl Database {
     pub fn open_in_memory() -> DbxResult<Self> {
         info!("Creating in-memory database");
         let storage_manager = Arc::new(crate::storage::manager::StoragePathManager::new(
-            tempfile::tempdir().map_err(|e| crate::error::DbxError::Storage(e.to_string()))?.path().to_path_buf()
+            tempfile::tempdir()
+                .map_err(|e| crate::error::DbxError::Storage(e.to_string()))?
+                .path()
+                .to_path_buf(),
         ));
         let db_index = Arc::new(HashIndex::new());
         let (tx, rx) = std::sync::mpsc::channel::<BackgroundJob>();
         spawn_background_worker(rx, None, None, Arc::clone(&db_index));
 
-        Ok(Self {
+        let mut db = Self {
             delta: DeltaVariant::RowBased(Arc::new(DeltaStore::new())),
             memory_wos: WosVariant::InMemory(Arc::new(InMemoryWosBackend::new())),
             file_wos: None,
@@ -474,7 +490,15 @@ impl Database {
             )),
             metrics: Arc::new(crate::monitoring::DbxMetrics::new()),
             cas_locks: Arc::new(crate::engine::database::RowLockManager::new(10)),
-        })
+            metadata_registry: Arc::new(crate::storage::metadata::MetadataRegistry::new()),
+        };
+
+        db.sql_optimizer
+            .register_rule(Box::new(crate::sql::optimizer::TierPruningRule::new(
+                Arc::clone(&db.metadata_registry),
+            )));
+
+        Ok(db)
     }
 
     /// 암호화된 인메모리 데이터베이스를 생성합니다.
@@ -499,13 +523,16 @@ impl Database {
     pub fn open_in_memory_encrypted(encryption: EncryptionConfig) -> DbxResult<Self> {
         info!("Creating encrypted in-memory database");
         let storage_manager = Arc::new(crate::storage::manager::StoragePathManager::new(
-            tempfile::tempdir().map_err(|e| crate::error::DbxError::Storage(e.to_string()))?.path().to_path_buf()
+            tempfile::tempdir()
+                .map_err(|e| crate::error::DbxError::Storage(e.to_string()))?
+                .path()
+                .to_path_buf(),
         ));
         let db_index = Arc::new(HashIndex::new());
         let (tx, rx) = std::sync::mpsc::channel::<BackgroundJob>();
         spawn_background_worker(rx, None, None, Arc::clone(&db_index));
 
-        Ok(Self {
+        let mut db = Self {
             delta: DeltaVariant::RowBased(Arc::new(DeltaStore::new())),
             memory_wos: WosVariant::Encrypted(Arc::new(EncryptedWosBackend::open_temporary(
                 encryption.clone(),
@@ -560,7 +587,15 @@ impl Database {
             )),
             metrics: Arc::new(crate::monitoring::DbxMetrics::new()),
             cas_locks: Arc::new(crate::engine::database::RowLockManager::new(10)),
-        })
+            metadata_registry: Arc::new(crate::storage::metadata::MetadataRegistry::new()),
+        };
+
+        db.sql_optimizer
+            .register_rule(Box::new(crate::sql::optimizer::TierPruningRule::new(
+                Arc::clone(&db.metadata_registry),
+            )));
+
+        Ok(db)
     }
 
     /// 최대 안전성 설정으로 데이터베이스를 엽니다 (Full durability).
@@ -607,7 +642,7 @@ impl Database {
         );
         let storage_manager = Arc::new(crate::storage::manager::StoragePathManager::new(path));
         let wos_path = storage_manager.wos_dir()?;
-        
+
         // Initialize WAL
         let wal_path = storage_manager.wal_path();
         let wal = Arc::new(crate::wal::WriteAheadLog::open(&wal_path)?);
@@ -677,6 +712,7 @@ impl Database {
             )),
             metrics: Arc::new(crate::monitoring::DbxMetrics::new()),
             cas_locks: Arc::new(crate::engine::database::RowLockManager::new(10)),
+            metadata_registry: Arc::new(crate::storage::metadata::MetadataRegistry::new()),
         };
 
         // Crash recovery
@@ -829,7 +865,7 @@ impl Database {
                 .expect("Failed to create parallel engine"),
         );
 
-        let db = Self {
+        let mut db = Self {
             delta: DeltaVariant::RowBased(Arc::new(crate::storage::delta_store::DeltaStore::new())),
             memory_wos: crate::engine::WosVariant::InMemory(Arc::new(
                 crate::storage::memory_wos::InMemoryWosBackend::new(),
@@ -880,7 +916,13 @@ impl Database {
             )),
             metrics: Arc::new(crate::monitoring::DbxMetrics::new()),
             cas_locks: Arc::new(crate::engine::database::RowLockManager::new(10)),
+            metadata_registry: Arc::new(crate::storage::metadata::MetadataRegistry::new()),
         };
+
+        db.sql_optimizer
+            .register_rule(Box::new(crate::sql::optimizer::TierPruningRule::new(
+                Arc::clone(&db.metadata_registry),
+            )));
 
         // Crash recovery
         let apply_fn = |record: &crate::wal::WalRecord| -> DbxResult<()> {

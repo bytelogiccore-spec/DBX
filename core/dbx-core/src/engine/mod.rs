@@ -48,10 +48,10 @@ pub use delta_variant::DeltaVariant;
 pub use feature_flags::{Feature, FeatureFlags};
 pub use lifecycle::LifecycleWorker;
 pub use metadata::{FieldMetadata, IndexMetadata, SchemaMetadata};
-pub use policy::{StorageStrategy, TablePolicy};
 pub use parallel_engine::{
     DbConfig, DirtyBufferMode, ParallelExecutionEngine, ParallelismConfig, ParallelizationPolicy,
 };
+pub use policy::{StorageStrategy, TablePolicy};
 pub use rollback::{Checkpoint, RollbackManager};
 pub use schema_builder::SchemaBuilder;
 pub use serialization::{SerializationRegistry, TwoLevelCache};

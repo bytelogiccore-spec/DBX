@@ -33,6 +33,7 @@ impl ProjectionPushdownRule {
                         table,
                         columns: scan_cols,
                         filter,
+                        ros_files,
                     } if !columns.is_empty() => {
                         let needed = self.extract_column_names(&columns);
                         let final_cols = if scan_cols.is_empty() {
@@ -48,6 +49,7 @@ impl ProjectionPushdownRule {
                                 table,
                                 columns: final_cols,
                                 filter,
+                                ros_files,
                             }),
                             projections: columns,
                         })

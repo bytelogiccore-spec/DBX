@@ -67,7 +67,9 @@ impl ShardRouter {
 
     /// 노드 주소 목록으로 라우터 생성
     pub fn new_with_addresses(addresses: Vec<String>) -> Self {
-        let shards: Vec<ShardNode> = addresses.into_iter().enumerate()
+        let shards: Vec<ShardNode> = addresses
+            .into_iter()
+            .enumerate()
             .map(|(i, addr)| ShardNode {
                 id: i,
                 address: addr,

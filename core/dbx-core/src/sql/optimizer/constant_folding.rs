@@ -76,10 +76,12 @@ impl ConstantFoldingRule {
                 table,
                 columns,
                 filter,
+                ros_files,
             } => Ok(LogicalPlan::Scan {
                 table,
                 columns,
                 filter: filter.map(|f| self.fold_expr(f)),
+                ros_files,
             }),
             other => Ok(other),
         }

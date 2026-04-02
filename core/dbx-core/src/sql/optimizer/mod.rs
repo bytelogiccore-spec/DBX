@@ -4,11 +4,12 @@
 //! 4가지 핵심 규칙: PredicatePushdown, ProjectionPushdown, ConstantFolding, LimitPushdown
 
 mod constant_folding;
+mod distributed_pushdown;
 mod limit_pushdown;
 mod predicate_pushdown;
 mod projection_pushdown;
-mod distributed_pushdown;
 mod subquery_unnesting;
+mod tier_pruning;
 
 #[cfg(test)]
 mod tests;
@@ -17,11 +18,12 @@ use crate::error::DbxResult;
 use crate::sql::planner::LogicalPlan;
 
 pub use constant_folding::ConstantFoldingRule;
+pub use distributed_pushdown::DistributedPushdownRule;
 pub use limit_pushdown::LimitPushdownRule;
 pub use predicate_pushdown::PredicatePushdownRule;
 pub use projection_pushdown::ProjectionPushdownRule;
-pub use distributed_pushdown::DistributedPushdownRule;
 pub use subquery_unnesting::SubqueryUnnestingRule;
+pub use tier_pruning::TierPruningRule;
 
 /// 최적화 규칙 트레이트
 pub trait OptimizationRule: Send + Sync {
@@ -52,6 +54,11 @@ impl QueryOptimizer {
         }
     }
 
+    /// 외부 구성 규칙 등록 (Phase 6 MetadataRegistry 연계 등)
+    pub fn register_rule(&mut self, rule: Box<dyn OptimizationRule>) {
+        // 푸루닝 규칙은 보통 푸시다운 이전/이후에 실행. 여기서는 맨 마지막(또는 첫번째)에 추가
+        self.rules.push(rule);
+    }
 
     /// 모든 규칙 적용
     pub fn optimize(&self, plan: LogicalPlan) -> DbxResult<LogicalPlan> {

@@ -24,11 +24,11 @@ pub struct TablePolicy {
     /// Hot Tier 보관 기간 (일 단위) - None이면 영구 보관
     pub hot_ttl_days: Option<u32>,
     pub hot_strategy: StorageStrategy,
-    
+
     /// Warm Tier 보관 기간 (일 단위) - None이면 영구 보관
     pub warm_ttl_days: Option<u32>,
     pub warm_strategy: StorageStrategy,
-    
+
     /// Cold Tier 보관 기간 (일 단위) - None이면 영구 보관
     pub cold_ttl_days: Option<u32>,
     pub cold_strategy: StorageStrategy,

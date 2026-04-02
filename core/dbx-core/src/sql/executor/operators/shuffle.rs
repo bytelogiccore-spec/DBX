@@ -1,11 +1,10 @@
-use std::sync::Arc;
-use crate::error::{DbxError, DbxResult};
+use crate::error::DbxResult;
 use crate::sql::executor::operators::PhysicalOperator;
 use crate::sql::planner::types::ShuffleSalting;
 use arrow::array::RecordBatch;
 use arrow::datatypes::Schema;
-use tokio::sync::mpsc;
 use rand::Rng;
+use tokio::sync::mpsc;
 
 /// Opaque wrapper struct that can be converted from an arrow Compute Error
 /// We will keep hash logic extremely simple.
@@ -49,7 +48,7 @@ impl PhysicalOperator for GridShuffleWriterOperator {
     fn next(&mut self) -> DbxResult<Option<RecordBatch>> {
         // Fetch next batch from input
         let batch_opt = self.input.next()?;
-        
+
         let batch = match batch_opt {
             Some(b) => b,
             None => return Ok(None),
@@ -63,16 +62,16 @@ impl PhysicalOperator for GridShuffleWriterOperator {
         // Basic implementation for Phase 4 Track C
         // Later we'll partition the Arrow Batch, but for now we format it
         // and handle ReplicateProbe and RandomDistributed
-        
+
         match &self.salting {
-            ShuffleSalting::ReplicateProbe { factor } => {
+            ShuffleSalting::ReplicateProbe { factor: _ } => {
                 // Broadcast essentially
                 let bytes = self.serialize_batch(&batch)?;
                 for sender in &self.target_senders {
                     let _ = sender.blocking_send(Ok(Some(bytes.clone())));
                 }
             }
-            ShuffleSalting::RandomDistributed { factor } => {
+            ShuffleSalting::RandomDistributed { factor: _ } => {
                 // Random round robin for now instead of complex arrow hashing
                 // Real DBs split the RecordBatch into N tiny batches using take()
                 // For simplicity, we can send the whole batch to a random node
@@ -90,7 +89,9 @@ impl PhysicalOperator for GridShuffleWriterOperator {
 
         // We return an empty batch so local execution doesn't process these rows locally
         // Because the data was SENT to other nodes.
-        Ok(Some(RecordBatch::new_empty(std::sync::Arc::new(self.input.schema().clone()))))
+        Ok(Some(RecordBatch::new_empty(std::sync::Arc::new(
+            self.input.schema().clone(),
+        ))))
     }
 
     fn reset(&mut self) -> DbxResult<()> {

@@ -63,10 +63,7 @@ pub enum StorageMessage {
         data: Vec<u8>,
     },
     /// 샤드 조회 요청
-    FetchShard {
-        key: String,
-        shard_id: usize,
-    },
+    FetchShard { key: String, shard_id: usize },
     /// 샤드 응답
     ShardResponse {
         key: String,
@@ -81,10 +78,16 @@ pub enum QueryMessage {
     /// 하위 노드에 쿼리 파편(Fragment) 실행 요청
     ExecuteFragment {
         execution_id: String,
-        /// bincode 직렬화된 PhysicalPlan 바이너리 (전 버전: plan_json: String)
-        plan_bytes: Vec<u8>,
+        stage_id: usize,
+        /// bincode 직렬화된 여러 개의 PhysicalPlan 바이너리
+        plans_bytes: Vec<Vec<u8>>,
         /// 코디네이터 주소 — 워커가 결과를 역전송할 목적지
         coordinator_addr: String,
+    },
+    /// 코디네이터에게 특정 워커가 스테이지의 모든 플랜 실행을 완료했음을 보고
+    FragmentCompleted {
+        execution_id: String,
+        stage_id: usize,
     },
     /// 코디네이터로 RecordBatch 배압(Backpressure) 전송 스트림. (Arrow IPC 포맷 - FlatBuffer 내장)
     ExchangeData {
@@ -93,8 +96,8 @@ pub enum QueryMessage {
         exchange_id: usize,
         /// 송신 워커 노드 식별자 (멀티 워커 집계 시 출처 추적용)
         node_id: u32,
-        is_eof: bool,         // 데이터 전송 완료 스트림 플래그
-        batch_data: Vec<u8>,  // Arrow IPC (FlatBuffer metadata + raw payload)
+        is_eof: bool,        // 데이터 전송 완료 스트림 플래그
+        batch_data: Vec<u8>, // Arrow IPC (FlatBuffer metadata + raw payload)
     },
 }
 
@@ -121,8 +124,7 @@ impl GridMessage {
 
     /// bincode를 사용해 메시지를 직렬화합니다.
     pub fn serialize(&self) -> crate::error::DbxResult<Vec<u8>> {
-        bincode::serialize(self)
-            .map_err(|e| crate::error::DbxError::Serialization(e.to_string()))
+        bincode::serialize(self).map_err(|e| crate::error::DbxError::Serialization(e.to_string()))
     }
 
     /// bincode를 사용해 바이트 배열로부터 메시지를 역직렬화합니다.
@@ -133,13 +135,19 @@ impl GridMessage {
 }
 
 /// Arrow RecordBatch → Arrow IPC 바이너리 직렬화
-pub fn serialize_batch_to_ipc(batch: &arrow::array::RecordBatch) -> crate::error::DbxResult<Vec<u8>> {
+pub fn serialize_batch_to_ipc(
+    batch: &arrow::array::RecordBatch,
+) -> crate::error::DbxResult<Vec<u8>> {
     let mut buf = Vec::new();
     {
         let mut writer = arrow::ipc::writer::StreamWriter::try_new(&mut buf, &batch.schema())
             .map_err(|e| crate::error::DbxError::Serialization(e.to_string()))?;
-        writer.write(batch).map_err(|e| crate::error::DbxError::Serialization(e.to_string()))?;
-        writer.finish().map_err(|e| crate::error::DbxError::Serialization(e.to_string()))?;
+        writer
+            .write(batch)
+            .map_err(|e| crate::error::DbxError::Serialization(e.to_string()))?;
+        writer
+            .finish()
+            .map_err(|e| crate::error::DbxError::Serialization(e.to_string()))?;
     }
     Ok(buf)
 }

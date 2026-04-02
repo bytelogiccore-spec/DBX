@@ -213,6 +213,9 @@ pub struct Database {
 
     /// Atomic CAS operations를 위한 Row-level Latch 매니저 (Phase 1.1)
     pub(crate) cas_locks: Arc<RowLockManager>,
+
+    /// 5-Tier Storage Metadata Registry (Phase 6)
+    pub(crate) metadata_registry: Arc<crate::storage::metadata::MetadataRegistry>,
 }
 
 impl Database {

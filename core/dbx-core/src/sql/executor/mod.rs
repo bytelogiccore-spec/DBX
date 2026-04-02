@@ -6,22 +6,22 @@ use arrow::compute;
 use arrow::datatypes::Schema;
 use std::sync::Arc;
 
+pub mod distributed_executor;
 pub mod expr;
-pub mod operators;
-pub mod parallel_query;
 pub mod fragment_splitter;
 pub mod local_executor;
-pub mod distributed_executor;
+pub mod operators;
+pub mod parallel_query;
 
+pub use distributed_executor::DistributedExecutor;
 pub use expr::evaluate_expr;
+pub use fragment_splitter::{FragmentDAG, FragmentSplitter, FragmentStage};
+pub use local_executor::LocalExecutor;
 pub use operators::{
     FilterOperator, GridExchangeOperator, HashAggregateOperator, HashJoinOperator, LimitOperator,
     PhysicalOperator, ProjectionOperator, SortOperator, TableScanOperator,
 };
 pub use parallel_query::{AggregateResult, AggregateType, ParallelQueryExecutor};
-pub use fragment_splitter::{FragmentSplitter, FragmentPair};
-pub use local_executor::LocalExecutor;
-pub use distributed_executor::DistributedExecutor;
 
 // Helper function for concatenating RecordBatches
 pub fn concat_batches(schema: &Arc<Schema>, batches: &[RecordBatch]) -> DbxResult<RecordBatch> {
