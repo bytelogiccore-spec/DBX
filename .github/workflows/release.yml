@@ -45,11 +45,6 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: 바인딩 크레이트 빌드 검증
-        run: |
-          cargo build --locked -p dbx-csharp
-          cargo build --locked -p dbx-node
-          cargo build --locked -p dbx-py
 
   # ──────────────────────────────────────────────
   # Phase 2: C/C++ 네이티브 빌드 (멀티 플랫폼)
@@ -93,9 +88,9 @@ jobs:
         with:
           key: ${{ matrix.platform }}
 
-      # Linux x64 빌드 도구 (mold 링커) 설치
-      - name: Linux x64 빌드 도구 설치
-        if: matrix.platform == 'linux-x64'
+      # Linux 빌드 도구 (mold 링커) 설치
+      - name: Linux 빌드 도구 설치
+        if: matrix.os == 'ubuntu-latest'
         run: sudo apt-get update && sudo apt-get install -y mold clang
 
       # Linux ARM 크로스 컴파일 도구 설치

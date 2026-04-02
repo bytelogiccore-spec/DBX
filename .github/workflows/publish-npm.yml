@@ -23,6 +23,12 @@ jobs:
       - name: Rust 설치
         uses: dtolnay/rust-toolchain@stable
 
+      - name: mold 링커 설치 (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y mold clang
+
       - uses: Swatinem/rust-cache@v2
         with:
           key: ${{ runner.os }}-npm-build
