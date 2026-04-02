@@ -127,7 +127,7 @@ impl DistributedExecutor {
             let mut node_scores: std::collections::HashMap<std::net::SocketAddr, usize> =
                 std::collections::HashMap::new();
 
-            fn collect_table_scans<'a>(p: &'a PhysicalPlan) -> Vec<&'a PhysicalPlan> {
+            fn collect_table_scans(p: &PhysicalPlan) -> Vec<&PhysicalPlan> {
                 let mut scans = Vec::new();
                 match p {
                     PhysicalPlan::TableScan { .. } => scans.push(p),
@@ -152,19 +152,16 @@ impl DistributedExecutor {
                     if let PhysicalPlan::TableScan {
                         table, ros_files, ..
                     } = scan
+                        && let Some(table_meta) = self.metadata_registry.tables.get(table)
                     {
-                        if let Some(table_meta) = self.metadata_registry.tables.get(table) {
-                            for part_ref in table_meta.partitions.iter() {
-                                let part = part_ref.value();
-                                // ros_files가 비어있으면(로컬 fallback) 모든 파티션을 고려, 아니면 ros_files 대상만
-                                if ros_files.is_empty() || ros_files.contains(&part.file_path) {
-                                    if let Some(ref addr_str) = part.node_addr {
-                                        if let Ok(addr) = addr_str.parse::<std::net::SocketAddr>() {
-                                            *node_scores.entry(addr).or_insert(0) +=
-                                                part.row_count.max(1);
-                                        }
-                                    }
-                                }
+                        for part_ref in table_meta.partitions.iter() {
+                            let part = part_ref.value();
+                            // ros_files가 비어있으면(로컬 fallback) 모든 파티션을 고려, 아니면 ros_files 대상만
+                            if (ros_files.is_empty() || ros_files.contains(&part.file_path))
+                                && let Some(ref addr_str) = part.node_addr
+                                && let Ok(addr) = addr_str.parse::<std::net::SocketAddr>()
+                            {
+                                *node_scores.entry(addr).or_insert(0) += part.row_count.max(1);
                             }
                         }
                     }

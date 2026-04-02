@@ -63,10 +63,10 @@ impl LifecycleWorker {
 
         for (table_name, schema) in schemas {
             // Arrow Schema Metadata에서 직렬화된 TablePolicy를 가져옵니다 (Phase 2에서 구현).
-            if let Some(policy_json) = schema.metadata().get("dbx_table_policy") {
-                if let Ok(policy) = crate::engine::policy::TablePolicy::from_json(policy_json) {
-                    self.apply_policy(&table_name, &policy)?;
-                }
+            if let Some(policy_json) = schema.metadata().get("dbx_table_policy")
+                && let Ok(policy) = crate::engine::policy::TablePolicy::from_json(policy_json)
+            {
+                self.apply_policy(&table_name, &policy)?;
             }
         }
         Ok(())

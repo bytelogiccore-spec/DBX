@@ -70,17 +70,16 @@ impl QuicChannel {
                             if stream.read_exact(&mut len_buf).await.is_ok() {
                                 let len = u32::from_be_bytes(len_buf) as usize;
                                 let mut data_buf = vec![0u8; len];
-                                if stream.read_exact(&mut data_buf).await.is_ok() {
-                                    if let Ok(msg) =
+                                if stream.read_exact(&mut data_buf).await.is_ok()
+                                    && let Ok(msg) =
                                         crate::grid::protocol::GridMessage::deserialize(&data_buf)
-                                    {
-                                        let _ = tx2
-                                            .send(GridMessageWrapper {
-                                                msg,
-                                                stream: Some(stream),
-                                            })
-                                            .await;
-                                    }
+                                {
+                                    let _ = tx2
+                                        .send(GridMessageWrapper {
+                                            msg,
+                                            stream: Some(stream),
+                                        })
+                                        .await;
                                 }
                             }
                         });

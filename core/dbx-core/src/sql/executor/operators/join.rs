@@ -1,6 +1,7 @@
 //! HashJoin Operator — Hash-based join implementation
 
 use crate::error::{DbxError, DbxResult};
+use crate::sql::executor::hash_utils;
 use crate::sql::executor::operators::PhysicalOperator;
 use crate::sql::executor::spill::SpillContext;
 use crate::sql::planner::JoinType;
@@ -9,7 +10,6 @@ use arrow::array::*;
 use arrow::compute;
 use arrow::datatypes::{DataType, Schema};
 use arrow::record_batch::RecordBatch;
-use crate::sql::executor::hash_utils;
 // use rayon::prelude::*; // Not used currently in sequential probe
 use smallvec::{SmallVec, smallvec};
 use std::path::PathBuf;
@@ -20,9 +20,7 @@ use std::sync::Arc;
 enum JoinState {
     InMemory,
     Partitioning,
-    JoiningPartitions {
-        current_partition: usize,
-    },
+    JoiningPartitions { current_partition: usize },
 }
 
 pub struct HashJoinOperator {
@@ -139,16 +137,19 @@ impl HashJoinOperator {
         depth: usize,
         base_idx: usize,
     ) -> DbxResult<()> {
-        let num_partitions = self.num_partitions;
+        let _num_partitions = self.num_partitions;
         let parts = self.partition_batch(&batch, key_indices, depth as u64)?;
-        
+
         for (sub_idx, part) in parts.into_iter().enumerate() {
             if let Some(p) = part {
                 let target_idx = base_idx + sub_idx;
                 let p_bytes = SpillContext::estimate_batch_bytes(&p);
-                
+
                 // Hybrid: Level 0의 Partition 0만 메모리에 유지
-                if depth == 0 && target_idx == 0 && self.partition0_mem_used + p_bytes < (self.build_memory_budget * 7 / 10) {
+                if depth == 0
+                    && target_idx == 0
+                    && self.partition0_mem_used + p_bytes < (self.build_memory_budget * 7 / 10)
+                {
                     if is_left {
                         self.left_partition0.push(p);
                     } else {
@@ -158,9 +159,16 @@ impl HashJoinOperator {
                 } else {
                     let spill_ctx = self.spill_ctx.as_mut().unwrap();
                     let prefix = if is_left { "left" } else { "right" };
-                    
+
                     // P0 메모리 초과 시 디스크로 스필 (Grace 모드 폴백)
-                    if depth == 0 && target_idx == 0 && (if is_left { !self.left_partition0.is_empty() } else { !self.right_partition0.is_empty() }) {
+                    if depth == 0
+                        && target_idx == 0
+                        && (if is_left {
+                            !self.left_partition0.is_empty()
+                        } else {
+                            !self.right_partition0.is_empty()
+                        })
+                    {
                         let to_spill = if is_left {
                             std::mem::take(&mut self.left_partition0)
                         } else {
@@ -168,8 +176,11 @@ impl HashJoinOperator {
                         };
                         for p0_batch in to_spill {
                             let path = spill_ctx.spill_partition_batch(prefix, 0, p0_batch)?;
-                            if is_left { self.left_partitions[0].push(path); }
-                            else { self.right_partitions[0].push(path); }
+                            if is_left {
+                                self.left_partitions[0].push(path);
+                            } else {
+                                self.right_partitions[0].push(path);
+                            }
                         }
                     }
 
@@ -190,7 +201,9 @@ impl HashJoinOperator {
         let mut left_bytes = 0usize;
 
         while let Some(batch) = self.left.next()? {
-            if batch.num_rows() == 0 { continue; }
+            if batch.num_rows() == 0 {
+                continue;
+            }
             let batch_bytes = SpillContext::estimate_batch_bytes(&batch);
             left_bytes += batch_bytes;
             left_batches.push(batch);
@@ -210,16 +223,22 @@ impl HashJoinOperator {
             }
 
             while let Some(batch) = self.left.next()? {
-                if batch.num_rows() == 0 { continue; }
+                if batch.num_rows() == 0 {
+                    continue;
+                }
                 self.handle_partitioning(batch, &left_indices, true, 0, 0)?;
             }
 
             while let Some(batch) = self.right.next()? {
-                if batch.num_rows() == 0 { continue; }
+                if batch.num_rows() == 0 {
+                    continue;
+                }
                 self.handle_partitioning(batch, &right_indices, false, 0, 0)?;
             }
 
-            self.state = JoinState::JoiningPartitions { current_partition: 0 };
+            self.state = JoinState::JoiningPartitions {
+                current_partition: 0,
+            };
             return Ok(());
         }
 
@@ -260,7 +279,7 @@ impl HashJoinOperator {
 
         let schema = build_batches[0].schema();
         let merged = super::super::concat_batches(&schema, build_batches.as_slice())?;
-        
+
         let key_columns: Vec<usize> = if build_is_left {
             self.on.iter().map(|(left_col, _)| *left_col).collect()
         } else {
@@ -289,7 +308,7 @@ impl HashJoinOperator {
         let build_table = self.build_table.as_ref().unwrap();
         let left_batch = self.left_batch.as_ref().unwrap();
         let right_batches = self.right_batches.as_ref().unwrap();
-        
+
         Self::do_probe(
             &mut self.right_batch_idx,
             build_table,
@@ -312,21 +331,27 @@ impl HashJoinOperator {
 
     fn next_partitioned(&mut self, current_part_ptr: &mut usize) -> DbxResult<Option<RecordBatch>> {
         loop {
-            if let Some(right_batches) = &self.right_batches {
-                if self.right_batch_idx < right_batches.len() {
-                    let build_table = self.build_table.as_ref().expect("Partition build table must exist");
-                    let left_batch = self.left_batch.as_ref().expect("Partition left batch must exist");
-                    if let Some(result) = Self::do_probe(
-                        &mut self.right_batch_idx,
-                        build_table,
-                        left_batch,
-                        right_batches,
-                        self.join_type,
-                        &self.on,
-                        &self.schema,
-                    )? {
-                        return Ok(Some(result));
-                    }
+            if let Some(right_batches) = &self.right_batches
+                && self.right_batch_idx < right_batches.len()
+            {
+                let build_table = self
+                    .build_table
+                    .as_ref()
+                    .expect("Partition build table must exist");
+                let left_batch = self
+                    .left_batch
+                    .as_ref()
+                    .expect("Partition left batch must exist");
+                if let Some(result) = Self::do_probe(
+                    &mut self.right_batch_idx,
+                    build_table,
+                    left_batch,
+                    right_batches,
+                    self.join_type,
+                    &self.on,
+                    &self.schema,
+                )? {
+                    return Ok(Some(result));
                 }
             }
 
@@ -344,7 +369,7 @@ impl HashJoinOperator {
                 let l_schema = Arc::new(self.left.schema().clone());
                 let l0_batches = std::mem::take(&mut self.left_partition0);
                 let left_merged = super::super::concat_batches(&l_schema, &l0_batches)?;
-                
+
                 let key_indices: Vec<usize> = self.on.iter().map(|(l, _)| *l).collect();
                 let mut hash_table: AHashMap<u64, Vec<usize>> = AHashMap::new();
                 let hashes = hash_utils::hash_batch(&left_merged, &key_indices, 0)?;
@@ -352,10 +377,10 @@ impl HashJoinOperator {
                     let hash = hashes.value(row_idx);
                     hash_table.entry(hash).or_default().push(row_idx);
                 }
-                
+
                 let r0_batches = std::mem::take(&mut self.right_partition0);
                 self.partition0_mem_used = 0;
-                
+
                 self.left_batch = Some(left_merged);
                 self.right_batches = Some(r0_batches);
                 self.build_table = Some(hash_table);
@@ -379,16 +404,18 @@ impl HashJoinOperator {
 
                 let next_depth = depth + 1;
                 let base_idx = self.num_partitions;
-                
+
                 // 파티션 목록 확장
                 self.num_partitions += 32;
                 self.left_partitions.resize(self.num_partitions, Vec::new());
-                self.right_partitions.resize(self.num_partitions, Vec::new());
-                self.partition_depths.resize(self.num_partitions, next_depth);
-                
+                self.right_partitions
+                    .resize(self.num_partitions, Vec::new());
+                self.partition_depths
+                    .resize(self.num_partitions, next_depth);
+
                 let left_paths = std::mem::take(&mut self.left_partitions[part_idx]);
                 let right_paths = std::mem::take(&mut self.right_partitions[part_idx]);
-                
+
                 let left_indices: Vec<usize> = self.on.iter().map(|(l, _)| *l).collect();
                 let right_indices: Vec<usize> = self.on.iter().map(|(_, r)| *r).collect();
 
@@ -399,7 +426,13 @@ impl HashJoinOperator {
                 }
                 for path in right_paths {
                     for batch in SpillContext::reload_batches(&path)? {
-                        self.handle_partitioning(batch, &right_indices, false, next_depth, base_idx)?;
+                        self.handle_partitioning(
+                            batch,
+                            &right_indices,
+                            false,
+                            next_depth,
+                            base_idx,
+                        )?;
                     }
                 }
                 continue;
@@ -445,7 +478,9 @@ impl HashJoinOperator {
         while *right_batch_idx < right_batches.len() {
             let right_batch = &right_batches[*right_batch_idx];
             *right_batch_idx += 1;
-            if right_batch.num_rows() == 0 { continue; }
+            if right_batch.num_rows() == 0 {
+                continue;
+            }
 
             let mut left_indices = Vec::new();
             let mut right_indices = Vec::new();
@@ -463,18 +498,29 @@ impl HashJoinOperator {
 
             let right_key_columns: Vec<usize> = on.iter().map(|(_, r)| *r).collect();
             let left_key_columns: Vec<usize> = on.iter().map(|(l, _)| *l).collect();
-            
+
             let hashes = hash_utils::hash_batch(right_batch, &right_key_columns, 0)?;
             for right_row in 0..right_batch.num_rows() {
                 let hash = hashes.value(right_row);
                 if let Some(left_rows) = build_table.get(&hash) {
                     for &left_row in left_rows {
                         // 해시 충돌 대응: 실제로 값이 같은지 확인
-                        if compare_rows(left_batch, &left_key_columns, left_row, right_batch, &right_key_columns, right_row) {
+                        if compare_rows(
+                            left_batch,
+                            &left_key_columns,
+                            left_row,
+                            right_batch,
+                            &right_key_columns,
+                            right_row,
+                        ) {
                             left_indices.push(left_row as u32);
                             right_indices.push(right_row as u32);
-                            if let Some(ref mut m) = matched_left_rows { m.insert(left_row); }
-                            if let Some(ref mut m) = matched_right_rows { m[right_row] = true; }
+                            if let Some(ref mut m) = matched_left_rows {
+                                m.insert(left_row);
+                            }
+                            if let Some(ref mut m) = matched_right_rows {
+                                m[right_row] = true;
+                            }
                         }
                     }
                 }
@@ -497,7 +543,9 @@ impl HashJoinOperator {
                 }
             }
 
-            if left_indices.is_empty() { continue; }
+            if left_indices.is_empty() {
+                continue;
+            }
 
             let mut output_columns: Vec<ArrayRef> = Vec::new();
             for col in left_batch.columns() {
@@ -508,24 +556,32 @@ impl HashJoinOperator {
             }
 
             let result = RecordBatch::try_new(Arc::clone(output_schema), output_columns)?;
-            if result.num_rows() > 0 { return Ok(Some(result)); }
+            if result.num_rows() > 0 {
+                return Ok(Some(result));
+            }
         }
         Ok(None)
     }
 }
 
 impl PhysicalOperator for HashJoinOperator {
-    fn schema(&self) -> &Schema { &self.schema }
+    fn schema(&self) -> &Schema {
+        &self.schema
+    }
     fn next(&mut self) -> DbxResult<Option<RecordBatch>> {
-        if self.done { return Ok(None); }
+        if self.done {
+            return Ok(None);
+        }
         if self.build_table.is_none() && matches!(self.state, JoinState::InMemory) {
             self.build_phase()?;
         }
-        
+
         let state = self.state.clone();
         match state {
             JoinState::InMemory | JoinState::Partitioning => self.next_in_memory(),
-            JoinState::JoiningPartitions { mut current_partition } => {
+            JoinState::JoiningPartitions {
+                mut current_partition,
+            } => {
                 let res = self.next_partitioned(&mut current_partition);
                 self.state = JoinState::JoiningPartitions { current_partition };
                 res
@@ -556,7 +612,7 @@ fn compare_rows(
     for i in 0..left_cols.len() {
         let l_col = left_batch.column(left_cols[i]);
         let r_col = right_batch.column(right_cols[i]);
-        
+
         if !compare_column_values(l_col, left_row, r_col, right_row) {
             return false;
         }
@@ -568,7 +624,7 @@ fn compare_column_values(l_col: &ArrayRef, l_row: usize, r_col: &ArrayRef, r_row
     if l_col.is_null(l_row) || r_col.is_null(r_row) {
         return l_col.is_null(l_row) && r_col.is_null(r_row);
     }
-    
+
     match l_col.data_type() {
         DataType::Int32 => {
             let l = l_col.as_any().downcast_ref::<Int32Array>().unwrap();
@@ -600,7 +656,7 @@ fn create_column_with_nulls(
     null_sentinel: u32,
 ) -> DbxResult<ArrayRef> {
     let num_rows = indices.len();
-    let has_nulls = indices.iter().any(|&idx| idx == null_sentinel);
+    let has_nulls = indices.contains(&null_sentinel);
     if !has_nulls {
         let idx_arr = UInt32Array::from(indices.to_vec());
         return compute::take(source_col.as_ref(), &idx_arr, None).map_err(Into::into);
@@ -611,8 +667,11 @@ fn create_column_with_nulls(
             let source = source_col.as_any().downcast_ref::<Int32Array>().unwrap();
             let mut builder = Int32Builder::with_capacity(num_rows);
             for &idx in indices {
-                if idx == null_sentinel { builder.append_null(); }
-                else { builder.append_value(source.value(idx as usize)); }
+                if idx == null_sentinel {
+                    builder.append_null();
+                } else {
+                    builder.append_value(source.value(idx as usize));
+                }
             }
             Ok(Arc::new(builder.finish()))
         }
@@ -620,8 +679,11 @@ fn create_column_with_nulls(
             let source = source_col.as_any().downcast_ref::<Int64Array>().unwrap();
             let mut builder = Int64Builder::with_capacity(num_rows);
             for &idx in indices {
-                if idx == null_sentinel { builder.append_null(); }
-                else { builder.append_value(source.value(idx as usize)); }
+                if idx == null_sentinel {
+                    builder.append_null();
+                } else {
+                    builder.append_value(source.value(idx as usize));
+                }
             }
             Ok(Arc::new(builder.finish()))
         }
@@ -629,8 +691,11 @@ fn create_column_with_nulls(
             let source = source_col.as_any().downcast_ref::<Float64Array>().unwrap();
             let mut builder = Float64Builder::with_capacity(num_rows);
             for &idx in indices {
-                if idx == null_sentinel { builder.append_null(); }
-                else { builder.append_value(source.value(idx as usize)); }
+                if idx == null_sentinel {
+                    builder.append_null();
+                } else {
+                    builder.append_value(source.value(idx as usize));
+                }
             }
             Ok(Arc::new(builder.finish()))
         }
@@ -638,8 +703,11 @@ fn create_column_with_nulls(
             let source = source_col.as_any().downcast_ref::<StringArray>().unwrap();
             let mut builder = StringBuilder::with_capacity(num_rows, num_rows * 10);
             for &idx in indices {
-                if idx == null_sentinel { builder.append_null(); }
-                else { builder.append_value(source.value(idx as usize)); }
+                if idx == null_sentinel {
+                    builder.append_null();
+                } else {
+                    builder.append_value(source.value(idx as usize));
+                }
             }
             Ok(Arc::new(builder.finish()))
         }
@@ -647,8 +715,11 @@ fn create_column_with_nulls(
             let source = source_col.as_any().downcast_ref::<BooleanArray>().unwrap();
             let mut builder = BooleanBuilder::with_capacity(num_rows);
             for &idx in indices {
-                if idx == null_sentinel { builder.append_null(); }
-                else { builder.append_value(source.value(idx as usize)); }
+                if idx == null_sentinel {
+                    builder.append_null();
+                } else {
+                    builder.append_value(source.value(idx as usize));
+                }
             }
             Ok(Arc::new(builder.finish()))
         }

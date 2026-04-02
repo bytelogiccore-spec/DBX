@@ -430,8 +430,7 @@ impl Database {
         let storage_manager = Arc::new(crate::storage::manager::StoragePathManager::new(
             tempfile::tempdir()
                 .map_err(|e| crate::error::DbxError::Storage(e.to_string()))?
-                .path()
-                .to_path_buf(),
+                .path(),
         ));
         let db_index = Arc::new(HashIndex::new());
         let (tx, rx) = std::sync::mpsc::channel::<BackgroundJob>();
@@ -525,8 +524,7 @@ impl Database {
         let storage_manager = Arc::new(crate::storage::manager::StoragePathManager::new(
             tempfile::tempdir()
                 .map_err(|e| crate::error::DbxError::Storage(e.to_string()))?
-                .path()
-                .to_path_buf(),
+                .path(),
         ));
         let db_index = Arc::new(HashIndex::new());
         let (tx, rx) = std::sync::mpsc::channel::<BackgroundJob>();

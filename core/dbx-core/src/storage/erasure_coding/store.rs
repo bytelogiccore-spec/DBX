@@ -34,7 +34,7 @@ impl ErasureCodingStore {
     pub fn encode(&self, data: &[u8]) -> DbxResult<Vec<Vec<u8>>> {
         let rs = ReedSolomon::new(self.k, self.m).map_err(|e| DbxError::Storage(e.to_string()))?;
 
-        let chunk_size = (data.len() + self.k - 1) / self.k;
+        let chunk_size = data.len().div_ceil(self.k);
         let mut shards = vec![vec![0u8; chunk_size]; self.k + self.m];
 
         // 1. 데이터 파티셔닝
@@ -122,13 +122,11 @@ impl ErasureCodingStore {
 
         let mut bytes_written = 0;
 
-        for shard in shards.into_iter().take(self.k) {
-            if let Some(data) = shard {
-                let remaining = original_len.saturating_sub(bytes_written);
-                let take = std::cmp::min(remaining, data.len());
-                output.extend_from_slice(&data[..take]);
-                bytes_written += take;
-            }
+        for data in shards.into_iter().take(self.k).flatten() {
+            let remaining = original_len.saturating_sub(bytes_written);
+            let take = std::cmp::min(remaining, data.len());
+            output.extend_from_slice(&data[..take]);
+            bytes_written += take;
         }
 
         Ok(output)
@@ -171,13 +169,11 @@ impl ErasureCodingStore {
         let mut output = Vec::with_capacity(original_len);
         let mut bytes_written = 0;
 
-        for shard in shards.into_iter().take(self.k) {
-            if let Some(data) = shard {
-                let remaining = original_len - bytes_written;
-                let take = std::cmp::min(remaining, data.len());
-                output.extend_from_slice(&data[..take]);
-                bytes_written += take;
-            }
+        for data in shards.into_iter().take(self.k).flatten() {
+            let remaining = original_len - bytes_written;
+            let take = std::cmp::min(remaining, data.len());
+            output.extend_from_slice(&data[..take]);
+            bytes_written += take;
         }
 
         Ok(Some(output))

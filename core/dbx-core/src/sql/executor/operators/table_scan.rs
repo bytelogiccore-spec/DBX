@@ -102,7 +102,7 @@ impl TableScanOperator {
             .map(|&idx| batch.schema().field(idx).clone())
             .collect();
         let projected_schema = Arc::new(Schema::new(projected_fields));
-        
+
         Ok(RecordBatch::try_new(projected_schema, projected_columns)?)
     }
 

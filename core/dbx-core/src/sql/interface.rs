@@ -867,12 +867,12 @@ impl Database {
                     let mut schema = Schema::new(fields);
 
                     // IF Policy exists, embed as JSON into Arrow schema metadata
-                    if let Some(p) = policy {
-                        if let Ok(json) = p.to_json() {
-                            let mut map = std::collections::HashMap::new();
-                            map.insert("dbx_table_policy".to_string(), json);
-                            schema = schema.with_metadata(map);
-                        }
+                    if let Some(p) = policy
+                        && let Ok(json) = p.to_json()
+                    {
+                        let mut map = std::collections::HashMap::new();
+                        map.insert("dbx_table_policy".to_string(), json);
+                        schema = schema.with_metadata(map);
                     }
 
                     let schema = Arc::new(schema);
@@ -1476,7 +1476,7 @@ impl Database {
                         agg_schema,
                         group_by.clone(),
                         aggregates.clone(),
-                        mode.clone(),
+                        *mode,
                     )
                     .with_gpu(self.gpu_manager.clone()),
                 ))

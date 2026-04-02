@@ -84,7 +84,8 @@ impl HashAggregateOperator {
 
                 // 임계치 초과 → partial 집계 후 Spill
                 if spill_ctx.should_spill() {
-                    let partial = self.run_aggregate_on(in_memory_batches.as_slice(), AggregateMode::Partial)?;
+                    let partial = self
+                        .run_aggregate_on(in_memory_batches.as_slice(), AggregateMode::Partial)?;
                     if let Some(partial_batch) = partial {
                         let path = spill_ctx.spill_batches(&[partial_batch])?;
                         spilled_paths.push(path);
@@ -103,7 +104,8 @@ impl HashAggregateOperator {
 
             // 남은 in-memory 데이터도 partial 집계
             if !in_memory_batches.is_empty() {
-                let partial = self.run_aggregate_on(in_memory_batches.as_slice(), AggregateMode::Partial)?;
+                let partial =
+                    self.run_aggregate_on(in_memory_batches.as_slice(), AggregateMode::Partial)?;
                 if let Some(partial_batch) = partial {
                     let path = spill_ctx.spill_batches(&[partial_batch])?;
                     spilled_paths.push(path);
@@ -164,14 +166,21 @@ impl HashAggregateOperator {
         let mut groups: AHashMap<u64, Vec<Vec<usize>>> = AHashMap::new();
         let group_indices: Vec<usize> = self.group_by.clone();
         let hashes = hash_utils::hash_batch(&merged, &group_indices, 0)?;
-        
+
         for row_idx in 0..merged.num_rows() {
             let hash = hashes.value(row_idx);
             let entries = groups.entry(hash).or_default();
-            
+
             let mut found = false;
             for group in entries.iter_mut() {
-                if compare_rows(&merged, &group_indices, group[0], &merged, &group_indices, row_idx) {
+                if compare_rows(
+                    &merged,
+                    &group_indices,
+                    group[0],
+                    &merged,
+                    &group_indices,
+                    row_idx,
+                ) {
                     group.push(row_idx);
                     found = true;
                     break;
@@ -195,13 +204,9 @@ impl HashAggregateOperator {
         for agg in &self.aggregates {
             let col = merged.column(agg.input);
             let result = match mode {
-                AggregateMode::Simple | AggregateMode::Partial => compute_aggregate_grouped(
-                    col,
-                    &agg.function,
-                    &group_keys,
-                    num_groups,
-                    mode,
-                )?,
+                AggregateMode::Simple | AggregateMode::Partial => {
+                    compute_aggregate_grouped(col, &agg.function, &group_keys, num_groups, mode)?
+                }
                 AggregateMode::Final => {
                     merge_aggregate_grouped(col, &agg.function, &group_keys, num_groups)?
                 }
@@ -330,7 +335,7 @@ fn compare_rows(
     for i in 0..left_cols.len() {
         let l_col = left_batch.column(left_cols[i]);
         let r_col = right_batch.column(right_cols[i]);
-        
+
         if !compare_column_values(l_col, left_row, r_col, right_row) {
             return false;
         }
@@ -342,7 +347,7 @@ fn compare_column_values(l_col: &ArrayRef, l_row: usize, r_col: &ArrayRef, r_row
     if l_col.is_null(l_row) || r_col.is_null(r_row) {
         return l_col.is_null(l_row) && r_col.is_null(r_row);
     }
-    
+
     match l_col.data_type() {
         DataType::Int32 => {
             let l = l_col.as_any().downcast_ref::<Int32Array>().unwrap();

@@ -27,7 +27,11 @@ impl VecOperator {
         } else {
             batches[0].schema()
         };
-        Self { batches, idx: 0, schema }
+        Self {
+            batches,
+            idx: 0,
+            schema,
+        }
     }
 }
 
@@ -94,11 +98,8 @@ fn test_spill_context_tracks_memory() {
 fn test_spill_context_reset_after_spill() {
     let mut ctx = SpillContext::with_budget(100).unwrap();
     let schema = Arc::new(Schema::new(vec![Field::new("v", DataType::Int32, false)]));
-    let batch = RecordBatch::try_new(
-        schema,
-        vec![Arc::new(Int32Array::from(vec![1, 2, 3]))],
-    )
-    .unwrap();
+    let batch =
+        RecordBatch::try_new(schema, vec![Arc::new(Int32Array::from(vec![1, 2, 3]))]).unwrap();
 
     let path = ctx.spill_batches(&[batch]).unwrap();
     // Spill 후 used_bytes는 리셋돼야 함
@@ -223,7 +224,9 @@ fn test_hash_join_oom_guard_triggers_on_large_build() {
         Arc::clone(&left_schema),
         vec![
             Arc::new(Int32Array::from((0..1000i32).collect::<Vec<_>>())),
-            Arc::new(Float64Array::from((0..1000).map(|i| i as f64).collect::<Vec<_>>())),
+            Arc::new(Float64Array::from(
+                (0..1000).map(|i| i as f64).collect::<Vec<_>>(),
+            )),
         ],
     )
     .unwrap();
@@ -263,12 +266,8 @@ fn test_hash_join_oom_guard_triggers_on_large_build() {
 
 #[test]
 fn test_hash_join_normal_operation_within_budget() {
-    let left_schema = Arc::new(Schema::new(vec![
-        Field::new("id", DataType::Int32, false),
-    ]));
-    let right_schema = Arc::new(Schema::new(vec![
-        Field::new("id", DataType::Int32, false),
-    ]));
+    let left_schema = Arc::new(Schema::new(vec![Field::new("id", DataType::Int32, false)]));
+    let right_schema = Arc::new(Schema::new(vec![Field::new("id", DataType::Int32, false)]));
     let join_schema = Arc::new(Schema::new(vec![
         Field::new("id", DataType::Int32, false),
         Field::new("id", DataType::Int32, false),
@@ -300,5 +299,9 @@ fn test_hash_join_normal_operation_within_budget() {
 
     let result = join_op.next();
     // 정상 동작 (에러 없음)
-    assert!(result.is_ok(), "한도 내에서는 정상 동작해야 함: {:?}", result.err());
+    assert!(
+        result.is_ok(),
+        "한도 내에서는 정상 동작해야 함: {:?}",
+        result.err()
+    );
 }

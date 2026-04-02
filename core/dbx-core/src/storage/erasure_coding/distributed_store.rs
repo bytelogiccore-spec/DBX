@@ -52,22 +52,21 @@ impl DistributedErasureCodingStore {
             let shard_key = format!("{}:shard_{}", key, i);
 
             // 만약 quic_channel이 존재한다면 원격 노드로 전송
-            if let Some(channel) = &self.quic_channel {
-                if let Some(node) = self.router.route(shard_key.as_bytes()) {
-                    if let Ok(addr) = SocketAddr::from_str(&node.address) {
-                        let msg = GridMessage::Storage(StorageMessage::StoreShard {
-                            key: key.to_string(),
-                            shard_id: i,
-                            data: shard.clone(),
-                        });
-                        let ch = channel.clone();
-                        futures.push(tokio::spawn(async move {
-                            if let Err(e) = ch.send_message(addr, msg).await {
-                                error!(?e, "Failed to send shard {} to {}", i, addr);
-                            }
-                        }));
+            if let Some(channel) = &self.quic_channel
+                && let Some(node) = self.router.route(shard_key.as_bytes())
+                && let Ok(addr) = SocketAddr::from_str(&node.address)
+            {
+                let msg = GridMessage::Storage(StorageMessage::StoreShard {
+                    key: key.to_string(),
+                    shard_id: i,
+                    data: shard.clone(),
+                });
+                let ch = channel.clone();
+                futures.push(tokio::spawn(async move {
+                    if let Err(e) = ch.send_message(addr, msg).await {
+                        error!(?e, "Failed to send shard {} to {}", i, addr);
                     }
-                }
+                }));
             }
         }
 
@@ -109,32 +108,32 @@ impl DistributedErasureCodingStore {
 
         for i in 0..total_shards {
             let shard_key = format!("{}:shard_{}", key, i);
-            if let Some(node) = self.router.route(shard_key.as_bytes()) {
-                if let Ok(addr) = SocketAddr::from_str(&node.address) {
-                    let msg = GridMessage::Storage(StorageMessage::FetchShard {
-                        key: key.to_string(),
-                        shard_id: i,
-                    });
-                    let ch = channel.clone();
+            if let Some(node) = self.router.route(shard_key.as_bytes())
+                && let Ok(addr) = SocketAddr::from_str(&node.address)
+            {
+                let msg = GridMessage::Storage(StorageMessage::FetchShard {
+                    key: key.to_string(),
+                    shard_id: i,
+                });
+                let ch = channel.clone();
 
-                    futures.push(tokio::spawn(async move {
-                        match ch.send_request_and_wait(addr, msg).await {
-                            Ok(GridMessage::Storage(StorageMessage::ShardResponse {
-                                shard_id,
-                                data: Some(shard_data),
-                                ..
-                            })) => Some((shard_id, shard_data)),
-                            Ok(other) => {
-                                warn!(?other, "Unexpected response for shard {}", i);
-                                None
-                            }
-                            Err(e) => {
-                                error!(?e, "Error fetching shard {} from {}", i, addr);
-                                None
-                            }
+                futures.push(tokio::spawn(async move {
+                    match ch.send_request_and_wait(addr, msg).await {
+                        Ok(GridMessage::Storage(StorageMessage::ShardResponse {
+                            shard_id,
+                            data: Some(shard_data),
+                            ..
+                        })) => Some((shard_id, shard_data)),
+                        Ok(other) => {
+                            warn!(?other, "Unexpected response for shard {}", i);
+                            None
                         }
-                    }));
-                }
+                        Err(e) => {
+                            error!(?e, "Error fetching shard {} from {}", i, addr);
+                            None
+                        }
+                    }
+                }));
             }
         }
 

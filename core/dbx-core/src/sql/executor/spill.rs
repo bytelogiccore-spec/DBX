@@ -42,9 +42,8 @@ impl SpillContext {
 
     /// 지정된 메모리 예산(바이트)으로 SpillContext 생성.
     pub fn with_budget(budget_bytes: usize) -> DbxResult<Self> {
-        let temp_dir = tempfile::tempdir().map_err(|e| {
-            DbxError::Storage(format!("Spill: tempdir 생성 실패: {}", e))
-        })?;
+        let temp_dir = tempfile::tempdir()
+            .map_err(|e| DbxError::Storage(format!("Spill: tempdir 생성 실패: {}", e)))?;
         let temp_path = temp_dir.path().to_path_buf();
         Ok(Self {
             budget_bytes,
@@ -83,10 +82,12 @@ impl SpillContext {
             return Err(DbxError::Storage("Spill: 빈 batch 목록".to_string()));
         }
 
-        let file_path = self.temp_path.join(format!("spill_{}.ipc", self.spill_count));
+        let file_path = self
+            .temp_path
+            .join(format!("spill_{}.ipc", self.spill_count));
         self.spill_count += 1;
         self.write_ipc_file(&file_path, batches)?;
-        
+
         self.reset_tracking();
         Ok(file_path)
     }
@@ -99,7 +100,9 @@ impl SpillContext {
         part_idx: usize,
         batch: RecordBatch,
     ) -> DbxResult<PathBuf> {
-        let file_path = self.temp_path.join(format!("{}_{}_{}.ipc", side, part_idx, self.spill_count));
+        let file_path = self
+            .temp_path
+            .join(format!("{}_{}_{}.ipc", side, part_idx, self.spill_count));
         self.spill_count += 1;
         self.write_ipc_file(&file_path, &[batch])?;
         Ok(file_path)
@@ -118,14 +121,14 @@ impl SpillContext {
         })?;
 
         for batch in batches {
-            writer.write(batch).map_err(|e| {
-                DbxError::Storage(format!("Spill: batch 쓰기 실패: {}", e))
-            })?;
+            writer
+                .write(batch)
+                .map_err(|e| DbxError::Storage(format!("Spill: batch 쓰기 실패: {}", e)))?;
         }
 
-        writer.finish().map_err(|e| {
-            DbxError::Storage(format!("Spill: IPC 파일 완료 실패: {}", e))
-        })?;
+        writer
+            .finish()
+            .map_err(|e| DbxError::Storage(format!("Spill: IPC 파일 완료 실패: {}", e)))?;
 
         Ok(())
     }
@@ -135,7 +138,11 @@ impl SpillContext {
     /// 읽기 완료 후 파일은 삭제되지 않습니다 (TempDir drop 시 일괄 삭제).
     pub fn reload_batches(path: &PathBuf) -> DbxResult<Vec<RecordBatch>> {
         let file = File::open(path).map_err(|e| {
-            DbxError::Storage(format!("Spill: reload 파일 열기 실패 {}: {}", path.display(), e))
+            DbxError::Storage(format!(
+                "Spill: reload 파일 열기 실패 {}: {}",
+                path.display(),
+                e
+            ))
         })?;
 
         let reader = FileReader::try_new(file, None).map_err(|e| {
@@ -144,9 +151,8 @@ impl SpillContext {
 
         let mut batches = Vec::new();
         for result in reader {
-            let batch = result.map_err(|e| {
-                DbxError::Storage(format!("Spill: batch 읽기 실패: {}", e))
-            })?;
+            let batch =
+                result.map_err(|e| DbxError::Storage(format!("Spill: batch 읽기 실패: {}", e)))?;
             batches.push(batch);
         }
 
@@ -197,7 +203,9 @@ mod tests {
             schema,
             vec![
                 Arc::new(Int32Array::from((0..n as i32).collect::<Vec<_>>())),
-                Arc::new(Float64Array::from((0..n).map(|i| i as f64).collect::<Vec<_>>())),
+                Arc::new(Float64Array::from(
+                    (0..n).map(|i| i as f64).collect::<Vec<_>>(),
+                )),
             ],
         )
         .unwrap()

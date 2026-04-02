@@ -256,7 +256,7 @@ impl LocalExecutor {
                     // Dummy 스키마 생성 (schema_hint 개수만큼 필드 생성)
                     let mut fields = Vec::with_capacity(*schema_hint);
                     for i in 0..*schema_hint {
-                        fields.push(Field::new(&format!("col_{}", i), DataType::Float64, true));
+                        fields.push(Field::new(format!("col_{}", i), DataType::Float64, true));
                     }
                     let schema = Arc::new(Schema::new(fields));
 
