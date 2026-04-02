@@ -5,9 +5,49 @@ on:
   workflow_call:
 
 jobs:
+  # 1. 플랫폼별 바이너리 빌드
+  build:
+    name: ${{ matrix.os }} 빌드
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Node.js 설치
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Rust 설치
+        uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ runner.os }}-npm-build
+
+      - name: npm 의존성 설치
+        run: |
+          cd packages/nodejs
+          npm install
+
+      - name: Node.js 바인딩 빌드 (napi build)
+        run: |
+          cd packages/nodejs
+          npm run build
+
+      - name: 바이너리 아티팩트 업로드
+        uses: actions/upload-artifact@v4
+        with:
+          name: node-binary-${{ matrix.os }}
+          path: packages/nodejs/*.node
+
+  # 2. 통합 패키지 배포
   publish:
     name: npm 배포
-    runs-on: windows-latest
+    needs: build
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
@@ -17,34 +57,26 @@ jobs:
           node-version: 20
           registry-url: https://registry.npmjs.org/
 
-      - name: Rust 설치
-        uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
+      - name: 모든 플랫폼 바이너리 다운로드
+        uses: actions/download-artifact@v4
+        with:
+          path: packages/nodejs/artifacts
+          pattern: node-binary-*
 
-      - name: npm 의존성 설치
+      - name: 바이너리 배치 및 패키징
         run: |
-          cd packages\nodejs
-          npm install
-
-      - name: Node.js 바인딩 빌드 (napi build)
-        run: |
-          cd packages\nodejs
-          npm run build
-
-      - name: npm 패키지 생성
-        run: |
-          cd packages\nodejs
+          cd packages/nodejs
+          # 아티팩트 폴더에서 바이너리들을 최상위로 이동 (napi-rs 구조에 맞춤)
+          cp artifacts/node-binary-ubuntu-latest/*.node . || true
+          cp artifacts/node-binary-windows-latest/*.node . || true
+          cp artifacts/node-binary-macos-latest/*.node . || true
+          
+          # npm pack을 통해 통합 아티팩트 생성 확인
           npm pack
 
       - name: npm 배포
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          cd packages\nodejs
+          cd packages/nodejs
           npm publish --access public --ignore-scripts
-
-      - name: 에셋 업로드
-        uses: actions/upload-artifact@v4
-        with:
-          name: npm-package
-          path: packages\nodejs\*.tgz

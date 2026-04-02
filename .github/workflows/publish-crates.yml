@@ -21,3 +21,8 @@ jobs:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CRATES_TOKEN }}
         run: cargo publish -p dbx-core --no-verify
 
+      - name: Publish dbx-ffi
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CRATES_TOKEN }}
+        run: cargo publish -p dbx-ffi --no-verify
+

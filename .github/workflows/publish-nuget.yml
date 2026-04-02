@@ -5,8 +5,51 @@ on:
   workflow_call:
 
 jobs:
+  # 1. 플랫폼별 네이티브 바이너리 빌드
+  build:
+    name: ${{ matrix.os }} 빌드
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Rust 설치
+        uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ runner.os }}-nuget-build
+
+      - name: 네이티브 라이브러리 빌드
+        run: cargo build --release --locked -p dbx-csharp
+
+      - name: 바이너리 아티팩트 업로드 (Windows)
+        if: matrix.os == 'windows-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: nuget-bin-windows
+          path: target/release/dbx_csharp.dll
+
+      - name: 바이너리 아티팩트 업로드 (Linux)
+        if: matrix.os == 'ubuntu-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: nuget-bin-linux
+          path: target/release/libdbx_csharp.so
+
+      - name: 바이너리 아티팩트 업로드 (macOS)
+        if: matrix.os == 'macos-latest'
+        uses: actions/upload-artifact@v4
+        with:
+          name: nuget-bin-macos
+          path: target/release/libdbx_csharp.dylib
+
+  # 2. 통합 패키징 및 배포
   publish:
     name: NuGet 배포
+    needs: build
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -16,21 +59,37 @@ jobs:
         with:
           dotnet-version: 9.0.x
 
-      - name: Rust C# FFI 빌드
-        uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - run: cargo build --release --locked -p dbx-csharp
+      - name: 모든 플랫폼 바이너리 다운로드
+        uses: actions/download-artifact@v4
+        with:
+          path: packages/dotnet/DBX.Dotnet/runtimes
+          pattern: nuget-bin-*
+
+      - name: 런타임 폴더 구조 정리
+        shell: pwsh
+        run: |
+          cd packages/dotnet/DBX.Dotnet
+          
+          # NuGet 표준 런타임 구조 생성
+          New-Item -Path "runtimes/win-x64/native" -ItemType Directory -Force
+          New-Item -Path "runtimes/linux-x64/native" -ItemType Directory -Force
+          New-Item -Path "runtimes/osx-arm64/native" -ItemType Directory -Force
+          
+          # 다운로드된 파일들을 구조에 맞게 이동
+          Move-Item runtimes/nuget-bin-windows/dbx_csharp.dll runtimes/win-x64/native/ -Force
+          Move-Item runtimes/nuget-bin-linux/libdbx_csharp.so runtimes/linux-x64/native/ -Force
+          Move-Item runtimes/nuget-bin-macos/libdbx_csharp.dylib runtimes/osx-arm64/native/ -Force
 
       - name: NuGet 패키징
-        run: dotnet pack packages\dotnet\DBX.Dotnet\DBX.Dotnet.csproj --configuration Release
+        run: dotnet pack packages/dotnet/DBX.Dotnet/DBX.Dotnet.csproj --configuration Release
 
       - name: NuGet 배포
         run: |
-          $pkg = Get-ChildItem packages\dotnet\DBX.Dotnet\bin\Release\*.nupkg | Select-Object -First 1
+          $pkg = Get-ChildItem packages/dotnet/DBX.Dotnet/bin/Release/*.nupkg | Select-Object -First 1
           dotnet nuget push $pkg.FullName --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate
 
-      - name: 에셋 업로드
+      - name: 아티팩트 업로드
         uses: actions/upload-artifact@v4
         with:
           name: nuget-package
-          path: packages\dotnet\DBX.Dotnet\bin\Release\*.nupkg
+          path: packages/dotnet/DBX.Dotnet/bin/Release/*.nupkg

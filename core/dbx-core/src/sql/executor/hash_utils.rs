@@ -32,53 +32,53 @@ fn update_hashes(col: &ArrayRef, hashes: &mut [u64], hasher: &RandomState) -> Db
     match col.data_type() {
         DataType::Int32 => {
             let arr = col.as_any().downcast_ref::<Int32Array>().unwrap();
-            for i in 0..num_rows {
+            for (i, hash) in hashes.iter_mut().enumerate().take(num_rows) {
                 if !arr.is_null(i) {
                     let val_hash = hasher.hash_one(arr.value(i));
-                    hashes[i] = combine_hashes(hashes[i], val_hash);
+                    *hash = combine_hashes(*hash, val_hash);
                 } else {
-                    hashes[i] = combine_hashes(hashes[i], 0);
+                    *hash = combine_hashes(*hash, 0);
                 }
             }
         }
         DataType::Int64 => {
             let arr = col.as_any().downcast_ref::<Int64Array>().unwrap();
-            for i in 0..num_rows {
+            for (i, hash) in hashes.iter_mut().enumerate().take(num_rows) {
                 if !arr.is_null(i) {
                     let val_hash = hasher.hash_one(arr.value(i));
-                    hashes[i] = combine_hashes(hashes[i], val_hash);
+                    *hash = combine_hashes(*hash, val_hash);
                 } else {
-                    hashes[i] = combine_hashes(hashes[i], 0);
+                    *hash = combine_hashes(*hash, 0);
                 }
             }
         }
         DataType::Float64 => {
             let arr = col.as_any().downcast_ref::<Float64Array>().unwrap();
-            for i in 0..num_rows {
+            for (i, hash) in hashes.iter_mut().enumerate().take(num_rows) {
                 if !arr.is_null(i) {
                     let val_hash = hasher.hash_one(arr.value(i).to_bits());
-                    hashes[i] = combine_hashes(hashes[i], val_hash);
+                    *hash = combine_hashes(*hash, val_hash);
                 } else {
-                    hashes[i] = combine_hashes(hashes[i], 0);
+                    *hash = combine_hashes(*hash, 0);
                 }
             }
         }
         DataType::Utf8 => {
             let arr = col.as_any().downcast_ref::<StringArray>().unwrap();
-            for i in 0..num_rows {
+            for (i, hash) in hashes.iter_mut().enumerate().take(num_rows) {
                 if !arr.is_null(i) {
                     let val_hash = hasher.hash_one(arr.value(i));
-                    hashes[i] = combine_hashes(hashes[i], val_hash);
+                    *hash = combine_hashes(*hash, val_hash);
                 } else {
-                    hashes[i] = combine_hashes(hashes[i], 0);
+                    *hash = combine_hashes(*hash, 0);
                 }
             }
         }
         _ => {
             // 다른 타입들은 포맷팅하여 해싱 (성능 저하 지점, 필요 시 확장)
-            for i in 0..num_rows {
+            for hash in hashes.iter_mut().take(num_rows) {
                 let val_hash = hasher.hash_one(format!("{:?}", col.as_any()));
-                hashes[i] = combine_hashes(hashes[i], val_hash);
+                *hash = combine_hashes(*hash, val_hash);
             }
         }
     }

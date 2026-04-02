@@ -15,15 +15,18 @@ use crate::grid::protocol::{GridMessage, QueryMessage};
 use crate::grid::quic::QuicChannel;
 use crate::sql::executor::fragment_splitter::FragmentSplitter;
 use crate::sql::executor::local_executor::LocalExecutor;
-use crate::sql::executor::operators::PhysicalOperator;
+// Remove unused import
 use crate::sql::planner::types::PhysicalPlan;
 use crate::storage::metadata::MetadataRegistry;
 use arrow::array::RecordBatch;
+use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 use tokio::sync::mpsc;
 use tracing::{error, info, warn};
+
+type NodeScoreMap = HashMap<SocketAddr, usize>;
 
 /// 분산 쿼리 코디네이터 실행기
 pub struct DistributedExecutor {
@@ -124,8 +127,7 @@ impl DistributedExecutor {
             let mut pending_workers = self.peer_addrs.clone();
 
             // Phase 6: Locality Routing (가중치 소팅)
-            let mut node_scores: std::collections::HashMap<std::net::SocketAddr, usize> =
-                std::collections::HashMap::new();
+            let mut node_scores: NodeScoreMap = HashMap::new();
 
             fn collect_table_scans(p: &PhysicalPlan) -> Vec<&PhysicalPlan> {
                 let mut scans = Vec::new();

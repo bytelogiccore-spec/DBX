@@ -9,6 +9,9 @@ use std::sync::Arc;
 use tokio::sync::mpsc;
 use tracing::{error, info, warn};
 
+type QuerySender = mpsc::Sender<DbxResult<Option<Vec<u8>>>>;
+type QueryStreamMap = Arc<DashMap<(String, usize), QuerySender>>;
+
 /// 그리드 중앙 제어기 (Thin Dispatcher)
 ///
 /// 네트워크 채널로부터 오는 메시지를 분류하여 도메인별 핸들러로 배달합니다.
@@ -16,7 +19,7 @@ pub struct GridManager {
     quic_channel: Arc<QuicChannel>,
     ec_store: Arc<DistributedErasureCodingStore>,
     receiver: mpsc::Receiver<GridMessageWrapper>,
-    query_streams: Arc<DashMap<(String, usize), mpsc::Sender<DbxResult<Option<Vec<u8>>>>>>,
+    query_streams: QueryStreamMap,
     stage_barriers: Arc<DashMap<(String, usize, std::net::SocketAddr), mpsc::Sender<()>>>,
     /// 워커 측 로컬 실행 엔진 (워커 노드일 때 사용)
     local_executor: Option<Arc<LocalExecutor>>,
@@ -58,7 +61,7 @@ impl GridManager {
 
     pub fn get_query_streams(
         &self,
-    ) -> Arc<DashMap<(String, usize), mpsc::Sender<DbxResult<Option<Vec<u8>>>>>> {
+    ) -> QueryStreamMap {
         Arc::clone(&self.query_streams)
     }
 
@@ -107,7 +110,7 @@ impl GridManager {
     /// 메시지 종류별 분기 처리
     async fn handle_message(
         ec_store: Arc<DistributedErasureCodingStore>,
-        query_streams: Arc<DashMap<(String, usize), mpsc::Sender<DbxResult<Option<Vec<u8>>>>>>,
+        query_streams: QueryStreamMap,
         stage_barriers: Arc<DashMap<(String, usize, std::net::SocketAddr), mpsc::Sender<()>>>,
         quic_channel: Arc<QuicChannel>,
         local_executor: Option<Arc<LocalExecutor>>,
@@ -144,7 +147,7 @@ impl GridManager {
 
     /// 쿼리(스트리밍) 메시지 처리
     async fn handle_query_message(
-        query_streams: Arc<DashMap<(String, usize), mpsc::Sender<DbxResult<Option<Vec<u8>>>>>>,
+        query_streams: QueryStreamMap,
         stage_barriers: Arc<DashMap<(String, usize, std::net::SocketAddr), mpsc::Sender<()>>>,
         quic_channel: Arc<QuicChannel>,
         local_executor: Option<Arc<LocalExecutor>>,
@@ -296,12 +299,12 @@ impl GridManager {
                             })).await;
 
                             // 셔플 백그라운드 송출 태스크들이 다 이빨이 맞을 때까지 대기
-                            while let Some(_) = shuffle_join_set.join_next().await {}
+                            while shuffle_join_set.join_next().await.is_some() {}
                         });
                     }
 
                     // 모든 Plan 태스크들 처리가 끝날 때까지 대기
-                    while let Some(_) = join_set.join_next().await {}
+                    while join_set.join_next().await.is_some() {}
 
                     // 코디네이터에게 해당 Stage의 모든 수행이 종료되었음을 알림
                     let complete_msg = GridMessage::Query(QueryMessage::FragmentCompleted {

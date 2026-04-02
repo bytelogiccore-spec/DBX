@@ -10,8 +10,8 @@ use tokio::sync::mpsc;
 /// We will keep hash logic extremely simple.
 pub struct GridShuffleWriterOperator {
     input: Box<dyn PhysicalOperator>,
-    hash_params: Vec<usize>,
-    exchange_id: usize,
+    _hash_params: Vec<usize>,
+    _exchange_id: usize,
     salting: ShuffleSalting,
     /// Outgoing channels for each target node
     target_senders: Vec<mpsc::Sender<DbxResult<Option<Vec<u8>>>>>,
@@ -27,8 +27,8 @@ impl GridShuffleWriterOperator {
     ) -> Self {
         Self {
             input,
-            hash_params,
-            exchange_id,
+            _hash_params: hash_params,
+            _exchange_id: exchange_id,
             salting,
             target_senders,
         }

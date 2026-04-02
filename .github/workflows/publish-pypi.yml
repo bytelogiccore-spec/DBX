@@ -7,7 +7,10 @@ on:
 jobs:
   publish:
     name: PyPI 배포
-    runs-on: windows-latest
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
 
@@ -16,29 +19,37 @@ jobs:
         with:
           python-version: '3.10'
 
-      - name: Rust Python 바인딩 빌드
+      - name: Rust 설치
         uses: dtolnay/rust-toolchain@stable
+
       - uses: Swatinem/rust-cache@v2
-      - run: cargo build --release --locked -p dbx-py
+        with:
+          key: ${{ runner.os }}-py-build
 
       - name: 빌드 도구 설치
         run: pip install setuptools wheel twine
 
-      - name: 패키지 빌드
+      - name: 패키지 빌드 (휠)
         run: |
-          cd packages\python
-          python setup.py sdist bdist_wheel
+          cd packages/python
+          python setup.py bdist_wheel
+
+      - name: 패키지 빌드 (소스 - Linux 전용)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          cd packages/python
+          python setup.py sdist
 
       - name: PyPI 배포
         env:
           TWINE_USERNAME: __token__
           TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
         run: |
-          cd packages\python
+          cd packages/python
           twine upload dist/* --skip-existing
 
-      - name: 에셋 업로드
+      - name: 아티팩트 업로드
         uses: actions/upload-artifact@v4
         with:
-          name: python-package
-          path: packages\python\dist\*
+          name: python-package-${{ matrix.os }}
+          path: packages/python/dist/*

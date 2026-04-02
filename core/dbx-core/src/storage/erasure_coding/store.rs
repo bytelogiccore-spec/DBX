@@ -154,10 +154,10 @@ impl ErasureCodingStore {
         let mut shards: Vec<Option<Vec<u8>>> = vec![None; self.k + self.m];
 
         // 1. 남아있는 샤드들 읽기
-        for i in 0..(self.k + self.m) {
+        for (i, shard) in shards.iter_mut().enumerate().take(self.k + self.m) {
             let shard_path = object_dir.join(format!("shard_{}.blk", i));
             if let Ok(data) = fs::read(&shard_path) {
-                shards[i] = Some(data);
+                *shard = Some(data);
             }
         }
 

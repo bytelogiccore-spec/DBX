@@ -277,6 +277,7 @@ enum SplitResult {
         coordinator: PhysicalPlan,
         stages: Vec<FragmentStage>,
     },
+    #[allow(dead_code)]
     Split {
         coordinator: PhysicalPlan,
         worker: PhysicalPlan,

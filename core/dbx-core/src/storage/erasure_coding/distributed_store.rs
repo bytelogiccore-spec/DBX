@@ -71,7 +71,7 @@ impl DistributedErasureCodingStore {
         }
 
         // 백그라운 전송 대기
-        while let Some(_) = futures.next().await {}
+        while (futures.next().await).is_some() {}
 
         // 3. 현재 노드의 로컬 스토리지에도 샤드 기록 (장애 복구 보장용 혹은 로컬 캐싱)
         self.local_store.store_shards(key, &shards, buffer.len())?;
@@ -161,7 +161,7 @@ impl DistributedErasureCodingStore {
                 }
             }
             // missing 복원 (메타데이터 8바이트 매직헤더 활용)
-            if let Ok(restored) = self.local_store.decode(shards_opt, std::usize::MAX) {
+            if let Ok(restored) = self.local_store.decode(shards_opt, usize::MAX) {
                 if restored.len() >= 8 {
                     let mut len_bytes = [0u8; 8];
                     len_bytes.copy_from_slice(&restored[0..8]);

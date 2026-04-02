@@ -16,6 +16,9 @@ use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
 use tokio::sync::mpsc;
 
+type ShuffleReceiver = tokio::sync::mpsc::Receiver<DbxResult<Option<Vec<u8>>>>;
+type ShuffleMap = std::collections::HashMap<usize, Vec<(std::net::SocketAddr, ShuffleReceiver)>>;
+
 /// 분산 실행 시 동적으로 생성된 IPC 채널을 보관하는 컨테이너
 #[derive(Default)]
 pub struct DistributedChannels {
@@ -24,13 +27,7 @@ pub struct DistributedChannels {
     pub exchanges: HashMap<usize, mpsc::Sender<DbxResult<Option<Vec<u8>>>>>,
     /// ShuffleWriter가 데이터를 송출하기 위해 사용하는 Receiver 보관 (key: exchange_id)
     /// GridManager가 이 Receiver 배열(타겟 워커 당 1개)을 가져가서 QUIC으로 전송합니다.
-    pub shuffles: HashMap<
-        usize,
-        Vec<(
-            std::net::SocketAddr,
-            mpsc::Receiver<DbxResult<Option<Vec<u8>>>>,
-        )>,
-    >,
+    pub shuffles: ShuffleMap,
 }
 
 /// 단일 노드 물리 플랜 실행기
