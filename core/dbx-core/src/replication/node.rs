@@ -433,7 +433,7 @@ mod tests {
                         &mut |_, _, _| Ok(()),
                     )
                     .await;
-                drop(last_lsn);
+                let _ = last_lsn;
             }
             _ => panic!("VoteRequest 예상"),
         }

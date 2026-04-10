@@ -81,6 +81,6 @@ impl SubqueryUnnestingRule {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+
     // Unit tests will simulate Expr::InSubquery unwrapping when it's added to types.rs
 }

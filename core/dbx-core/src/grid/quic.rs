@@ -280,17 +280,17 @@ mod tests {
         let cert_pem = cert.cert.pem();
         let key_pem = cert.key_pair.serialize_pem();
 
-        let (tx1, mut rx1) = mpsc::channel(100);
+        let (tx1, mut _rx1) = mpsc::channel(100);
         let node1_addr: SocketAddr = "127.0.0.1:0".parse().unwrap();
-        let channel1 = QuicChannel::new(node1_addr, &cert_pem, &key_pem, tx1)
+        let _channel1 = QuicChannel::new(node1_addr, &cert_pem, &key_pem, tx1)
             .await
             .unwrap();
-        let local_addr1 = channel1.local_addr; // need actual bound addr but binding to 0 may not expose it on `channel1.local_addr` immediately. Wait, QuicChannel::new receives 127.0.0.1:0 but doesn't update it to the bound port... So we need a fixed port or get the bound port.
+        let _local_addr1 = _channel1.local_addr; // need actual bound addr but binding to 0 may not expose it on `channel1.local_addr` immediately. Wait, QuicChannel::new receives 127.0.0.1:0 but doesn't update it to the bound port... So we need a fixed port or get the bound port.
 
         // For testing we will use fixed ports
         let node1_fixed_addr: SocketAddr = "127.0.0.1:15682".parse().unwrap();
         let (tx1, mut rx1) = mpsc::channel(100);
-        let channel1 = QuicChannel::new(node1_fixed_addr, &cert_pem, &key_pem, tx1)
+        let _channel1 = QuicChannel::new(node1_fixed_addr, &cert_pem, &key_pem, tx1)
             .await
             .unwrap();
 

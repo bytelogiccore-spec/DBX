@@ -214,6 +214,7 @@ impl StorageBackend for DeltaStore {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::transaction::mvcc::version::VersionedKey;
 
     #[test]
     fn insert_and_get() {

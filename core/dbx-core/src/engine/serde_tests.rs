@@ -1,7 +1,7 @@
 #[cfg(test)]
 mod tests {
     use crate::engine::database::Database;
-    use crate::traits::{DatabaseCore, DatabaseSerde};
+    use crate::traits::DatabaseSerde;
     use serde::{Deserialize, Serialize};
 
     #[derive(Debug, Serialize, Deserialize, PartialEq, Eq)]

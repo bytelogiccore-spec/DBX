@@ -222,7 +222,7 @@ mod tests {
     async fn test_distributed_store_shard_routing() {
         let dir = tempdir().unwrap();
         // data shards = 4, parity = 2 -> total 6 shards
-        let local_store = ErasureCodingStore::new(dir.path(), 4, 2);
+        let _local_store = ErasureCodingStore::new(dir.path(), 4, 2);
         // Simulate a 10-node Grid cluster
         let router = Arc::new(ShardRouter::new_local(10));
 

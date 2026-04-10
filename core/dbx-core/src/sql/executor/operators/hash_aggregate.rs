@@ -845,8 +845,7 @@ fn merge_aggregate_global(col: &ArrayRef, func: &AggregateFunction) -> DbxResult
 #[cfg(test)]
 mod tests {
     use crate::sql::executor::operators::hash_aggregate::*;
-    use crate::sql::planner::{AggregateFunction, AggregateMode, PhysicalAggExpr};
-    use arrow::array::*;
+    use crate::sql::planner::{AggregateFunction, AggregateMode};
     use arrow::datatypes::*;
     use arrow::record_batch::RecordBatch;
     use std::sync::Arc;
