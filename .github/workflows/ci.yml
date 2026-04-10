@@ -123,9 +123,8 @@ jobs:
         if: matrix.package == 'dbx-py'
         run: |
           cd packages/python
-          pip install maturin pytest
-          maturin build --interpreter python3
-          # 간단한 로드 테스트
+          pip install pytest setuptools wheel
+          # python 래퍼 빌드 및 연결 (내부에서 setup.py -> cargo dbx-ffi 빌드 수행)
           pip install -v -e .
           pytest test_simple.py
 
