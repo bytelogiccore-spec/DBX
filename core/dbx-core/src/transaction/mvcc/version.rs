@@ -45,24 +45,31 @@ impl VersionedKey {
 
     /// Encode into bytes for storage.
     pub fn encode(&self) -> Vec<u8> {
-        let mut bytes = Vec::with_capacity(self.user_key.len() + 8);
+        let mut bytes = Vec::with_capacity(self.user_key.len() + 10);
         bytes.extend_from_slice(&self.user_key);
         // Invert timestamp for descending order (latest first)
         let inverted_ts = !self.commit_ts;
         bytes.extend_from_slice(&inverted_ts.to_be_bytes());
+        // Magic suffix to securely identify MVCC VersionedKeys [0xDB, 0x58]
+        bytes.extend_from_slice(&[0xDB, 0x58]);
         bytes
     }
 
     /// Decode from storage bytes.
     pub fn decode(bytes: &[u8]) -> DbxResult<Self> {
-        if bytes.len() < 8 {
+        if bytes.len() < 10 {
             return Err(DbxError::Storage("Invalid versioned key length".into()));
         }
 
-        let split_idx = bytes.len() - 8;
+        // Check magic suffix
+        if &bytes[bytes.len() - 2..] != [0xDB, 0x58] {
+            return Err(DbxError::Storage("Missing MVCC magic suffix".into()));
+        }
+
+        let split_idx = bytes.len() - 10;
         let user_key = bytes[..split_idx].to_vec();
 
-        let ts_bytes: [u8; 8] = bytes[split_idx..].try_into().unwrap(); // Safe due to len check
+        let ts_bytes: [u8; 8] = bytes[split_idx..split_idx + 8].try_into().unwrap(); // Safe due to len check
         let inverted_ts = u64::from_be_bytes(ts_bytes);
         let commit_ts = !inverted_ts;
 
@@ -74,10 +81,10 @@ impl VersionedKey {
 
     /// Extract user key from encoded bytes without full decoding.
     pub fn extract_user_key(bytes: &[u8]) -> Option<&[u8]> {
-        if bytes.len() < 8 {
+        if bytes.len() < 10 || &bytes[bytes.len() - 2..] != [0xDB, 0x58] {
             None
         } else {
-            Some(&bytes[..bytes.len() - 8])
+            Some(&bytes[..bytes.len() - 10])
         }
     }
 }
@@ -93,7 +100,7 @@ mod tests {
         let vk = VersionedKey::new(key.clone(), ts);
         let encoded = vk.encode();
 
-        assert_eq!(encoded.len(), key.len() + 8);
+        assert_eq!(encoded.len(), key.len() + 10);
 
         let decoded = VersionedKey::decode(&encoded).unwrap();
         assert_eq!(decoded, vk);

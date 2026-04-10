@@ -15,7 +15,7 @@ use std::sync::Arc;
 /// Default flush threshold: flush to WOS when entry count exceeds this.
 const DEFAULT_FLUSH_THRESHOLD: usize = 10_000;
 
-/// Tier 1: Concurrent in-memory store with ordered versioned keys.
+/// Tier 1: Concurrent in-memory store with ordered keys.
 ///
 /// Uses `DashMap` for O(1) table lookups and `SkipMap` for O(log N) ordered storage.
 /// Each table is a separate `SkipMap` instance.
@@ -23,7 +23,7 @@ pub struct DeltaStore {
     /// Table name → SkipMap mapping
     /// Using DashMap for O(1) table access
     #[allow(clippy::type_complexity)]
-    tables: DashMap<String, Arc<SkipMap<VersionedKey, Arc<Vec<u8>>>>>,
+    tables: DashMap<String, Arc<SkipMap<Vec<u8>, Arc<Vec<u8>>>>>,
     /// Threshold to trigger flush
     flush_threshold: usize,
     /// Atomic entry count across all tables
@@ -57,8 +57,6 @@ impl DeltaStore {
 
     /// Drain all data from the store, returning table→entries mapping.
     /// Used during flush to move data to WOS.
-    ///
-    /// Note: Returns encoded keys for backward compatibility with WOS.
     #[allow(clippy::type_complexity)]
     pub fn drain_all(&self) -> Vec<(String, Vec<(Vec<u8>, Vec<u8>)>)> {
         let mut result = Vec::new();
@@ -70,7 +68,7 @@ impl DeltaStore {
             if let Some((_, table_map)) = self.tables.remove(&table_name) {
                 let entries: Vec<(Vec<u8>, Vec<u8>)> = table_map
                     .iter()
-                    .map(|e| (e.key().encode(), (**e.value()).clone()))
+                    .map(|e| (e.key().clone(), (**e.value()).clone()))
                     .collect();
 
                 result.push((table_name, entries));
@@ -85,7 +83,7 @@ impl DeltaStore {
     }
 
     /// Get or create the SkipMap for a table.
-    fn get_or_create_table(&self, table: &str) -> Arc<SkipMap<VersionedKey, Arc<Vec<u8>>>> {
+    fn get_or_create_table(&self, table: &str) -> Arc<SkipMap<Vec<u8>, Arc<Vec<u8>>>> {
         self.tables
             .entry(table.to_string())
             .or_insert_with(|| Arc::new(SkipMap::new()))
@@ -93,55 +91,11 @@ impl DeltaStore {
             .clone()
     }
 
-    /// Helper to convert raw bytes to VersionedKey.
-    fn to_versioned_key(key: &[u8], default_ts: u64) -> VersionedKey {
-        // If it looks like a versioned key (length > 8), try to decode it.
-        // Versioned keys are [user_key] + [8 bytes timestamp].
-        if key.len() > 8
-            && let Ok(vk) = VersionedKey::decode(key)
-        {
-            return vk;
-        }
-        VersionedKey::new(key.to_vec(), default_ts)
-    }
-
-    /// Helper to convert Bound<&Vec<u8>> to Bound<VersionedKey>.
-    fn convert_start_bound(bound: Bound<&Vec<u8>>) -> Bound<VersionedKey> {
+    /// Helper to convert Bound<&Vec<u8>> to Bound<Vec<u8>>.
+    fn convert_bound(bound: Bound<&Vec<u8>>) -> Bound<Vec<u8>> {
         match bound {
-            Bound::Included(v) => {
-                if v.is_empty() {
-                    Bound::Included(VersionedKey::new(vec![], u64::MAX))
-                } else {
-                    Bound::Included(Self::to_versioned_key(v, u64::MAX))
-                }
-            }
-            Bound::Excluded(v) => {
-                if v.is_empty() {
-                    Bound::Excluded(VersionedKey::new(vec![], u64::MAX))
-                } else {
-                    Bound::Excluded(Self::to_versioned_key(v, u64::MAX))
-                }
-            }
-            Bound::Unbounded => Bound::Unbounded,
-        }
-    }
-
-    fn convert_end_bound(bound: Bound<&Vec<u8>>) -> Bound<VersionedKey> {
-        match bound {
-            Bound::Included(v) => {
-                if v.is_empty() {
-                    Bound::Included(VersionedKey::new(vec![], 0))
-                } else {
-                    Bound::Included(Self::to_versioned_key(v, 0))
-                }
-            }
-            Bound::Excluded(v) => {
-                if v.is_empty() {
-                    Bound::Excluded(VersionedKey::new(vec![], 0))
-                } else {
-                    Bound::Excluded(Self::to_versioned_key(v, 0))
-                }
-            }
+            Bound::Included(v) => Bound::Included(v.clone()),
+            Bound::Excluded(v) => Bound::Excluded(v.clone()),
             Bound::Unbounded => Bound::Unbounded,
         }
     }
@@ -156,10 +110,7 @@ impl Default for DeltaStore {
 impl StorageBackend for DeltaStore {
     fn insert(&self, table: &str, key: &[u8], value: &[u8]) -> DbxResult<()> {
         let table_map = self.get_or_create_table(table);
-        // For inserts, if it's a raw key, we use ts=0 (legacy).
-        // If it's encoded, decode() will find the correct TS.
-        let vk = Self::to_versioned_key(key, 0);
-        table_map.insert(vk, Arc::new(value.to_vec()));
+        table_map.insert(key.to_vec(), Arc::new(value.to_vec()));
         self.entry_count
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 
@@ -170,8 +121,7 @@ impl StorageBackend for DeltaStore {
         let table_map = self.get_or_create_table(table);
 
         for (key, value) in rows {
-            let vk = Self::to_versioned_key(&key, 0);
-            table_map.insert(vk, Arc::new(value));
+            table_map.insert(key, Arc::new(value));
             self.entry_count
                 .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         }
@@ -184,8 +134,7 @@ impl StorageBackend for DeltaStore {
             return Ok(None);
         };
 
-        let vk = Self::to_versioned_key(key, 0);
-        Ok(table_map.get(&vk).map(|e| (**e.value()).clone()))
+        Ok(table_map.get(key).map(|e| (**e.value()).clone()))
     }
 
     fn delete(&self, table: &str, key: &[u8]) -> DbxResult<bool> {
@@ -193,8 +142,7 @@ impl StorageBackend for DeltaStore {
             return Ok(false);
         };
 
-        let vk = Self::to_versioned_key(key, 0);
-        if table_map.remove(&vk).is_some() {
+        if table_map.remove(key).is_some() {
             self.entry_count
                 .fetch_sub(1, std::sync::atomic::Ordering::Relaxed);
             Ok(true)
@@ -217,12 +165,12 @@ impl StorageBackend for DeltaStore {
             return Ok(Vec::new());
         }
 
-        let start = Self::convert_start_bound(range.start_bound());
-        let end = Self::convert_end_bound(range.end_bound());
+        let start = Self::convert_bound(range.start_bound());
+        let end = Self::convert_bound(range.end_bound());
 
         let entries: Vec<(Vec<u8>, Vec<u8>)> = table_map
             .range((start, end))
-            .map(|e| (e.key().encode(), (**e.value()).clone()))
+            .map(|e| (e.key().clone(), (**e.value()).clone()))
             .collect();
 
         Ok(entries)
@@ -237,13 +185,13 @@ impl StorageBackend for DeltaStore {
             return Ok(None);
         };
 
-        let start = Self::convert_start_bound(range.start_bound());
-        let end = Self::convert_end_bound(range.end_bound());
+        let start = Self::convert_bound(range.start_bound());
+        let end = Self::convert_bound(range.end_bound());
 
         Ok(table_map
             .range((start, end))
             .next()
-            .map(|e| (e.key().encode(), (**e.value()).clone())))
+            .map(|e| (e.key().clone(), (**e.value()).clone())))
     }
 
     fn flush(&self) -> DbxResult<()> {
