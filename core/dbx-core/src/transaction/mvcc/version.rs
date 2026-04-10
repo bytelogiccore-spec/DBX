@@ -62,7 +62,7 @@ impl VersionedKey {
         }
 
         // Check magic suffix
-        if &bytes[bytes.len() - 2..] != [0xDB, 0x58] {
+        if bytes[bytes.len() - 2..] != [0xDB, 0x58] {
             return Err(DbxError::Storage("Missing MVCC magic suffix".into()));
         }
 
@@ -81,7 +81,7 @@ impl VersionedKey {
 
     /// Extract user key from encoded bytes without full decoding.
     pub fn extract_user_key(bytes: &[u8]) -> Option<&[u8]> {
-        if bytes.len() < 10 || &bytes[bytes.len() - 2..] != [0xDB, 0x58] {
+        if bytes.len() < 10 || bytes[bytes.len() - 2..] != [0xDB, 0x58] {
             None
         } else {
             Some(&bytes[..bytes.len() - 10])
