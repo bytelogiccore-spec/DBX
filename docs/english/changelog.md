@@ -14,6 +14,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.2.1-beta] - 2026-04-10
+
+MVCC VersionedKey identification hardening and DeltaStore hot-path retrieval optimization.
+
+### Improvements & Fixes
+- **MVCC Magic Suffix** — Added a deterministic 2-byte magic suffix (`[0xDB, 0x58]`) to `VersionedKey` byte-encoding. This safely prevents subtle data corruption edge-cases by guaranteeing positive identification of MVCC-encoded keys over arbitrary raw bytes.
+- **DeltaStore Zero-Overhead Keys** — Refactored the core BTreeMap inside `DeltaStore` to use bare `Vec<u8>` bytes natively instead of struct-wrapped `VersionedKey`s. This fully eliminates intermediate allocating iterations, redundant decoding overheads, and properly scales range bounded queries.
+- **Multi-language Pre-Documentation** — Added initial roadmap documentation structures under `docs/Version History` in preparation for comprehensive i18n support.
+
+---
+
 ## [0.2.0-beta] - 2026-04-03
 
 Introduced Native SSTable-based WOS, Fast-Path ultra-low latency optimization, and Workspace refactoring.
