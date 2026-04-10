@@ -9,7 +9,7 @@ description = "CsBindgen native C# bindings for DBX database"
 crate-type = ["cdylib"]
 
 [dependencies]
-dbx-core = { path = "../dbx-core", version = "0.2.0-beta" }
+dbx-core = { path = "../dbx-core", version = "0.2.1-beta" }
 
 [build-dependencies]
 csbindgen = "1.9"

@@ -1,6 +1,6 @@
 [package]
 name = "dbx-examples"
-version = "0.2.0-beta"
+version = "0.2.1-beta"
 edition.workspace = true
 license.workspace = true
 repository.workspace = true

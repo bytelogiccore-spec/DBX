@@ -882,7 +882,7 @@ dependencies = [
 
 [[package]]
 name = "dbx-benchmarks"
-version = "0.2.0-beta"
+version = "0.2.1-beta"
 dependencies = [
  "arrow",
  "criterion",
@@ -897,7 +897,7 @@ dependencies = [
 
 [[package]]
 name = "dbx-core"
-version = "0.2.0-beta"
+version = "0.2.1-beta"
 dependencies = [
  "aes-gcm-siv",
  "ahash 0.8.12",
@@ -939,7 +939,7 @@ dependencies = [
 
 [[package]]
 name = "dbx-csharp"
-version = "0.2.0-beta"
+version = "0.2.1-beta"
 dependencies = [
  "csbindgen",
  "dbx-core",
@@ -947,7 +947,7 @@ dependencies = [
 
 [[package]]
 name = "dbx-examples"
-version = "0.2.0-beta"
+version = "0.2.1-beta"
 dependencies = [
  "arrow",
  "dbx-core",
@@ -963,7 +963,7 @@ dependencies = [
 
 [[package]]
 name = "dbx-ffi"
-version = "0.2.0-beta"
+version = "0.2.1-beta"
 dependencies = [
  "dbx-core",
  "libc",
@@ -971,7 +971,7 @@ dependencies = [
 
 [[package]]
 name = "dbx-node"
-version = "0.2.0-beta"
+version = "0.2.1-beta"
 dependencies = [
  "dbx-core",
  "napi",
@@ -981,7 +981,7 @@ dependencies = [
 
 [[package]]
 name = "dbx-py"
-version = "0.2.0-beta"
+version = "0.2.1-beta"
 dependencies = [
  "dbx-core",
  "pyo3",
@@ -989,7 +989,7 @@ dependencies = [
 
 [[package]]
 name = "dbx-tests"
-version = "0.2.0-beta"
+version = "0.2.1-beta"
 dependencies = [
  "arrow",
  "dbx-core",
