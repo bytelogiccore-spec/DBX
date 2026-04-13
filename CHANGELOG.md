@@ -4,6 +4,16 @@ This document follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) f
 
 ---
 
+## [0.2.2] - 2026-04-13
+
+Critical fixes for data durability and partition routing.
+
+### Fixed
+- **Delete Durability** — Added missing WAL logging for delete operations, ensuring deleted data remains deleted after a system crash or restart.
+- **Partition Routing** — Fixed a critical bug where `delete`, `get`, and `get_snapshot` operations did not correctly route to sub-partitions, causing operations to fail or return inconsistent data on partitioned tables.
+
+---
+
 ## [0.2.1-beta] - 2026-04-10
 
 MVCC VersionedKey identification hardening and DeltaStore hot-path retrieval optimization.

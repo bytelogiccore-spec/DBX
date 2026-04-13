@@ -387,6 +387,18 @@ impl Database {
         key: &[u8],
         read_ts: u64,
     ) -> DbxResult<Option<Option<Vec<u8>>>> {
+        let target_table = {
+            let maps = self.partition_maps.read().unwrap();
+            if let Some(map) = maps.get(table) {
+                use crate::storage::partition::PartitionValue;
+                let key_str = String::from_utf8_lossy(key).into_owned();
+                map.route_key(&PartitionValue::Text(key_str))
+            } else {
+                table.to_string()
+            }
+        };
+        let table = target_table.as_str();
+
         let start_vk = crate::transaction::mvcc::version::VersionedKey::new(key.to_vec(), read_ts);
         let start_bytes = start_vk.encode();
 
@@ -459,6 +471,18 @@ impl Database {
     /// 최대 성능을 달성합니다.
     #[inline(always)]
     pub fn get(&self, table: &str, key: &[u8]) -> DbxResult<Option<Vec<u8>>> {
+        let target_table = {
+            let maps = self.partition_maps.read().unwrap();
+            if let Some(map) = maps.get(table) {
+                use crate::storage::partition::PartitionValue;
+                let key_str = String::from_utf8_lossy(key).into_owned();
+                map.route_key(&PartitionValue::Text(key_str))
+            } else {
+                table.to_string()
+            }
+        };
+        let table = target_table.as_str();
+
         // Fast-path: Delta → WOS 직접 조회 (MVCC 오버헤드 없음)
         // MVCC feature가 활성화되어도 Fast-path를 우선 사용
         // 일반 insert()로 저장된 데이터는 여기서 조회됨
@@ -645,6 +669,29 @@ impl Database {
 
     /// 키를 삭제합니다.
     pub fn delete(&self, table: &str, key: &[u8]) -> DbxResult<bool> {
+        let target_table = {
+            let maps = self.partition_maps.read().unwrap();
+            if let Some(map) = maps.get(table) {
+                use crate::storage::partition::PartitionValue;
+                let key_str = String::from_utf8_lossy(key).into_owned();
+                map.route_key(&PartitionValue::Text(key_str))
+            } else {
+                table.to_string()
+            }
+        };
+        let table = target_table.as_str();
+
+        #[cfg(feature = "wal")]
+        if self.durability != DurabilityLevel::None
+            && (self.wal.is_some() || self.encrypted_wal.is_some())
+        {
+            self.append_to_wal(&crate::wal::WalRecord::Delete {
+                table: table.to_string(),
+                key: key.to_vec(),
+                ts: 0,
+            })?;
+        }
+
         #[cfg(feature = "index")]
         if self.has_index(table, "key") {
             let row_ids = self.index.lookup(table, "key", key)?;
